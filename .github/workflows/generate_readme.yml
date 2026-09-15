@@ -1,0 +1,56 @@
+name: Auto Update README Tree
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+  workflow_dispatch:
+
+jobs:
+  update-tree:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Tree Utility
+        run: sudo apt-get update && sudo apt-get install -y tree
+
+      # Workflow cũ GHI ĐÈ toàn bộ README.md mỗi lần push, xoá sạch phần hướng
+      # dẫn cài đặt do người viết. Nay chỉ thay phần giữa hai marker TREE.
+      - name: Update directory tree section
+        run: |
+          python - <<'PY'
+          import re
+          import subprocess
+
+          tree = subprocess.run(
+              ["tree", "-I",
+               ".git|.venv|venv|__pycache__|*.pyc|temp_uploads|.pytest_cache|.idea|data"],
+              capture_output=True, text=True, check=True,
+          ).stdout
+
+          block = "<!-- TREE:START -->\n\n```text\n" + tree + "```\n\n<!-- TREE:END -->"
+
+          with open("README.md", encoding="utf-8") as f:
+              readme = f.read()
+
+          if "<!-- TREE:START -->" not in readme:
+              raise SystemExit("Khong tim thay marker TREE:START trong README.md")
+
+          readme = re.sub(
+              r"<!-- TREE:START -->.*?<!-- TREE:END -->",
+              block, readme, flags=re.DOTALL,
+          )
+
+          with open("README.md", "w", encoding="utf-8") as f:
+              f.write(readme)
+          PY
+
+      - name: Commit and Push README
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: cap nhat cay thu muc trong README [skip ci]"
+          file_pattern: 'README.md'

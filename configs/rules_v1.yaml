@@ -1,0 +1,296 @@
+# =============================================================================
+# RULE ENGINE v1 — Phân loại 5 nhóm bản quyền & đánh giá rủi ro sử dụng
+#
+# CLAUDE.md §9: đây là LOGIC TƯỜNG MINH, không phải mô hình học máy.
+# Thứ tự đánh giá là CỐ ĐỊNH và không được phép chạy song song:
+#   Audio Library -> Creator Music -> Content ID -> Creative Commons
+#   -> Public Domain -> Uncategorized
+#
+# Cách đọc một rule:
+#   when:   các điều kiện PHẢI đúng hết (AND). Khoá `context.*` lấy từ mục đích
+#           sử dụng do người dùng khai báo (platform / commercial_use / monetization).
+#           Giá trị dạng danh sách nghĩa là "thuộc một trong các giá trị đó".
+#           `null` nghĩa là trường bị thiếu/không xác định.
+#   risk:   LOW | CONDITIONAL | HIGH | UNKNOWN
+#   condition: mã điều kiện sử dụng trả về cho client
+#
+# Rule đầu tiên khớp sẽ thắng; nếu không rule nào khớp thì dùng `default`.
+# =============================================================================
+version: 1
+name: rules_v1
+updated: "2026-09-05"
+
+# --- Cổng định danh: chạy TRƯỚC mọi nhóm ------------------------------------
+# Không nhận diện được bản ghi thì không có quyền gì để xét. Ở đây bắt buộc trả
+# UNKNOWN, tuyệt đối không được ép thành LOW hay HIGH (§2).
+identity_gate:
+  # THRESHOLD_MIN — độ tin cậy định danh tối thiểu để dám áp dụng rights.
+  #
+  # Ngưỡng phải tách THEO TỪNG TẦNG, vì điểm của hai tầng không cùng thang đo:
+  # Chromaprint trả tỉ lệ bit trùng khớp, MERT trả cosine similarity. Một con số
+  # chung 0.90 (giá trị tạm trước đây) thực chất là đặt ngưỡng tầng 1 cao hơn hẳn
+  # giá trị đã hiệu chỉnh, và EXP-08 đã đo được hậu quả: 18/36 truy vấn nhận diện
+  # ĐÚNG ở tầng 1 vẫn bị cổng này vứt thành UNKNOWN.
+  #
+  # Giá trị dưới đây bằng ĐÚNG ngưỡng chấp nhận của từng tầng trong cascade,
+  # hiệu chỉnh trên corpus FMA thật (1.000 bản ghi, 1.140 truy vấn biến đổi):
+  #   EXACT_MATCH = τFP   = 0.15 — EXP-01: Precision 0.9963, FPR 0.0032
+  #   NEAR_MATCH  = τMERT = 0.97 — EXP-06: False Match Rate 4.4% (§16 yêu cầu ≤5%)
+  #
+  # NGƯỠNG PHỤ THUỘC QUY MÔ REFERENCE — đo được, không phải suy đoán. Khi corpus
+  # tăng từ 1.000 lên 4.000 bản ghi, ở CÙNG τFP = 0.10 thì FPR tăng từ 0.0044 lên
+  # 0.0095 (gấp 2,2 lần), nên phải nâng τFP lên 0.15 mới giữ được FPR ≤ 0.005.
+  # Tương tự, FMR của τMERT = 0.97 tăng từ 3,35% lên 4,4% — vẫn đạt §16 nhưng đã
+  # sát trần. Mở rộng corpus thêm nữa thì BẮT BUỘC phải hiệu chỉnh lại cả hai.
+  #
+  # Con số cũ (0.70 / 0.95) hiệu chỉnh trên dữ liệu mô phỏng suy biến; đo lại
+  # trên corpus thật thì chính τMERT = 0.95 đó cho False Match Rate 14.7%, tức
+  # gấp gần 8 lần con số 1.87% từng ghi ở đây.
+  #
+  # PHẢI cập nhật cùng lúc với FP_THRESHOLD / MERT_THRESHOLD trong .env, nếu
+  # không cascade và Rule Engine sẽ nói hai chuyện khác nhau: cascade nhận một
+  # khớp rồi Rule Engine lại vứt chính khớp đó thành UNKNOWN.
+  min_identity_confidence_by_match_type:
+    EXACT_MATCH: 0.15
+    NEAR_MATCH: 0.97
+    COVER_MATCH: 0.97
+    # Bài KHÔNG khớp bản ghi nào, nhưng giấy phép được model suy đoán từ âm
+    # thanh. Ngưỡng 0.0 vì ở đây không hề có "định danh" để mà đặt ngưỡng —
+    # cascade đã kết luận là không nhận ra bài này. Cái kiểm soát chất lượng
+    # của nhánh này là `rights_confidence`: nguồn PREDICTED bị trừ 0.60, nên
+    # `decision_confidence` (= min của hai loại tin cậy) luôn rất thấp.
+    #
+    # ⚠️ EXP-09 đo được bộ phân loại này KHÔNG vượt baseline khi gặp nghệ sĩ
+    # chưa từng thấy (0.382 so với 0.569) — tức đúng tình huống nhánh này chạy.
+    # Nhánh được bật theo yêu cầu của chủ dự án; đặt ngưỡng này về 0.97 là tắt nó.
+    LICENSE_PREDICTED: 0.0
+  # Dùng cho match_type không nằm trong bảng trên. Giữ ở mức chặt nhất.
+  min_identity_confidence: 0.97
+
+  no_match:
+    risk: LOW
+    category: USER_GENERATED_CONTENT
+    condition: MONETIZABLE_UNTIL_RETROACTIVE_CLAIM
+    reason: >-
+      Không khớp bất kỳ bản ghi nào trong cơ sở dữ liệu tham chiếu. Nhiều khả
+      năng là nội dung do người dùng tự tạo. Vẫn có thể bị khiếu nại hồi tố nếu
+      cơ sở dữ liệu tham chiếu chưa đầy đủ.
+
+  low_confidence:
+    risk: UNKNOWN
+    category: UNCATEGORIZED
+    condition: HUMAN_REVIEW_REQUIRED
+    reason: >-
+      Độ tin cậy định danh dưới ngưỡng tối thiểu. Không đủ căn cứ để kết luận
+      quyền sử dụng — cần người kiểm tra thủ công.
+
+  missing_rights:
+    risk: UNKNOWN
+    category: UNCATEGORIZED
+    condition: HUMAN_REVIEW_REQUIRED
+    reason: >-
+      Đã nhận diện được bản ghi nhưng không tìm thấy dữ liệu quyền tương ứng
+      trong cơ sở dữ liệu.
+
+# --- 5 nhóm bản quyền, xét theo đúng thứ tự này -----------------------------
+groups:
+
+  # 1 ---------------------------------------------------------------------
+  - id: AUDIO_LIBRARY
+    order: 1
+    match:
+      license_type: [AUDIO_LIBRARY]
+    rules:
+      - when: {attribution_required: false}
+        risk: LOW
+        condition: FREE_TO_USE
+        reason: >-
+          Thuộc thư viện âm thanh miễn phí, không yêu cầu ghi công. Được dùng
+          tự do kể cả cho mục đích thương mại và bật kiếm tiền.
+      - when: {attribution_required: true}
+        risk: CONDITIONAL
+        condition: ATTRIBUTION_REQUIRED
+        reason: >-
+          Thuộc thư viện âm thanh miễn phí nhưng BẮT BUỘC ghi công tác giả
+          trong phần mô tả video.
+    default:
+      risk: UNKNOWN
+      condition: HUMAN_REVIEW_REQUIRED
+      reason: Thiếu thông tin yêu cầu ghi công của thư viện âm thanh.
+
+  # 2 ---------------------------------------------------------------------
+  - id: CREATOR_MUSIC
+    order: 2
+    match:
+      license_type: [CREATOR_MUSIC]
+    rules:
+      - when: {license_purchased: true, license_valid: true}
+        risk: LOW
+        condition: FULL_REVENUE_RETAINED
+        reason: >-
+          Đã mua giấy phép Creator Music và giấy phép còn hiệu lực. Giữ 100%
+          doanh thu của video.
+      - when: {license_purchased: true, license_valid: false}
+        risk: UNKNOWN
+        condition: HUMAN_REVIEW_REQUIRED
+        reason: >-
+          Có ghi nhận đã mua giấy phép nhưng giấy phép đã hết hạn hoặc chưa tới
+          ngày hiệu lực. Cần kiểm tra lại hợp đồng.
+      - when: {revenue_share_agreed: true}
+        risk: CONDITIONAL
+        condition: REVENUE_SHARE_APPLIED
+        reason: >-
+          Sử dụng theo cơ chế chia sẻ doanh thu của Creator Music. Video vẫn
+          kiếm tiền được nhưng doanh thu bị chia cho chủ sở hữu bản quyền.
+      - when: {license_purchased: false, revenue_share_agreed: false}
+        risk: HIGH
+        condition: LICENSE_REQUIRED
+        reason: >-
+          Bản nhạc thuộc Creator Music nhưng chưa mua giấy phép và cũng chưa
+          chấp nhận chia sẻ doanh thu. Phải mua giấy phép trước khi sử dụng.
+    default:
+      risk: UNKNOWN
+      condition: HUMAN_REVIEW_REQUIRED
+      reason: Thiếu thông tin trạng thái giấy phép Creator Music.
+
+  # 3 ---------------------------------------------------------------------
+  - id: COMMERCIAL_CONTENT_ID
+    order: 3
+    match:
+      license_type: [CONTENT_ID, COMMERCIAL]
+    rules:
+      - when: {policy_action: MONETIZE_CLAIM}
+        risk: CONDITIONAL
+        condition: REVENUE_REDIRECTED
+        reason: >-
+          Bản ghi được đăng ký Content ID với chính sách nhận tiền. Video không
+          bị chặn nhưng toàn bộ doanh thu chuyển cho chủ sở hữu bản quyền.
+      - when: {policy_action: BLOCK_OR_TAKEDOWN}
+        risk: HIGH
+        condition: VIDEO_BLOCKED_OR_STRIKE
+        reason: >-
+          Bản ghi được đăng ký Content ID với chính sách chặn. Video có thể bị
+          chặn hoặc nhận gậy bản quyền.
+      - when: {policy_action: [null, NONE]}
+        risk: UNKNOWN
+        condition: HUMAN_REVIEW_REQUIRED
+        reason: >-
+          Bản ghi thuộc nhóm thương mại nhưng chưa rõ chính sách Content ID áp
+          dụng. Không đủ căn cứ để kết luận.
+    default:
+      risk: UNKNOWN
+      condition: HUMAN_REVIEW_REQUIRED
+      reason: Chính sách Content ID không nằm trong tập giá trị đã biết.
+
+  # 4 ---------------------------------------------------------------------
+  - id: CREATIVE_COMMONS
+    order: 4
+    match:
+      license_type: [CREATIVE_COMMONS, CC_BY, CC_BY_SA, CC_BY_NC, CC_BY_NC_SA,
+                     CC_BY_ND, CC_BY_NC_ND, CC0]
+    rules:
+      # Vi phạm điều khoản phi thương mại — xét TRƯỚC các nhánh còn lại
+      - when: {commercial_use_allowed: false, context.commercial_use: true}
+        risk: HIGH
+        condition: NON_COMMERCIAL_VIOLATION
+        reason: >-
+          Giấy phép Creative Commons phi thương mại (NC) nhưng người dùng khai
+          báo mục đích thương mại. Đây là vi phạm điều khoản giấy phép.
+      - when: {monetization_allowed: false, context.monetization: true}
+        risk: HIGH
+        condition: MONETIZATION_NOT_PERMITTED
+        reason: >-
+          Giấy phép không cho phép kiếm tiền nhưng người dùng bật kiếm tiền.
+      - when: {license_type: CC0}
+        risk: LOW
+        condition: FREE_TO_USE
+        reason: CC0 — tác giả từ bỏ mọi quyền, được dùng tự do.
+      - when: {attribution_required: true}
+        risk: CONDITIONAL
+        condition: ATTRIBUTION_REQUIRED
+        reason: >-
+          Giấy phép Creative Commons hợp lệ. Được phép sử dụng nhưng BẮT BUỘC
+          ghi công đúng theo yêu cầu của giấy phép.
+      - when: {attribution_required: false}
+        risk: LOW
+        condition: FREE_TO_USE
+        reason: Giấy phép Creative Commons không yêu cầu ghi công.
+    default:
+      risk: UNKNOWN
+      condition: HUMAN_REVIEW_REQUIRED
+      reason: Metadata Creative Commons không đầy đủ để kết luận.
+
+  # 5 ---------------------------------------------------------------------
+  # §2: composition PD KHÔNG suy ra recording PD. Hai trường xét độc lập.
+  - id: PUBLIC_DOMAIN
+    order: 5
+    match:
+      any_of:
+        license_type: [PUBLIC_DOMAIN]
+        copyright_status: [PUBLIC_DOMAIN]
+    rules:
+      - when: {composition_public_domain: verified, recording_public_domain: true}
+        risk: LOW
+        condition: FREE_TO_USE
+        reason: >-
+          Cả tác phẩm lẫn bản thu đều thuộc miền công cộng. Được sử dụng, chỉnh
+          sửa và kiếm tiền tự do.
+      - when:
+          composition_public_domain: verified
+          recording_public_domain: false
+          context.commercial_use: true
+        risk: HIGH
+        condition: RECORDING_PERMISSION_REQUIRED
+        reason: >-
+          Tác phẩm thuộc miền công cộng NHƯNG bản thu cụ thể này vẫn được bảo
+          hộ. Dùng cho mục đích thương mại mà chưa xin phép chủ bản thu là rủi
+          ro cao. Có thể dùng một bản thu khác đã thuộc miền công cộng.
+      - when: {composition_public_domain: verified, recording_public_domain: false}
+        risk: CONDITIONAL
+        condition: RECORDING_PERMISSION_REQUIRED
+        reason: >-
+          Tác phẩm thuộc miền công cộng nhưng bản thu vẫn được bảo hộ. Cần xin
+          phép chủ sở hữu bản thu, hoặc thay bằng bản thu khác thuộc miền công cộng.
+      - when: {composition_public_domain: [possible, unknown, null]}
+        risk: UNKNOWN
+        condition: HUMAN_REVIEW_REQUIRED
+        reason: >-
+          Tình trạng miền công cộng của tác phẩm chưa được xác minh. Không suy
+          luận từ tình trạng của bản thu.
+      - when: {composition_public_domain: "no", recording_public_domain: true}
+        risk: CONDITIONAL
+        condition: COMPOSITION_PERMISSION_REQUIRED
+        reason: >-
+          Bản thu thuộc miền công cộng nhưng TÁC PHẨM vẫn được bảo hộ. Vẫn cần
+          xử lý quyền tác giả của phần sáng tác.
+    default:
+      risk: UNKNOWN
+      condition: HUMAN_REVIEW_REQUIRED
+      reason: Dữ liệu miền công cộng mâu thuẫn hoặc không đầy đủ.
+
+# --- Nhóm ngoại lệ: không rơi vào 5 nhóm trên -------------------------------
+uncategorized:
+  risk: UNKNOWN
+  category: UNCATEGORIZED
+  condition: HUMAN_REVIEW_REQUIRED
+  reason: >-
+    Loại giấy phép không thuộc 5 nhóm đã định nghĩa. Cần người phân loại thủ công.
+
+# --- Cách tính rights_confidence (tách riêng khỏi identity_confidence, §2) ---
+rights_confidence:
+  base: 1.0
+  penalties:
+    missing_license_type: 0.40      # không biết loại giấy phép
+    missing_copyright_status: 0.20
+    simulated_source: 0.30          # metadata mô phỏng, chưa xác minh thật
+    # Quyền do MODEL SUY ĐOÁN từ âm thanh, không tra từ bất kỳ nguồn nào. Phạt
+    # nặng hơn cả metadata mô phỏng, vì EXP-09 đo được rằng bộ phân loại giấy
+    # phép KHÔNG vượt baseline khi gặp nghệ sĩ chưa từng thấy (0.382 so với
+    # 0.569). Mức phạt này đủ để kéo rights_confidence xuống dưới ngưỡng, nên
+    # kết quả suy đoán sẽ rơi vào nhánh UNKNOWN + HUMAN_REVIEW_REQUIRED thay vì
+    # được dùng như một kết luận về quyền.
+    predicted_source: 0.60
+    unverified: 0.20                # thiếu verified_at
+    stale_verification_days: 365    # verified_at quá cũ
+    stale_penalty: 0.10
+    license_expired: 0.30

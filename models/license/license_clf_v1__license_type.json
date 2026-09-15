@@ -1,0 +1,40 @@
+{
+  "model_version": "license_clf_v1",
+  "target": "license_type",
+  "algorithm": "LogisticRegression(class_weight=balanced, C=1.0)",
+  "features": "MERT-v1-95M mean-pooled theo bản ghi, chuẩn hoá L2",
+  "embedding_dim": 768,
+  "mert_model_version": "MERT-v1-95M",
+  "n_train": 1000,
+  "n_artists": 379,
+  "classes": [
+    "CC0",
+    "CC_BY",
+    "CC_BY_NC",
+    "CC_BY_NC_ND",
+    "CC_BY_NC_SA",
+    "CC_BY_ND",
+    "CC_BY_SA"
+  ],
+  "class_distribution": {
+    "CC_BY_NC_SA": 569,
+    "CC_BY_NC_ND": 242,
+    "CC_BY": 100,
+    "CC_BY_NC": 64,
+    "CC_BY_SA": 11,
+    "CC_BY_ND": 5,
+    "CC0": 9
+  },
+  "trained_at": "2026-09-06T23:46:06",
+  "validation": {
+    "protocol": "StratifiedGroupKFold theo nghệ sĩ (nghệ sĩ trong test là mới)",
+    "folds": 5,
+    "n_eval": 1000,
+    "accuracy": 0.382,
+    "macro_f1": 0.1787,
+    "baseline_accuracy": 0.569,
+    "accuracy_vs_baseline": -0.187,
+    "beats_baseline": false
+  },
+  "warning": "EXP-09: bộ phân loại này KHÔNG vượt baseline khi gặp nghệ sĩ chưa từng thấy — đúng tình huống 'bài ngoài cơ sở dữ liệu' mà nó được dùng. Giấy phép là thuộc tính pháp lý gắn với hợp đồng, không gắn với tín hiệu âm thanh. Mọi dự đoán chỉ nên đọc như một gợi ý cần người kiểm tra."
+}

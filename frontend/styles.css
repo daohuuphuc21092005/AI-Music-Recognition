@@ -1,0 +1,241 @@
+/* Music Rights AI — giao diện 4 màn hình MVP (CLAUDE.md §13).
+   Không dùng framework: dự án chỉ build Python, thêm bundler chỉ để tô màu
+   là cái giá không đáng trả. */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e2e5ea;
+  --text: #1b1f24;
+  --muted: #646b75;
+  --accent: #2f6df6;
+  --accent-soft: #e8effe;
+  --low: #1a8f4c;
+  --conditional: #b8770a;
+  --high: #cf2a2a;
+  --unknown: #646b75;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 16px rgba(16, 24, 40, .05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c;
+    --surface: #1c2027;
+    --border: #2c323b;
+    --text: #e8eaed;
+    --muted: #9aa3ae;
+    --accent: #6b9bff;
+    --accent-soft: #212c44;
+    --low: #4ac47e;
+    --conditional: #e0a33a;
+    --high: #ef6b6b;
+    --unknown: #9aa3ae;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace; }
+
+/* ── Thanh trên ─────────────────────────────────────────── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.logo {
+  display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-size: 20px;
+}
+.topbar h1 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
+.topbar p { margin: 0; font-size: 13px; color: var(--muted); }
+
+.health { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot-ok { background: var(--low); }
+.dot-warn { background: var(--conditional); }
+.dot-bad { background: var(--high); }
+
+/* ── Thanh bước ─────────────────────────────────────────── */
+.steps { padding: 16px 24px 0; }
+.steps ol {
+  display: flex; gap: 8px; list-style: none; margin: 0 auto; padding: 0;
+  max-width: 940px; flex-wrap: wrap;
+}
+.steps li {
+  display: flex; align-items: center; gap: 8px; padding: 7px 14px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--muted); font-size: 13px;
+}
+.steps li span {
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  background: var(--border); color: var(--muted); font-size: 12px; font-weight: 600;
+}
+.steps li.active { color: var(--text); border-color: var(--accent); }
+.steps li.active span { background: var(--accent); color: #fff; }
+.steps li.done span { background: var(--low); color: #fff; }
+
+/* ── Bố cục ─────────────────────────────────────────────── */
+main { max-width: 940px; margin: 0 auto; padding: 20px 24px 48px; }
+.screen { display: none; }
+.screen.active { display: block; }
+h2 { font-size: 20px; margin: 4px 0 6px; }
+h3 { font-size: 15px; margin: 0 0 12px; }
+.hint { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.error { color: var(--high); font-size: 14px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow);
+}
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+
+/* ── Vùng thả file ──────────────────────────────────────── */
+.dropzone {
+  border: 2px dashed var(--border); border-radius: var(--radius); background: var(--surface);
+  padding: 40px 24px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.dropzone:hover, .dropzone:focus-visible { border-color: var(--accent); outline: none; }
+.dropzone.dragging { border-color: var(--accent); background: var(--accent-soft); }
+.dz-icon { font-size: 32px; color: var(--accent); }
+.dz-title { margin: 10px 0 4px; font-weight: 600; }
+.dz-sub { margin: 0; color: var(--muted); font-size: 14px; }
+.dz-formats { margin: 14px 0 0; color: var(--muted); font-size: 12px; }
+.dz-formats .sep { margin: 0 6px; }
+.linklike {
+  background: none; border: none; padding: 0; color: var(--accent);
+  font: inherit; cursor: pointer; text-decoration: underline;
+}
+
+.file-picked {
+  display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.file-icon { font-size: 20px; }
+.file-meta { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.file-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta span { color: var(--muted); font-size: 13px; }
+
+/* ── Tuỳ chọn ───────────────────────────────────────────── */
+.options {
+  margin: 18px 0 0; padding: 16px 18px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+}
+.options legend { padding: 0 6px; color: var(--muted); font-size: 12px; }
+@media (max-width: 720px) { .options { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.field select {
+  padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--text); font: inherit;
+}
+
+/* ── Nút ────────────────────────────────────────────────── */
+button { font: inherit; }
+.primary {
+  margin-top: 18px; padding: 12px 22px; border: none; border-radius: 10px;
+  background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+}
+.primary:disabled { opacity: .45; cursor: not-allowed; }
+.ghost {
+  padding: 10px 18px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); cursor: pointer;
+}
+.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.actions .primary { margin-top: 0; }
+
+/* ── Danh sách bước xử lý ───────────────────────────────── */
+.stages { list-style: none; padding: 0; margin: 0 0 18px; }
+.stages li {
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px; margin-bottom: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--muted);
+}
+.stages li::before {
+  content: "○"; flex: none; width: 18px; text-align: center; color: var(--border);
+}
+.stages li.running { color: var(--text); border-color: var(--accent); }
+.stages li.running::before { content: "◐"; color: var(--accent); }
+.stages li.done { color: var(--text); }
+.stages li.done::before { content: "●"; color: var(--low); }
+.stages li.skipped { color: var(--muted); border-style: dashed; }
+.stages li.skipped::before { content: "–"; color: var(--muted); }
+.stages li .ms { margin-left: auto; font-size: 12px; color: var(--muted); }
+
+/* ── Bảng rủi ro ────────────────────────────────────────── */
+.risk-banner {
+  display: flex; align-items: center; gap: 18px; padding: 20px 22px; margin-bottom: 16px;
+  border: 1px solid var(--border); border-left: 6px solid var(--unknown);
+  border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow);
+}
+.risk-emoji { font-size: 34px; }
+.risk-label { margin: 0; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.risk-level { margin: 2px 0 0; font-size: 24px; font-weight: 700; }
+.risk-condition { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.risk-LOW { border-left-color: var(--low); }
+.risk-LOW .risk-level { color: var(--low); }
+.risk-CONDITIONAL { border-left-color: var(--conditional); }
+.risk-CONDITIONAL .risk-level { color: var(--conditional); }
+.risk-HIGH { border-left-color: var(--high); }
+.risk-HIGH .risk-level { color: var(--high); }
+.risk-UNKNOWN { border-left-color: var(--unknown); }
+.risk-UNKNOWN .risk-level { color: var(--unknown); }
+
+/* ── Danh sách khoá/giá trị ─────────────────────────────── */
+dl { display: grid; grid-template-columns: minmax(140px, auto) 1fr; gap: 8px 16px; margin: 0; }
+dt { color: var(--muted); font-size: 13px; }
+dd { margin: 0; word-break: break-word; }
+dd.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; }
+.pill {
+  display: inline-block; padding: 2px 9px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 600;
+}
+.yes { color: var(--low); font-weight: 600; }
+.no { color: var(--high); font-weight: 600; }
+
+.recommendation { margin: 0 0 14px; font-size: 15px; }
+
+.confidences { display: grid; gap: 10px; margin-bottom: 12px; }
+.conf-row { display: grid; grid-template-columns: 170px 1fr 52px; align-items: center; gap: 12px; font-size: 13px; }
+.bar { height: 7px; border-radius: 999px; background: var(--border); overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); }
+
+/* ── Bảng ───────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; margin-bottom: 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; }
+tr.hit td { background: var(--accent-soft); }
+
+/* ── Phản hồi ───────────────────────────────────────────── */
+.feedback-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.feedback-buttons button {
+  padding: 9px 16px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--bg); color: var(--text); cursor: pointer;
+}
+.feedback-buttons button:hover { border-color: var(--accent); color: var(--accent); }
+.feedback-buttons button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+pre {
+  max-height: 420px; overflow: auto; padding: 14px; margin: 12px 0 0;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 12px;
+}
+details summary { cursor: pointer; font-weight: 600; font-size: 15px; }
+
+footer {
+  padding: 20px 24px 32px; text-align: center; color: var(--muted); font-size: 13px;
+}
+footer a { color: var(--accent); }

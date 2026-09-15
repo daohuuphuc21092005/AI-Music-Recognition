@@ -1,0 +1,74 @@
+# Môi trường & bí mật
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# Dữ liệu tạm sinh ra lúc chạy
+temp_uploads/
+data/raw/
+*.log
+
+# Index FAISS mồ côi 235 MB: không file mã nguồn nào tham chiếu tới nó, và nó
+# vượt giới hạn 100 MB mỗi file của GitHub nên commit vào là repo hết push được.
+data/processed/mert_faiss_ALL.index
+
+# Checkpoint của thí nghiệm dài: chỉ là trạng thái để chạy tiếp sau khi bị ngắt,
+# tự xoá khi thí nghiệm lưu kết quả xong. Có thể lên tới vài chục MB.
+experiments/results/.checkpoints/
+
+# Bản sao lưu của .env: chính .env đã được ignore ngay dòng đầu, nhưng bản sao
+# thì KHÔNG, và chúng chứa nguyên POSTGRES_PASSWORD. Commit một lần là mật khẩu
+# nằm vĩnh viễn trong lịch sử git, xoá đi cũng không gỡ được khỏi các bản clone.
+# Dùng pattern rộng .env.* thay vì liệt kê từng hậu tố: rà soát trước lần commit
+# đầu tiên phát hiện một file `.env.bi-ghi-de-20260910` không khớp `.env.bak*`
+# cũ — hậu tố đặt tay không thể đoán trước hết, nên chặn cả lớp thay vì từng tên.
+.env.*
+!.env.example
+
+# File thừa của các lần dựng lại dữ liệu (đuôi .old/.stale do script tự đặt).
+*.old
+*.stale
+
+# Embedding master 125 MB: vượt giới hạn 100 MB/file của GitHub, và là dữ liệu
+# SINH RA ĐƯỢC — dựng lại bằng `python scripts/build_embeddings.py --all` từ audio
+# trong AUDIO_ROOT. Cùng lý do với mert_faiss_ALL.index ở trên.
+data/processed/embeddings_master.csv
+
+# Dump metadata gốc từ nguồn (908 MB features.csv + 249 MB tracks.csv của FMA...):
+# đây là dữ liệu THÔ do nguồn công bố, không phải sản phẩm của pipeline này, và
+# sinh lại được bằng `fetch_fma.py`/`fetch_jamendo.py` rồi `ingest_corpus.py`.
+data/preprocess/
+
+# Snapshot thủ công của data/processed/ tại một thời điểm cũ (trùng lặp toàn bộ
+# nội dung, gồm cả 2 file đã bị ignore ở trên nhưng KHÔNG bị ignore lại ở đây vì
+# pattern có "/" chỉ khớp đúng path gốc). Quy ước: mọi thư mục con dạng
+# `_archive_*` trong data/processed/ là snapshot thủ công, không commit.
+data/processed/_archive_*/
+data/processed/_backup_*/
+
+# 1901 file audio thật (~2.1 GB) phục vụ Robustness Test Set (EXP-05): sinh lại
+# được bằng `python scripts/augment_audio.py --from-db --sample N` từ corpus đã
+# nạp trong data/processed/. Không có audio gốc nào ở đây là duy nhất/không thể
+# tái tạo.
+data/test_queries/
+
+# Cấu hình riêng từng máy (Claude Code): *.local.* là override cá nhân — đường
+# dẫn tool, CUDA, quyền lệnh Windows... khác nhau giữa các thành viên nhóm.
+.claude/settings.local.json
+.claude/CLAUDE.local.md
+
+# Audio mẫu đi kèm repo: có thể là nhạc có bản quyền của bên thứ ba, commit rồi
+# push lên GitHub là phát tán lại. Người clone mới tự đặt file test vào đúng chỗ
+# (config.resolve_audio_path thử cả thư mục gốc repo).
+test.mp3
+test_audio/

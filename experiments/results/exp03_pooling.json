@@ -1,0 +1,386 @@
+{
+  "experiment_id": "exp03_pooling",
+  "date": "2026-09-09T06:45:35",
+  "git_commit": "17faca9",
+  "git_dirty": true,
+  "dataset_version": {
+    "metadata_master.csv": {
+      "bytes": 869989,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "rights_master.csv": {
+      "bytes": 1517215,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "fingerprints_master.csv": {
+      "bytes": 3746156,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "embeddings_master.csv": {
+      "bytes": 131916100,
+      "mtime": "2026-09-07T16:09:12"
+    }
+  },
+  "model": {
+    "name": "m-a-p/MERT-v1-95M",
+    "version": "MERT-v1-95M",
+    "embedding_dim": 768,
+    "pooling": "mean",
+    "sample_rate": 24000
+  },
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "parameters": {
+    "protocol": "window-level retrieval; reference = cửa sổ của audio gốc, truy vấn = cửa sổ của file đã biến đổi",
+    "window_s": 15.0,
+    "reference_hop_s": 10.0,
+    "query_hop_s": 5.0,
+    "crop_start_source": "manifest",
+    "overlap_min": 0.5,
+    "reference_windows": 200,
+    "query_windows": 6098,
+    "k_values": [
+      1,
+      5
+    ],
+    "source_files": [
+      "fma/00_0006.mp3",
+      "fma/00_0067.mp3",
+      "fma/00_0100.mp3",
+      "fma/00_0115.mp3",
+      "fma/00_0217.mp3",
+      "fma/00_0228.mp3",
+      "fma/00_0266.mp3",
+      "fma/00_0278.mp3",
+      "fma/00_0326.mp3",
+      "fma/00_0347.mp3",
+      "fma/00_0454.mp3",
+      "fma/00_0475.mp3",
+      "fma/00_0476.mp3",
+      "fma/01_0126.mp3",
+      "fma/01_0130.mp3",
+      "fma/01_0144.mp3",
+      "fma/01_0146.mp3",
+      "fma/01_0242.mp3",
+      "fma/01_0250.mp3",
+      "fma/01_0281.mp3",
+      "fma/01_0295.mp3",
+      "fma/01_0315.mp3",
+      "fma/01_0376.mp3",
+      "fma/01_0416.mp3",
+      "fma/01_0493.mp3",
+      "fma/02_0005.mp3",
+      "fma/02_0118.mp3",
+      "fma/02_0177.mp3",
+      "fma/02_0212.mp3",
+      "fma/02_0217.mp3",
+      "fma/02_0221.mp3",
+      "fma/02_0381.mp3",
+      "fma/02_0384.mp3",
+      "fma/02_0400.mp3",
+      "fma/02_0512.mp3",
+      "fma/02_0515.mp3",
+      "fma/03_0033.mp3",
+      "fma/03_0064.mp3",
+      "fma/03_0074.mp3",
+      "fma/03_0113.mp3",
+      "fma/03_0133.mp3",
+      "fma/03_0174.mp3",
+      "fma/03_0186.mp3",
+      "fma/03_0223.mp3",
+      "fma/03_0244.mp3",
+      "fma/03_0251.mp3",
+      "fma/03_0296.mp3",
+      "fma/03_0394.mp3",
+      "fma/03_0402.mp3",
+      "fma/03_0428.mp3",
+      "fma/03_0446.mp3",
+      "fma/04_0024.mp3",
+      "fma/04_0135.mp3",
+      "fma/04_0159.mp3",
+      "fma/04_0270.mp3",
+      "fma/04_0330.mp3",
+      "fma/04_0352.mp3",
+      "fma/04_0410.mp3",
+      "fma/04_0447.mp3",
+      "fma/04_0463.mp3",
+      "fma/04_0498.mp3",
+      "fma/04_0512.mp3",
+      "fma/04_0520.mp3",
+      "fma/05_0020.mp3",
+      "fma/05_0094.mp3",
+      "fma/05_0177.mp3",
+      "fma/05_0329.mp3",
+      "fma/05_0434.mp3",
+      "fma/05_0469.mp3",
+      "fma/05_0509.mp3",
+      "fma/06_0017.mp3",
+      "fma/06_0111.mp3",
+      "fma/06_0131.mp3",
+      "fma/06_0233.mp3",
+      "fma/06_0248.mp3",
+      "fma/06_0257.mp3",
+      "fma/06_0259.mp3",
+      "fma/06_0274.mp3",
+      "fma/06_0323.mp3",
+      "fma/06_0325.mp3",
+      "fma/06_0371.mp3",
+      "fma/06_0374.mp3",
+      "fma/06_0398.mp3",
+      "fma/06_0414.mp3",
+      "fma/06_0484.mp3",
+      "fma/06_0488.mp3",
+      "fma/07_0015.mp3",
+      "fma/07_0017.mp3",
+      "fma/07_0064.mp3",
+      "fma/07_0105.mp3",
+      "fma/07_0123.mp3",
+      "fma/07_0180.mp3",
+      "fma/07_0221.mp3",
+      "fma/07_0278.mp3",
+      "fma/07_0314.mp3",
+      "fma/07_0318.mp3",
+      "fma/07_0348.mp3",
+      "fma/07_0394.mp3",
+      "fma/07_0454.mp3",
+      "fma/07_0492.mp3"
+    ],
+    "strategies": {
+      "mean": 768,
+      "mean_std": 1536
+    },
+    "similarity": "cosine (IndexFlatIP trên vector đã chuẩn hoá L2)",
+    "shared_forward_pass": true
+  },
+  "metrics": {
+    "mean": {
+      "recall@1": 0.8616,
+      "recall@5": 0.9351,
+      "mrr": 0.8977,
+      "recording_recall@1": 0.9075,
+      "mean_top1_similarity": 0.9596,
+      "search_ms_mean": 0.054,
+      "search_ms_p95": 0.072,
+      "dimension": 768,
+      "index_bytes": 614400,
+      "queries": 6098,
+      "per_transformation": {
+        "audio_overlay": {
+          "n": 346,
+          "accuracy@1": 0.841,
+          "recording_accuracy@1": 0.8728
+        },
+        "crop_10s": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "crop_15s": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "eq_lowpass_4k": {
+          "n": 346,
+          "accuracy@1": 0.9855,
+          "recording_accuracy@1": 1.0
+        },
+        "gain_minus12db": {
+          "n": 346,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "mp3_128k": {
+          "n": 346,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "mp3_64k": {
+          "n": 346,
+          "accuracy@1": 0.9971,
+          "recording_accuracy@1": 1.0
+        },
+        "noise_snr10": {
+          "n": 346,
+          "accuracy@1": 0.9624,
+          "recording_accuracy@1": 0.9971
+        },
+        "noise_snr20": {
+          "n": 346,
+          "accuracy@1": 0.9827,
+          "recording_accuracy@1": 0.9971
+        },
+        "noise_snr5": {
+          "n": 346,
+          "accuracy@1": 0.9104,
+          "recording_accuracy@1": 0.9769
+        },
+        "original_crop30s": {
+          "n": 346,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "pitch_minus_1": {
+          "n": 346,
+          "accuracy@1": 0.578,
+          "recording_accuracy@1": 0.6792
+        },
+        "pitch_minus_2": {
+          "n": 346,
+          "accuracy@1": 0.4971,
+          "recording_accuracy@1": 0.6301
+        },
+        "pitch_plus_1": {
+          "n": 346,
+          "accuracy@1": 0.604,
+          "recording_accuracy@1": 0.7052
+        },
+        "pitch_plus_2": {
+          "n": 346,
+          "accuracy@1": 0.474,
+          "recording_accuracy@1": 0.5578
+        },
+        "tempo_0_90": {
+          "n": 400,
+          "accuracy@1": 0.915,
+          "recording_accuracy@1": 0.9775
+        },
+        "tempo_0_95": {
+          "n": 400,
+          "accuracy@1": 0.9375,
+          "recording_accuracy@1": 0.9925
+        },
+        "tempo_1_05": {
+          "n": 300,
+          "accuracy@1": 0.9467,
+          "recording_accuracy@1": 1.0
+        },
+        "tempo_1_10": {
+          "n": 300,
+          "accuracy@1": 0.9367,
+          "recording_accuracy@1": 0.9867
+        }
+      },
+      "pool_ms_mean": 0.3259
+    },
+    "mean_std": {
+      "recall@1": 0.8731,
+      "recall@5": 0.9378,
+      "mrr": 0.9049,
+      "recording_recall@1": 0.9141,
+      "mean_top1_similarity": 0.9857,
+      "search_ms_mean": 0.074,
+      "search_ms_p95": 0.107,
+      "dimension": 1536,
+      "index_bytes": 1228800,
+      "queries": 6098,
+      "per_transformation": {
+        "audio_overlay": {
+          "n": 346,
+          "accuracy@1": 0.8179,
+          "recording_accuracy@1": 0.8497
+        },
+        "crop_10s": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "crop_15s": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "eq_lowpass_4k": {
+          "n": 346,
+          "accuracy@1": 0.9913,
+          "recording_accuracy@1": 1.0
+        },
+        "gain_minus12db": {
+          "n": 346,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "mp3_128k": {
+          "n": 346,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "mp3_64k": {
+          "n": 346,
+          "accuracy@1": 0.9971,
+          "recording_accuracy@1": 1.0
+        },
+        "noise_snr10": {
+          "n": 346,
+          "accuracy@1": 0.9595,
+          "recording_accuracy@1": 0.9942
+        },
+        "noise_snr20": {
+          "n": 346,
+          "accuracy@1": 0.9855,
+          "recording_accuracy@1": 0.9971
+        },
+        "noise_snr5": {
+          "n": 346,
+          "accuracy@1": 0.9046,
+          "recording_accuracy@1": 0.9711
+        },
+        "original_crop30s": {
+          "n": 346,
+          "accuracy@1": 1.0,
+          "recording_accuracy@1": 1.0
+        },
+        "pitch_minus_1": {
+          "n": 346,
+          "accuracy@1": 0.6272,
+          "recording_accuracy@1": 0.7225
+        },
+        "pitch_minus_2": {
+          "n": 346,
+          "accuracy@1": 0.5347,
+          "recording_accuracy@1": 0.659
+        },
+        "pitch_plus_1": {
+          "n": 346,
+          "accuracy@1": 0.6647,
+          "recording_accuracy@1": 0.7486
+        },
+        "pitch_plus_2": {
+          "n": 346,
+          "accuracy@1": 0.5087,
+          "recording_accuracy@1": 0.5867
+        },
+        "tempo_0_90": {
+          "n": 400,
+          "accuracy@1": 0.9225,
+          "recording_accuracy@1": 0.98
+        },
+        "tempo_0_95": {
+          "n": 400,
+          "accuracy@1": 0.95,
+          "recording_accuracy@1": 0.9925
+        },
+        "tempo_1_05": {
+          "n": 300,
+          "accuracy@1": 0.9667,
+          "recording_accuracy@1": 1.0
+        },
+        "tempo_1_10": {
+          "n": 300,
+          "accuracy@1": 0.94,
+          "recording_accuracy@1": 0.9867
+        }
+      },
+      "pool_ms_mean": 3.374
+    },
+    "forward_ms_mean": 2029.6,
+    "delta_mean_std_minus_mean": {
+      "recall@1": 0.0115,
+      "recall@5": 0.0027,
+      "mrr": 0.0072
+    }
+  },
+  "notes": "Reference gồm cửa sổ của 60 bản ghi nguồn, truy vấn là cửa sổ của 1.140 file đã biến đổi. Con số đáng đọc là Recall@1/@5 ở MỨC CỬA SỔ: các cửa sổ chồng lấn của cùng một bài rất giống nhau nên đây là phép thử đủ khó để phân biệt hai chiến lược pooling. Cố ý KHÔNG dựng lại reference cho cả 1.000 bản ghi — EXP-03 so sánh hai phép gộp trên cùng một lượt suy luận MERT, nên chênh lệch đo được là của pooling chứ không phải của quy mô reference. Độ phủ retrieval ở mức bản ghi đã có EXP-02 và EXP-04 đo."
+}

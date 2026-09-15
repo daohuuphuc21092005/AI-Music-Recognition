@@ -1,0 +1,363 @@
+{
+  "experiment_id": "exp06_unknown_detection",
+  "date": "2026-09-07T17:12:43",
+  "git_commit": "266fcd8",
+  "git_dirty": true,
+  "dataset_version": {
+    "metadata_master.csv": {
+      "bytes": 869989,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "rights_master.csv": {
+      "bytes": 1517215,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "fingerprints_master.csv": {
+      "bytes": 3746156,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "embeddings_master.csv": {
+      "bytes": 131916100,
+      "mtime": "2026-09-07T16:09:12"
+    }
+  },
+  "model": {
+    "name": "m-a-p/MERT-v1-95M",
+    "version": "MERT-v1-95M",
+    "embedding_dim": 768,
+    "pooling": "mean",
+    "sample_rate": 24000
+  },
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "parameters": {
+    "protocol": "leave-one-recording-out (split theo recording_id, §2)",
+    "thresholds": [
+      0.7,
+      0.71,
+      0.72,
+      0.73,
+      0.74,
+      0.75,
+      0.76,
+      0.77,
+      0.78,
+      0.79,
+      0.8,
+      0.81,
+      0.82,
+      0.83,
+      0.84,
+      0.85,
+      0.86,
+      0.87,
+      0.88,
+      0.89,
+      0.9,
+      0.91,
+      0.92,
+      0.93,
+      0.94,
+      0.95,
+      0.96,
+      0.97,
+      0.98,
+      0.99,
+      1.0
+    ],
+    "target_false_match_rate": [
+      0.05,
+      0.01
+    ],
+    "reference_vectors": 8000,
+    "reference_recordings": 4000
+  },
+  "metrics": {
+    "sweep": [
+      {
+        "threshold": 0.7,
+        "false_match_rate": 0.9999,
+        "unknown_recall": 0.0001,
+        "unknown_precision": 1.0,
+        "true_accept_rate": 0.9195,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.71,
+        "false_match_rate": 0.9999,
+        "unknown_recall": 0.0001,
+        "unknown_precision": 0.5,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.72,
+        "false_match_rate": 0.9999,
+        "unknown_recall": 0.0001,
+        "unknown_precision": 0.5,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.73,
+        "false_match_rate": 0.9998,
+        "unknown_recall": 0.0002,
+        "unknown_precision": 0.6667,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.74,
+        "false_match_rate": 0.9998,
+        "unknown_recall": 0.0002,
+        "unknown_precision": 0.6667,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.75,
+        "false_match_rate": 0.9998,
+        "unknown_recall": 0.0002,
+        "unknown_precision": 0.6667,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.76,
+        "false_match_rate": 0.9994,
+        "unknown_recall": 0.0006,
+        "unknown_precision": 0.8333,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.77,
+        "false_match_rate": 0.9986,
+        "unknown_recall": 0.0014,
+        "unknown_precision": 0.9167,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.78,
+        "false_match_rate": 0.9979,
+        "unknown_recall": 0.0021,
+        "unknown_precision": 0.9444,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.79,
+        "false_match_rate": 0.9959,
+        "unknown_recall": 0.0041,
+        "unknown_precision": 0.9706,
+        "true_accept_rate": 0.9194,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.8,
+        "false_match_rate": 0.9946,
+        "unknown_recall": 0.0054,
+        "unknown_precision": 0.9556,
+        "true_accept_rate": 0.9193,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.81,
+        "false_match_rate": 0.993,
+        "unknown_recall": 0.007,
+        "unknown_precision": 0.9655,
+        "true_accept_rate": 0.9193,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.82,
+        "false_match_rate": 0.99,
+        "unknown_recall": 0.01,
+        "unknown_precision": 0.9756,
+        "true_accept_rate": 0.9193,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.83,
+        "false_match_rate": 0.984,
+        "unknown_recall": 0.016,
+        "unknown_precision": 0.9846,
+        "true_accept_rate": 0.9193,
+        "wrong_accept_rate": 0.0805
+      },
+      {
+        "threshold": 0.84,
+        "false_match_rate": 0.9756,
+        "unknown_recall": 0.0244,
+        "unknown_precision": 0.9799,
+        "true_accept_rate": 0.9191,
+        "wrong_accept_rate": 0.0804
+      },
+      {
+        "threshold": 0.85,
+        "false_match_rate": 0.9649,
+        "unknown_recall": 0.0351,
+        "unknown_precision": 0.9757,
+        "true_accept_rate": 0.919,
+        "wrong_accept_rate": 0.0801
+      },
+      {
+        "threshold": 0.86,
+        "false_match_rate": 0.9493,
+        "unknown_recall": 0.0507,
+        "unknown_precision": 0.9644,
+        "true_accept_rate": 0.9189,
+        "wrong_accept_rate": 0.0793
+      },
+      {
+        "threshold": 0.87,
+        "false_match_rate": 0.9217,
+        "unknown_recall": 0.0783,
+        "unknown_precision": 0.9485,
+        "true_accept_rate": 0.9177,
+        "wrong_accept_rate": 0.078
+      },
+      {
+        "threshold": 0.88,
+        "false_match_rate": 0.8865,
+        "unknown_recall": 0.1135,
+        "unknown_precision": 0.9488,
+        "true_accept_rate": 0.9175,
+        "wrong_accept_rate": 0.0764
+      },
+      {
+        "threshold": 0.89,
+        "false_match_rate": 0.828,
+        "unknown_recall": 0.172,
+        "unknown_precision": 0.9392,
+        "true_accept_rate": 0.915,
+        "wrong_accept_rate": 0.0739
+      },
+      {
+        "threshold": 0.9,
+        "false_match_rate": 0.7486,
+        "unknown_recall": 0.2514,
+        "unknown_precision": 0.9367,
+        "true_accept_rate": 0.9119,
+        "wrong_accept_rate": 0.0711
+      },
+      {
+        "threshold": 0.91,
+        "false_match_rate": 0.6452,
+        "unknown_recall": 0.3548,
+        "unknown_precision": 0.9187,
+        "true_accept_rate": 0.9025,
+        "wrong_accept_rate": 0.0661
+      },
+      {
+        "threshold": 0.92,
+        "false_match_rate": 0.5101,
+        "unknown_recall": 0.4899,
+        "unknown_precision": 0.9017,
+        "true_accept_rate": 0.8886,
+        "wrong_accept_rate": 0.058
+      },
+      {
+        "threshold": 0.93,
+        "false_match_rate": 0.3686,
+        "unknown_recall": 0.6314,
+        "unknown_precision": 0.8807,
+        "true_accept_rate": 0.8678,
+        "wrong_accept_rate": 0.0467
+      },
+      {
+        "threshold": 0.94,
+        "false_match_rate": 0.2387,
+        "unknown_recall": 0.7612,
+        "unknown_precision": 0.8587,
+        "true_accept_rate": 0.8375,
+        "wrong_accept_rate": 0.0372
+      },
+      {
+        "threshold": 0.95,
+        "false_match_rate": 0.1452,
+        "unknown_recall": 0.8548,
+        "unknown_precision": 0.8206,
+        "true_accept_rate": 0.7836,
+        "wrong_accept_rate": 0.0295
+      },
+      {
+        "threshold": 0.96,
+        "false_match_rate": 0.0788,
+        "unknown_recall": 0.9213,
+        "unknown_precision": 0.7769,
+        "true_accept_rate": 0.7124,
+        "wrong_accept_rate": 0.0231
+      },
+      {
+        "threshold": 0.97,
+        "false_match_rate": 0.044,
+        "unknown_recall": 0.956,
+        "unknown_precision": 0.708,
+        "true_accept_rate": 0.5864,
+        "wrong_accept_rate": 0.0192
+      },
+      {
+        "threshold": 0.98,
+        "false_match_rate": 0.0184,
+        "unknown_recall": 0.9816,
+        "unknown_precision": 0.6301,
+        "true_accept_rate": 0.4109,
+        "wrong_accept_rate": 0.0127
+      },
+      {
+        "threshold": 0.99,
+        "false_match_rate": 0.01,
+        "unknown_recall": 0.99,
+        "unknown_precision": 0.5424,
+        "true_accept_rate": 0.1552,
+        "wrong_accept_rate": 0.0094
+      },
+      {
+        "threshold": 1.0,
+        "false_match_rate": 0.0013,
+        "unknown_recall": 0.9988,
+        "unknown_precision": 0.5,
+        "true_accept_rate": 0.0,
+        "wrong_accept_rate": 0.0013
+      }
+    ],
+    "recommended": {
+      "fmr<=0.05": {
+        "threshold": 0.97,
+        "false_match_rate": 0.044,
+        "unknown_recall": 0.956,
+        "unknown_precision": 0.708,
+        "true_accept_rate": 0.5864,
+        "wrong_accept_rate": 0.0192
+      },
+      "fmr<=0.01": {
+        "threshold": 0.99,
+        "false_match_rate": 0.01,
+        "unknown_recall": 0.99,
+        "unknown_precision": 0.5424,
+        "true_accept_rate": 0.1552,
+        "wrong_accept_rate": 0.0094
+      }
+    },
+    "current_threshold": 0.97,
+    "current_threshold_row": {
+      "threshold": 0.97,
+      "false_match_rate": 0.044,
+      "unknown_recall": 0.956,
+      "unknown_precision": 0.708,
+      "true_accept_rate": 0.5864,
+      "wrong_accept_rate": 0.0192
+    },
+    "known_queries": 8000,
+    "unknown_queries": 8000,
+    "known_top1_mean": 0.969,
+    "unknown_top1_mean": 0.918,
+    "unknown_top1_p95": 0.968,
+    "unknown_top1_max": 1.0
+  },
+  "notes": "Truy vấn UNKNOWN ở đây là segment của chính reference set sau khi loại bản ghi đó ra, chưa phải audio ngoài tập. Reference chỉ 114 bản ghi nên số liệu mang tính chỉ báo. τMERT khuyến nghị cần kiểm lại khi reference mở rộng: FMR tăng theo số bản ghi trong index."
+}

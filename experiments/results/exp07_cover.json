@@ -1,0 +1,486 @@
+{
+  "experiment_id": "exp07_cover",
+  "date": "2026-09-09T07:02:06",
+  "git_commit": "17faca9",
+  "git_dirty": true,
+  "dataset_version": {
+    "metadata_master.csv": {
+      "bytes": 869989,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "rights_master.csv": {
+      "bytes": 1517215,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "fingerprints_master.csv": {
+      "bytes": 3746156,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "embeddings_master.csv": {
+      "bytes": 131916100,
+      "mtime": "2026-09-07T16:09:12"
+    }
+  },
+  "model": {
+    "name": "m-a-p/MERT-v1-95M",
+    "version": "MERT-v1-95M",
+    "embedding_dim": 768,
+    "pooling": "mean",
+    "sample_rate": 24000
+  },
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "parameters": {
+    "protocol": "window-level retrieval, CÙNG bộ cửa sổ với EXP-03",
+    "window_s": 15.0,
+    "reference_hop_s": 10.0,
+    "query_hop_s": 5.0,
+    "crop_start_source": "manifest",
+    "overlap_min": 0.5,
+    "reference_windows": 200,
+    "query_windows": 6098,
+    "k_values": [
+      1,
+      5
+    ],
+    "source_files": [
+      "fma/00_0006.mp3",
+      "fma/00_0067.mp3",
+      "fma/00_0100.mp3",
+      "fma/00_0115.mp3",
+      "fma/00_0217.mp3",
+      "fma/00_0228.mp3",
+      "fma/00_0266.mp3",
+      "fma/00_0278.mp3",
+      "fma/00_0326.mp3",
+      "fma/00_0347.mp3",
+      "fma/00_0454.mp3",
+      "fma/00_0475.mp3",
+      "fma/00_0476.mp3",
+      "fma/01_0126.mp3",
+      "fma/01_0130.mp3",
+      "fma/01_0144.mp3",
+      "fma/01_0146.mp3",
+      "fma/01_0242.mp3",
+      "fma/01_0250.mp3",
+      "fma/01_0281.mp3",
+      "fma/01_0295.mp3",
+      "fma/01_0315.mp3",
+      "fma/01_0376.mp3",
+      "fma/01_0416.mp3",
+      "fma/01_0493.mp3",
+      "fma/02_0005.mp3",
+      "fma/02_0118.mp3",
+      "fma/02_0177.mp3",
+      "fma/02_0212.mp3",
+      "fma/02_0217.mp3",
+      "fma/02_0221.mp3",
+      "fma/02_0381.mp3",
+      "fma/02_0384.mp3",
+      "fma/02_0400.mp3",
+      "fma/02_0512.mp3",
+      "fma/02_0515.mp3",
+      "fma/03_0033.mp3",
+      "fma/03_0064.mp3",
+      "fma/03_0074.mp3",
+      "fma/03_0113.mp3",
+      "fma/03_0133.mp3",
+      "fma/03_0174.mp3",
+      "fma/03_0186.mp3",
+      "fma/03_0223.mp3",
+      "fma/03_0244.mp3",
+      "fma/03_0251.mp3",
+      "fma/03_0296.mp3",
+      "fma/03_0394.mp3",
+      "fma/03_0402.mp3",
+      "fma/03_0428.mp3",
+      "fma/03_0446.mp3",
+      "fma/04_0024.mp3",
+      "fma/04_0135.mp3",
+      "fma/04_0159.mp3",
+      "fma/04_0270.mp3",
+      "fma/04_0330.mp3",
+      "fma/04_0352.mp3",
+      "fma/04_0410.mp3",
+      "fma/04_0447.mp3",
+      "fma/04_0463.mp3",
+      "fma/04_0498.mp3",
+      "fma/04_0512.mp3",
+      "fma/04_0520.mp3",
+      "fma/05_0020.mp3",
+      "fma/05_0094.mp3",
+      "fma/05_0177.mp3",
+      "fma/05_0329.mp3",
+      "fma/05_0434.mp3",
+      "fma/05_0469.mp3",
+      "fma/05_0509.mp3",
+      "fma/06_0017.mp3",
+      "fma/06_0111.mp3",
+      "fma/06_0131.mp3",
+      "fma/06_0233.mp3",
+      "fma/06_0248.mp3",
+      "fma/06_0257.mp3",
+      "fma/06_0259.mp3",
+      "fma/06_0274.mp3",
+      "fma/06_0323.mp3",
+      "fma/06_0325.mp3",
+      "fma/06_0371.mp3",
+      "fma/06_0374.mp3",
+      "fma/06_0398.mp3",
+      "fma/06_0414.mp3",
+      "fma/06_0484.mp3",
+      "fma/06_0488.mp3",
+      "fma/07_0015.mp3",
+      "fma/07_0017.mp3",
+      "fma/07_0064.mp3",
+      "fma/07_0105.mp3",
+      "fma/07_0123.mp3",
+      "fma/07_0180.mp3",
+      "fma/07_0221.mp3",
+      "fma/07_0278.mp3",
+      "fma/07_0314.mp3",
+      "fma/07_0318.mp3",
+      "fma/07_0348.mp3",
+      "fma/07_0394.mp3",
+      "fma/07_0454.mp3",
+      "fma/07_0492.mp3"
+    ],
+    "feature": "chroma_cqt + Optimal Transposition Index (12 phép xoay)",
+    "chroma_sr": 22050,
+    "descriptor_frames": 64,
+    "similarity": "cosine trên descriptor đã chuẩn hoá L2, lấy max qua 12 phép xoay",
+    "compared_against_exp03": true
+  },
+  "metrics": {
+    "recall@1": 0.5935,
+    "recall@5": 0.6617,
+    "mrr": 0.6317,
+    "map": 0.6157,
+    "oti_accuracy": 0.9134,
+    "queries": 6098,
+    "reference_windows": 200,
+    "descriptor_dimension": 768,
+    "threshold_sweep": [
+      {
+        "threshold": 0.8,
+        "precision": 0.6063,
+        "recall": 0.5922,
+        "f1": 0.5991,
+        "accepted": 5956,
+        "false_match_rate": 0.9524
+      },
+      {
+        "threshold": 0.81,
+        "precision": 0.6114,
+        "recall": 0.5922,
+        "f1": 0.6016,
+        "accepted": 5906,
+        "false_match_rate": 0.9369
+      },
+      {
+        "threshold": 0.82,
+        "precision": 0.6191,
+        "recall": 0.5918,
+        "f1": 0.6052,
+        "accepted": 5829,
+        "false_match_rate": 0.9173
+      },
+      {
+        "threshold": 0.83,
+        "precision": 0.6258,
+        "recall": 0.5907,
+        "f1": 0.6077,
+        "accepted": 5756,
+        "false_match_rate": 0.8926
+      },
+      {
+        "threshold": 0.84,
+        "precision": 0.6343,
+        "recall": 0.589,
+        "f1": 0.6108,
+        "accepted": 5663,
+        "false_match_rate": 0.8647
+      },
+      {
+        "threshold": 0.85,
+        "precision": 0.6451,
+        "recall": 0.5866,
+        "f1": 0.6144,
+        "accepted": 5545,
+        "false_match_rate": 0.8211
+      },
+      {
+        "threshold": 0.86,
+        "precision": 0.6552,
+        "recall": 0.5853,
+        "f1": 0.6183,
+        "accepted": 5447,
+        "false_match_rate": 0.7811
+      },
+      {
+        "threshold": 0.87,
+        "precision": 0.6665,
+        "recall": 0.5838,
+        "f1": 0.6224,
+        "accepted": 5341,
+        "false_match_rate": 0.7396
+      },
+      {
+        "threshold": 0.88,
+        "precision": 0.6853,
+        "recall": 0.581,
+        "f1": 0.6289,
+        "accepted": 5170,
+        "false_match_rate": 0.6856
+      },
+      {
+        "threshold": 0.89,
+        "precision": 0.7028,
+        "recall": 0.5725,
+        "f1": 0.631,
+        "accepted": 4967,
+        "false_match_rate": 0.6228
+      },
+      {
+        "threshold": 0.9,
+        "precision": 0.7276,
+        "recall": 0.5638,
+        "f1": 0.6353,
+        "accepted": 4725,
+        "false_match_rate": 0.5464
+      },
+      {
+        "threshold": 0.91,
+        "precision": 0.7462,
+        "recall": 0.5521,
+        "f1": 0.6347,
+        "accepted": 4512,
+        "false_match_rate": 0.4861
+      },
+      {
+        "threshold": 0.92,
+        "precision": 0.77,
+        "recall": 0.543,
+        "f1": 0.6369,
+        "accepted": 4300,
+        "false_match_rate": 0.4203
+      },
+      {
+        "threshold": 0.93,
+        "precision": 0.8105,
+        "recall": 0.5274,
+        "f1": 0.639,
+        "accepted": 3968,
+        "false_match_rate": 0.3262
+      },
+      {
+        "threshold": 0.94,
+        "precision": 0.8607,
+        "recall": 0.5105,
+        "f1": 0.6409,
+        "accepted": 3617,
+        "false_match_rate": 0.2386
+      },
+      {
+        "threshold": 0.95,
+        "precision": 0.9079,
+        "recall": 0.4946,
+        "f1": 0.6403,
+        "accepted": 3322,
+        "false_match_rate": 0.1515
+      },
+      {
+        "threshold": 0.96,
+        "precision": 0.9576,
+        "recall": 0.4705,
+        "f1": 0.631,
+        "accepted": 2996,
+        "false_match_rate": 0.0605
+      },
+      {
+        "threshold": 0.97,
+        "precision": 0.9864,
+        "recall": 0.4405,
+        "f1": 0.609,
+        "accepted": 2723,
+        "false_match_rate": 0.0143
+      },
+      {
+        "threshold": 0.98,
+        "precision": 0.9952,
+        "recall": 0.4069,
+        "f1": 0.5776,
+        "accepted": 2493,
+        "false_match_rate": 0.0016
+      },
+      {
+        "threshold": 0.99,
+        "precision": 0.9979,
+        "recall": 0.3111,
+        "f1": 0.4743,
+        "accepted": 1901,
+        "false_match_rate": 0.0007
+      },
+      {
+        "threshold": 1.0,
+        "precision": 1.0,
+        "recall": 0.0458,
+        "f1": 0.0875,
+        "accepted": 279,
+        "false_match_rate": 0.0
+      }
+    ],
+    "recommended_tau_cover": {
+      "threshold": 0.97,
+      "precision": 0.9864,
+      "recall": 0.4405,
+      "f1": 0.609,
+      "accepted": 2723,
+      "false_match_rate": 0.0143
+    },
+    "tau_cover_meets_fmr_target": true,
+    "score_distribution": {
+      "top1_correct": {
+        "count": 3619,
+        "mean": 0.9768,
+        "p05": 0.9
+      },
+      "top1_wrong": {
+        "count": 2479,
+        "mean": 0.8936,
+        "p95": 0.9602
+      },
+      "held_out_best": {
+        "count": 6098,
+        "mean": 0.8978,
+        "p95": 0.9614,
+        "max": 1.0
+      }
+    },
+    "latency_ms": {
+      "descriptor_reference_mean": 153.0,
+      "descriptor_query_mean": 149.5,
+      "search_mean": 0.38,
+      "search_p95": 0.495
+    },
+    "per_transformation": {
+      "audio_overlay": {
+        "n": 346,
+        "accuracy@1": 0.5491,
+        "oti_accuracy": 0.8844,
+        "mean_top1_score": 0.953
+      },
+      "crop_10s": {
+        "n": 100,
+        "accuracy@1": 0.28,
+        "oti_accuracy": 0.88,
+        "mean_top1_score": 0.8973
+      },
+      "crop_15s": {
+        "n": 100,
+        "accuracy@1": 1.0,
+        "oti_accuracy": 1.0,
+        "mean_top1_score": 0.9999
+      },
+      "eq_lowpass_4k": {
+        "n": 346,
+        "accuracy@1": 0.6821,
+        "oti_accuracy": 0.9306,
+        "mean_top1_score": 0.9577
+      },
+      "gain_minus12db": {
+        "n": 346,
+        "accuracy@1": 0.6821,
+        "oti_accuracy": 0.9364,
+        "mean_top1_score": 0.9586
+      },
+      "mp3_128k": {
+        "n": 346,
+        "accuracy@1": 0.6792,
+        "oti_accuracy": 0.9306,
+        "mean_top1_score": 0.9578
+      },
+      "mp3_64k": {
+        "n": 346,
+        "accuracy@1": 0.685,
+        "oti_accuracy": 0.9306,
+        "mean_top1_score": 0.9577
+      },
+      "noise_snr10": {
+        "n": 346,
+        "accuracy@1": 0.6647,
+        "oti_accuracy": 0.9306,
+        "mean_top1_score": 0.9617
+      },
+      "noise_snr20": {
+        "n": 346,
+        "accuracy@1": 0.6763,
+        "oti_accuracy": 0.9306,
+        "mean_top1_score": 0.9591
+      },
+      "noise_snr5": {
+        "n": 346,
+        "accuracy@1": 0.6387,
+        "oti_accuracy": 0.9191,
+        "mean_top1_score": 0.9635
+      },
+      "original_crop30s": {
+        "n": 346,
+        "accuracy@1": 0.6821,
+        "oti_accuracy": 0.9364,
+        "mean_top1_score": 0.9589
+      },
+      "pitch_minus_1": {
+        "n": 346,
+        "accuracy@1": 0.6561,
+        "oti_accuracy": 0.922,
+        "mean_top1_score": 0.949
+      },
+      "pitch_minus_2": {
+        "n": 346,
+        "accuracy@1": 0.659,
+        "oti_accuracy": 0.9191,
+        "mean_top1_score": 0.9468
+      },
+      "pitch_plus_1": {
+        "n": 346,
+        "accuracy@1": 0.6647,
+        "oti_accuracy": 0.9133,
+        "mean_top1_score": 0.9489
+      },
+      "pitch_plus_2": {
+        "n": 346,
+        "accuracy@1": 0.659,
+        "oti_accuracy": 0.9104,
+        "mean_top1_score": 0.9482
+      },
+      "tempo_0_90": {
+        "n": 400,
+        "accuracy@1": 0.25,
+        "oti_accuracy": 0.8425,
+        "mean_top1_score": 0.8952
+      },
+      "tempo_0_95": {
+        "n": 400,
+        "accuracy@1": 0.44,
+        "oti_accuracy": 0.8875,
+        "mean_top1_score": 0.9032
+      },
+      "tempo_1_05": {
+        "n": 300,
+        "accuracy@1": 0.5133,
+        "oti_accuracy": 0.92,
+        "mean_top1_score": 0.9098
+      },
+      "tempo_1_10": {
+        "n": 300,
+        "accuracy@1": 0.31,
+        "oti_accuracy": 0.88,
+        "mean_top1_score": 0.902
+      }
+    }
+  },
+  "notes": "KHÔNG phải thí nghiệm cover thật: repo chưa có bản thu cover nào (§8 yêu cầu subset SecondHandSongs, 100–200 composition × 2–5 version). Thí nghiệm này đo tính BẤT BIẾN VỚI DỊCH CAO ĐỘ và đổi tốc độ — cơ chế cốt lõi mà một hệ cover dựa vào, tức điều kiện CẦN chứ không phải điều kiện đủ. τCover đề xuất ở đây hiệu chỉnh trên reference là cửa sổ của 60 bản ghi nguồn. Chroma là đặc trưng thô: số ứng viên tăng lên thì dương tính giả tăng nhanh, nên trước khi nối tầng này vào cascade vẫn phải có một thí nghiệm unknown-detection riêng cho nó, tương tự EXP-06 của tầng MERT."
+}

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music Rights AI — Nhận diện nhạc &amp; đánh giá rủi ro bản quyền</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">♪</span>
+    <div>
+      <h1>Music Rights AI</h1>
+      <p>Nhận diện nhạc &amp; đánh giá rủi ro sử dụng bản quyền</p>
+    </div>
+  </div>
+  <div id="health" class="health" title="Trạng thái hệ thống">
+    <span class="dot dot-idle"></span><span class="health-text">đang kiểm tra…</span>
+  </div>
+</header>
+
+<nav class="steps" aria-label="Tiến trình">
+  <ol>
+    <li data-step="upload" class="active"><span>1</span> Tải lên</li>
+    <li data-step="processing"><span>2</span> Xử lý</li>
+    <li data-step="result"><span>3</span> Kết quả</li>
+    <li data-step="evidence"><span>4</span> Bằng chứng</li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ══════════════════ MÀN 1: UPLOAD ══════════════════ -->
+<section id="screen-upload" class="screen active">
+  <form id="upload-form">
+    <div id="dropzone" class="dropzone" tabindex="0" role="button"
+         aria-label="Kéo thả file vào đây hoặc bấm để chọn file">
+      <div class="dz-icon" aria-hidden="true">⇪</div>
+      <p class="dz-title">Kéo thả file audio hoặc video vào đây</p>
+      <p class="dz-sub">hoặc <button type="button" id="browse" class="linklike">chọn file từ máy</button></p>
+      <p class="dz-formats">mp3 · wav · flac · m4a · aac · ogg · opus · mp4 · mkv · mov · webm · avi
+        <span class="sep">—</span> tối đa <span id="max-size">100</span> MB</p>
+      <input type="file" id="file" name="file" hidden
+             accept=".mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,.mp4,.mkv,.mov,.webm,.avi">
+    </div>
+
+    <div id="file-picked" class="file-picked" hidden>
+      <span class="file-icon" aria-hidden="true">🎵</span>
+      <div class="file-meta">
+        <strong id="file-name"></strong>
+        <span id="file-size"></span>
+      </div>
+      <button type="button" id="clear-file" class="ghost" aria-label="Bỏ chọn file">✕</button>
+    </div>
+
+    <fieldset class="options">
+      <legend>Mục đích sử dụng — đây là đầu vào của Rule Engine, không phải tuỳ chọn trang trí</legend>
+
+      <label class="field">
+        <span>Nền tảng đăng tải</span>
+        <select id="platform" name="platform">
+          <option value="YOUTUBE" selected>YouTube</option>
+          <option value="FACEBOOK">Facebook</option>
+          <option value="TIKTOK">TikTok</option>
+          <option value="OTHER">Khác</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Mục đích</span>
+        <select id="commercial_use" name="commercial_use">
+          <option value="false" selected>Phi thương mại</option>
+          <option value="true">Thương mại</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Bật kiếm tiền</span>
+        <select id="monetization" name="monetization">
+          <option value="false" selected>Không</option>
+          <option value="true">Có</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <button type="submit" id="analyze" class="primary" disabled>PHÂN TÍCH</button>
+    <p id="upload-error" class="error" hidden></p>
+  </form>
+</section>
+
+<!-- ══════════════════ MÀN 2: PROCESSING ══════════════════ -->
+<section id="screen-processing" class="screen">
+  <h2>Đang xử lý <span id="processing-file" class="muted"></span></h2>
+  <p class="hint">Danh sách dưới đây là các bước THẬT của pipeline, đọc từ
+     <code>GET /api/v1/jobs/{job_id}</code> — không phải thanh chờ giả.</p>
+
+  <ol id="stage-list" class="stages">
+    <li data-stage="VALIDATING">Kiểm tra file tải lên</li>
+    <li data-stage="EXTRACTING_AUDIO">Tách &amp; chuẩn hoá luồng âm thanh</li>
+    <li data-stage="FINGERPRINTING">Sinh fingerprint Chromaprint &amp; dò trong CSDL</li>
+    <li data-stage="EMBEDDING">Trích embedding MERT-v1-95M</li>
+    <li data-stage="VECTOR_SEARCH">Tìm Top-K bản ghi tương đồng (FAISS)</li>
+    <li data-stage="COVER_SEARCH">Nhận dạng phiên bản &amp; cover (CQT + OTI)</li>
+    <li data-stage="RIGHTS_LOOKUP">Tra cứu giấy phép &amp; quyền sử dụng</li>
+    <li data-stage="RULE_ENGINE">Áp dụng Rule Engine phân loại rủi ro</li>
+  </ol>
+
+  <p class="muted small">Job <code id="job-id"></code> · trạng thái <span id="job-status">QUEUED</span></p>
+  <button type="button" id="cancel-poll" class="ghost">Huỷ theo dõi</button>
+</section>
+
+<!-- ══════════════════ MÀN 3: RESULT ══════════════════ -->
+<section id="screen-result" class="screen">
+  <div id="risk-banner" class="risk-banner">
+    <span id="risk-emoji" class="risk-emoji" aria-hidden="true">⚪</span>
+    <div>
+      <p class="risk-label">Mức rủi ro sử dụng</p>
+      <p id="risk-level" class="risk-level">—</p>
+      <p id="risk-condition" class="risk-condition"></p>
+    </div>
+  </div>
+
+  <div class="cards">
+    <article class="card">
+      <h3>Nhận diện</h3>
+      <dl id="identity-list"></dl>
+    </article>
+
+    <article class="card">
+      <h3>Quyền &amp; giấy phép</h3>
+      <dl id="rights-list"></dl>
+    </article>
+  </div>
+
+  <article class="card">
+    <h3>Đánh giá &amp; khuyến nghị</h3>
+    <p id="recommendation" class="recommendation"></p>
+    <p class="hint">Ba loại độ tin cậy được giữ TÁCH BIỆT — hệ thống không quy về
+       một con số “xác suất vi phạm bản quyền” duy nhất.</p>
+    <div id="confidences" class="confidences"></div>
+    <p id="decision-reason" class="muted small"></p>
+  </article>
+
+  <article class="card feedback">
+    <h3>Kết quả này có đúng không?</h3>
+    <div class="feedback-buttons">
+      <button type="button" data-verdict="Correct">Đúng</button>
+      <button type="button" data-verdict="Incorrect">Sai</button>
+      <button type="button" data-verdict="Unsure">Không chắc</button>
+    </div>
+    <p id="feedback-msg" class="muted small" hidden></p>
+  </article>
+
+  <div class="actions">
+    <button type="button" id="to-evidence" class="primary">Xem bằng chứng →</button>
+    <button type="button" id="restart" class="ghost">Phân tích file khác</button>
+  </div>
+</section>
+
+<!-- ══════════════════ MÀN 4: EVIDENCE ══════════════════ -->
+<section id="screen-evidence" class="screen">
+  <h2>Bằng chứng</h2>
+  <p class="hint">Mọi kết luận ở màn hình trước đều truy ngược được về các số liệu
+     dưới đây. Không có bước nào là hộp đen.</p>
+
+  <article class="card">
+    <h3>Tầng 1 — Chromaprint</h3>
+    <dl id="ev-fingerprint"></dl>
+  </article>
+
+  <article class="card">
+    <h3>Tầng 2 — MERT retrieval (Top-K bản ghi)</h3>
+    <div class="table-wrap">
+      <table id="ev-topk">
+        <thead><tr><th>#</th><th>recording_id</th><th>Similarity</th><th>Đoạn khớp</th><th>Số đoạn trúng</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <dl id="ev-embedding"></dl>
+  </article>
+
+  <article class="card" id="card-cover">
+    <h3>Tầng 3 — Cover &amp; Phiên bản (CQT Chroma + OTI)</h3>
+    <dl id="ev-cover"></dl>
+  </article>
+
+  <article class="card">
+    <h3>Rule Engine — luật đã kích hoạt</h3>
+    <dl id="ev-rules"></dl>
+  </article>
+
+  <article class="card">
+    <h3>Nguồn dữ liệu quyền</h3>
+    <dl id="ev-source"></dl>
+  </article>
+
+  <article class="card">
+    <h3>Độ trễ từng bước</h3>
+    <dl id="ev-timings"></dl>
+  </article>
+
+  <details class="card">
+    <summary>JSON gốc của kết quả</summary>
+    <pre id="ev-raw"></pre>
+  </details>
+
+  <div class="actions">
+    <button type="button" id="back-to-result" class="ghost">← Về kết quả</button>
+    <button type="button" id="restart2" class="primary">Phân tích file khác</button>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p>Rule Engine <code>rules_v1</code> · <a href="/docs">Swagger UI</a> · <a href="/health">/health</a></p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

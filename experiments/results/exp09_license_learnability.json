@@ -1,0 +1,413 @@
+{
+  "experiment_id": "exp09_license_learnability",
+  "date": "2026-09-07T17:14:56",
+  "git_commit": "266fcd8",
+  "git_dirty": true,
+  "dataset_version": {
+    "metadata_master.csv": {
+      "bytes": 869989,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "rights_master.csv": {
+      "bytes": 1517215,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "fingerprints_master.csv": {
+      "bytes": 3746156,
+      "mtime": "2026-09-07T00:28:40"
+    },
+    "embeddings_master.csv": {
+      "bytes": 131916100,
+      "mtime": "2026-09-07T16:09:12"
+    }
+  },
+  "model": {
+    "name": "m-a-p/MERT-v1-95M",
+    "version": "MERT-v1-95M",
+    "embedding_dim": 768,
+    "pooling": "mean",
+    "sample_rate": 24000
+  },
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "parameters": {
+    "features": "MERT-v1-95M mean-pooled, gộp theo bản ghi, chuẩn hoá L2",
+    "embedding_dim": 768,
+    "folds": 5,
+    "seed": 42,
+    "protocol_A": "StratifiedKFold theo bản ghi (nghệ sĩ có ở cả hai bên)",
+    "protocol_B": "StratifiedGroupKFold theo NGHỆ SĨ (nghệ sĩ trong test là mới)",
+    "protocol_C": "DummyClassifier(most_frequent)",
+    "models": [
+      "logistic",
+      "mlp"
+    ]
+  },
+  "metrics": {
+    "n_recordings": 4000,
+    "n_artists": 1387,
+    "artists_with_multiple_licenses": 67,
+    "tasks": {
+      "license_type": {
+        "n_samples": 4000,
+        "n_classes": 7,
+        "class_distribution": {
+          "CC_BY_NC_SA": 1531,
+          "CC_BY_NC_ND": 1511,
+          "CC_BY": 377,
+          "CC_BY_NC": 313,
+          "CC_BY_SA": 200,
+          "CC_BY_ND": 28,
+          "CC0": 40
+        },
+        "protocols": {
+          "C_baseline": {
+            "accuracy": 0.3827,
+            "macro_f1": 0.0791,
+            "n_test": 4000
+          },
+          "A_random_logistic": {
+            "accuracy": 0.306,
+            "macro_f1": 0.265,
+            "n_test": 4000
+          },
+          "B_by_artist_logistic": {
+            "accuracy": 0.2357,
+            "macro_f1": 0.1553,
+            "n_test": 4000
+          },
+          "gap_logistic": {
+            "accuracy": 0.0703,
+            "macro_f1": 0.1097
+          },
+          "A_random_mlp": {
+            "accuracy": 0.456,
+            "macro_f1": 0.264,
+            "n_test": 4000
+          },
+          "B_by_artist_mlp": {
+            "accuracy": 0.408,
+            "macro_f1": 0.1436,
+            "n_test": 4000
+          },
+          "gap_mlp": {
+            "accuracy": 0.048,
+            "macro_f1": 0.1204
+          }
+        }
+      },
+      "commercial_use": {
+        "n_samples": 4000,
+        "n_classes": 2,
+        "class_distribution": {
+          "cam": 3355,
+          "cho_phep": 645
+        },
+        "protocols": {
+          "C_baseline": {
+            "accuracy": 0.8387,
+            "macro_f1": 0.4562,
+            "n_test": 4000
+          },
+          "A_random_logistic": {
+            "accuracy": 0.6645,
+            "macro_f1": 0.563,
+            "n_test": 4000
+          },
+          "B_by_artist_logistic": {
+            "accuracy": 0.651,
+            "macro_f1": 0.5322,
+            "n_test": 4000
+          },
+          "gap_logistic": {
+            "accuracy": 0.0135,
+            "macro_f1": 0.0308
+          },
+          "A_random_mlp": {
+            "accuracy": 0.8433,
+            "macro_f1": 0.5185,
+            "n_test": 4000
+          },
+          "B_by_artist_mlp": {
+            "accuracy": 0.837,
+            "macro_f1": 0.4646,
+            "n_test": 4000
+          },
+          "gap_mlp": {
+            "accuracy": 0.0063,
+            "macro_f1": 0.0539
+          }
+        }
+      },
+      "artist_doi_chung": {
+        "n_samples": 2209,
+        "n_classes": 225,
+        "class_distribution": {
+          "Ed Askew": 12,
+          "Bird Names": 6,
+          "Fósforo": 5,
+          "Hall Of Fame": 5,
+          "Lucky Dragons": 21,
+          "The Sounds of Taraab": 16,
+          "Cryptacize": 7,
+          "La Troba Kung-Fu": 5,
+          "Michael Chapman": 11,
+          "Pistolera": 11,
+          "Polka Madre": 11,
+          "Yan Yalego": 5,
+          "Dälek": 5,
+          "Half Japanese": 10,
+          "Peter Biedermann": 7,
+          "Raya Brass Band": 9,
+          "Scott Wilson & Efendi": 5,
+          "EPMD": 5,
+          "Matt Bauer": 6,
+          "Height With Friends": 8,
+          "Jarrod Fowler": 6,
+          "BrokeMC": 9,
+          "Monk Turner": 17,
+          "Mia Doi Todd": 7,
+          "Justice Yeldham": 22,
+          "Kristin Hersh": 7,
+          "Meg Baird": 5,
+          "Big Blood": 86,
+          "Nine Inch Nails": 8,
+          "BOPD": 11,
+          "Cordero": 10,
+          "6th Sense": 33,
+          "6th Sense &amp; Mick Boogie": 5,
+          "WatFatMan": 7,
+          "Garmisch": 29,
+          "Koonda Holaa": 7,
+          "Tha Silent Partner": 14,
+          "Josh Woodward": 26,
+          "This One": 6,
+          "Goto80": 11,
+          "Black Sea Hotel": 11,
+          "Opio": 10,
+          "Ergo Phizmiz": 48,
+          "Throwing Muses": 14,
+          "Bruce Russell": 5,
+          "Multifaros": 5,
+          "Comfort Fit": 16,
+          "Alash Ensemble": 16,
+          "Jalikebba Kuyateh and the Toubabs": 7,
+          "Orquestra Popular De Paio Pires": 8,
+          "Mikuś": 6,
+          "Katapulto": 7,
+          "Pierlo": 5,
+          "Noveller": 8,
+          "Cuban Cowboys": 10,
+          "Black Ant": 23,
+          "Ardei Iute (Moldavian string band)": 5,
+          "Gipsyork": 10,
+          "Sawako": 6,
+          "Romashka": 6,
+          "Zlatne Uste Balkan Brass Band": 11,
+          "Loretta Kelley": 5,
+          "Ras Amerlock": 11,
+          "Buguinha Dub": 5,
+          "Karl Blau": 5,
+          "Lezet": 8,
+          "Flowerheads": 6,
+          "Graphiqs Groove": 9,
+          "Sun Araw": 7,
+          "Frau": 5,
+          "The Pop Winds": 10,
+          "Digi G'Alessio": 8,
+          "Lee Rosevere": 9,
+          "Amy Sayer": 5,
+          "Cullah": 17,
+          "Amil Byleckie": 10,
+          "Gurdonark": 5,
+          "Christian Bjoerklund": 5,
+          "Plushgoolash": 15,
+          "transient": 6,
+          "Yair Yona": 7,
+          "Chico Trujillo": 6,
+          "James Beaudreau": 10,
+          "Lorenzo's Music": 8,
+          "Tommy Tornado": 10,
+          "Unza Unza Orkstar": 7,
+          "Tchakare Kanyembe": 5,
+          "Mastermind XS": 18,
+          "Sláinte": 27,
+          "File Under Toner": 29,
+          "Liam Stewart": 7,
+          "U Can Unlearn Guitar": 5,
+          "Quiet Hooves": 8,
+          "Albert Glasser": 5,
+          "Phemale": 26,
+          "Colin Shaddick & Roger Nicholls": 6,
+          "Broke For Free": 19,
+          "Huun Huur Tu": 14,
+          "Eastern Watershed Klezmer Quartet": 11,
+          "MWE": 9,
+          "Rozsa has become... Madárka": 12,
+          "Kreamy 'Lectric Santa": 6,
+          "Sunslide": 6,
+          "Rolemusic": 12,
+          "Blear Moon": 7,
+          "Plusplus": 18,
+          "Eric Skiff": 10,
+          "Asian Women on the Telephone": 11,
+          "Zachary Cale": 7,
+          "AlexandreDavidGabriel": 7,
+          "Gogofski": 14,
+          "NaDa BaBa": 5,
+          "BADLUCK": 7,
+          "My Bubba & Mi": 10,
+          "David Rovics": 5,
+          "McCloud Zicmuse": 5,
+          "Milk Music": 6,
+          "Kevin MacLeod": 6,
+          "Bob Ostertag": 7,
+          "Manudub": 6,
+          "Poland": 11,
+          "Cracked Latin": 12,
+          "Jan Morgenstern": 5,
+          "The Honorable Sleaze": 8,
+          "Jason Shaw": 21,
+          "Marissa Nadler": 9,
+          "The Hate Noise": 5,
+          "alright lover": 5,
+          "Mark Neil": 10,
+          "DuBoLoGy": 8,
+          "Friglob": 6,
+          "Starseed": 5,
+          "Alaclair Ensemble": 21,
+          "The Kyoto Connection": 12,
+          "et_": 10,
+          "Blasterhead": 5,
+          "Sexteto Tabalá de Palenque": 7,
+          "Origami Repetika": 6,
+          "Jenny Mayhem": 7,
+          "Jackie & The Cedrics": 6,
+          "Corty": 11,
+          "Podington Bear": 38,
+          "Trance And The Arcade": 5,
+          "Elvis Herod": 7,
+          "Kellee Maize": 43,
+          "Man Bites Dog": 5,
+          "Brazda": 7,
+          "Yale Women's Slavic Chorus": 10,
+          "Slaveya Women's Vocal Ensemble": 6,
+          "Isra-Alien Band": 5,
+          "Ventanas": 6,
+          "Tenores de Aterúe": 5,
+          "The Rosen Sisters": 8,
+          "Rakiya": 5,
+          "Niva": 6,
+          "Ben von Wildenhaus": 7,
+          "Gosprom": 5,
+          "Jahzzar": 29,
+          "I Was A Teenage Strangler Soundtrack": 5,
+          "The Happy Valley Band": 5,
+          "Heavy Links": 8,
+          "Buildings and Mountains": 5,
+          "Blank & Kytt": 7,
+          "Monroeville Music Center": 21,
+          "Action Davis": 8,
+          "Derek Clegg": 12,
+          "krackatoa": 13,
+          "Waylon Thornton": 6,
+          "The Suzan": 7,
+          "Supercute": 6,
+          "Drama for Yamaha": 6,
+          "Howie Mitchell": 10,
+          "Howie & Ann Mitchell": 5,
+          "A. P. Vague": 5,
+          "Psychadelik Pedestrian": 7,
+          "Marc Burt": 5,
+          "Redmann": 5,
+          "The NSJ Crew": 5,
+          "Chris Cook": 9,
+          "Infinite Livez": 7,
+          "Morsa": 6,
+          "C-Doc": 22,
+          "S.J. Mellia": 10,
+          "Frenic": 5,
+          "Dengaz": 16,
+          "BLEO": 7,
+          "Decktonic": 14,
+          "Howie Mitchell & Ruth Meyer": 6,
+          "Howie Mitchell & Charlotte Williams": 5,
+          "Büromaschinen": 6,
+          "Deltason": 9,
+          "Miquel Parera Jaques": 5,
+          "The Fucked Up Beat": 16,
+          "Cherly KaCherly": 12,
+          "Square People": 7,
+          "Tricky Diesel": 12,
+          "Koliadnyky of Kryvorivnia": 10,
+          "Stray": 10,
+          "Hudson": 5,
+          "Brock Tyler": 6,
+          "Zlatni Makedoncinja": 5,
+          "Electric Mirrors": 6,
+          "Laura Stevenson and the Cans": 5,
+          "Orange Peels": 10,
+          "Frame": 8,
+          "Pete Galub": 8,
+          "Andrea Carri": 6,
+          "XPURM": 13,
+          "Still Pluto": 5,
+          "Dr. Wylie": 5,
+          "Eric & Magill": 10,
+          "Lantriperc": 6,
+          "Chuzausen": 5,
+          "Not The 1s": 8,
+          "Rod Hamilton": 7,
+          "Pilesar": 9,
+          "Mported Flows": 9,
+          "URB": 9,
+          "Aislinn": 10,
+          "Three Jolly Rogues": 5,
+          "The Craters": 5,
+          "Andrea Tomasi": 5,
+          "Muhmood": 7,
+          "Moon Veil": 6,
+          "Coldnoise": 6
+        },
+        "protocols": {
+          "C_baseline": {
+            "accuracy": 0.0389,
+            "macro_f1": 0.0003,
+            "n_test": 2209
+          },
+          "A_random_logistic": {
+            "accuracy": 0.2811,
+            "macro_f1": 0.2536,
+            "n_test": 2209
+          },
+          "B_by_artist_logistic": {
+            "accuracy": 0.0,
+            "macro_f1": 0.0,
+            "n_test": 2209
+          },
+          "gap_logistic": {
+            "accuracy": 0.2811,
+            "macro_f1": 0.2536
+          },
+          "A_random_mlp": {
+            "accuracy": 0.4455,
+            "macro_f1": 0.3902,
+            "n_test": 2209
+          },
+          "B_by_artist_mlp": {
+            "accuracy": 0.0,
+            "macro_f1": 0.0,
+            "n_test": 2209
+          },
+          "gap_mlp": {
+            "accuracy": 0.4455,
+            "macro_f1": 0.3902
+          }
+        }
+      }
+    }
+  },
+  "notes": "Thí nghiệm trả lời bằng số liệu câu hỏi 'gắn nhãn bản quyền vào đặc trưng rồi train thì có đoán được bài lạ không'. Con số cần đọc là cột 'B vượt baseline': đó là phần model THỰC SỰ học được về giấy phép khi gặp nghệ sĩ chưa từng thấy. Cột 'Rò rỉ (A-B)' là phần hiệu năng đến từ việc nhận ra nghệ sĩ rồi tra bảng chứ không phải từ bản quyền — bài toán đối chứng 'artist_doi_chung' cho thấy embedding mã hoá danh tính nghệ sĩ mạnh tới mức nào. Kết quả này là bằng chứng thực nghiệm cho đóng góp C3 (§1) và cho nguyên tắc §2 'license không phải acoustic class'."
+}
