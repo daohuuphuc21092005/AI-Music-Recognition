@@ -30,12 +30,42 @@ from experiments.common import (
     load_embedding_matrix,
     print_table,
     save_result,
-    similarity_matrix,
 )
 
 EXPERIMENT_ID = "exp06_unknown_detection"
 THRESHOLDS = [round(t, 3) for t in np.arange(0.70, 1.001, 0.01)]
 TARGET_FMR = [0.05, 0.01]  # §16: False Match Rate ≤ 5%
+# Ma trận N×N không vừa RAM khi corpus lớn (50.000 vector ≈ 10 GB): tính theo khối.
+CHUNK_ROWS = 2048
+
+
+def top1_scores(matrix: np.ndarray, recording_ids: np.ndarray) -> tuple:
+    """
+    Trả (known_top1, known_correct, unknown_top1) cho mọi vector.
+
+    KNOWN  : leave-one-out — chỉ bỏ chính vector đó khỏi reference.
+    UNKNOWN: bỏ CẢ bản ghi chứa vector đó, như thể bài chưa từng có trong DB.
+    """
+    n = len(recording_ids)
+    columns_of = {}
+    for column, rec in enumerate(recording_ids):
+        columns_of.setdefault(rec, []).append(column)
+
+    known_top1 = np.empty(n, dtype=np.float32)
+    known_correct = np.empty(n, dtype=bool)
+    unknown_top1 = np.empty(n, dtype=np.float32)
+    for start in range(0, n, CHUNK_ROWS):
+        stop = min(start + CHUNK_ROWS, n)
+        scores = matrix[start:stop] @ matrix.T
+        rows = np.arange(stop - start)
+        scores[rows, np.arange(start, stop)] = -np.inf
+        best = scores.argmax(axis=1)
+        known_top1[start:stop] = scores[rows, best]
+        known_correct[start:stop] = recording_ids[best] == recording_ids[start:stop]
+        for row, rec in enumerate(recording_ids[start:stop]):
+            scores[row, columns_of[rec]] = -np.inf
+        unknown_top1[start:stop] = scores.max(axis=1)
+    return known_top1, known_correct, unknown_top1
 
 
 def main() -> int:
@@ -44,29 +74,7 @@ def main() -> int:
     unique = sorted(set(recording_ids.tolist()))
     print(f"Reference: {n} vector / {len(unique)} bản ghi")
 
-    sims = similarity_matrix(matrix)
-
-    # --- Nhóm KNOWN: leave-one-out -----------------------------------------
-    known_top1, known_correct = [], []
-    for i in range(n):
-        scores = sims[i].copy()
-        scores[i] = -np.inf
-        best = int(np.argmax(scores))
-        known_top1.append(float(scores[best]))
-        known_correct.append(recording_ids[best] == recording_ids[i])
-    known_top1 = np.asarray(known_top1)
-    known_correct = np.asarray(known_correct)
-
-    # --- Nhóm UNKNOWN: loại bỏ toàn bộ bản ghi khỏi reference --------------
-    unknown_top1 = []
-    for rec in unique:
-        rows = np.where(recording_ids == rec)[0]
-        mask = recording_ids == rec          # cột cần loại
-        for i in rows:
-            scores = sims[i].copy()
-            scores[mask] = -np.inf           # bỏ CẢ bản ghi, không chỉ chính nó
-            unknown_top1.append(float(np.max(scores)))
-    unknown_top1 = np.asarray(unknown_top1)
+    known_top1, known_correct, unknown_top1 = top1_scores(matrix, recording_ids)
 
     print(f"Truy vấn KNOWN  : {known_top1.size}")
     print(f"Truy vấn UNKNOWN: {unknown_top1.size}")

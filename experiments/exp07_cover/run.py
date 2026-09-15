@@ -71,6 +71,25 @@ FAMILIES = {
     "Biên độ / EQ": ["gain_minus12db", "eq_lowpass_4k"],
 }
 
+# Mẫu âm không có hoà âm: tầng Cover không được nhận chúng thành bài nào.
+NOISE_COLORS = {"trang": 0.0, "hong": 0.5, "nau": 1.0}  # biên độ phổ ∝ 1 / f^alpha
+NOISE_SEEDS = range(10)
+
+
+def noise_probe_descriptors() -> list:
+    """Descriptor của nhiễu trắng/hồng/nâu dài một cửa sổ — sinh tổng hợp, lặp lại được."""
+    length = int(WINDOW_S * CHROMA_SR)
+    freqs = np.fft.rfftfreq(length, 1.0 / CHROMA_SR)
+    freqs[0] = freqs[1]
+    probes = []
+    for color, alpha in NOISE_COLORS.items():
+        for seed in NOISE_SEEDS:
+            spectrum = np.fft.rfft(np.random.RandomState(seed).normal(0, 1, length))
+            signal = np.fft.irfft(spectrum / freqs ** alpha, n=length)
+            signal = (0.5 * signal / np.max(np.abs(signal))).astype(np.float32)
+            probes.append((f"{color}_{seed}", build_descriptor(signal, CHROMA_SR)))
+    return probes
+
 
 def describe_file(path: str, hop: float, timing: list):
     """Trả danh sách (start, end, descriptor) cho một file."""
@@ -259,6 +278,9 @@ def main() -> int:
         "descriptor_dimension": int(reference_matrix.shape[1]),
     }
 
+    noise_scores = [float(search(descriptor, reference_matrix, top_k=1)[0]["similarity_score"])
+                    for _, descriptor in noise_probe_descriptors()]
+
     # --- Sweep ngưỡng τCover ----------------------------------------------
     sweep = []
     for threshold in THRESHOLD_SWEEP:
@@ -269,15 +291,18 @@ def main() -> int:
         f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
         # Tỉ lệ truy vấn NGOÀI CSDL bị gán nhầm cho một bài — §16 yêu cầu ≤ 5%
         false_match = sum(1 for score in held_out_scores if score >= threshold)
+        noise_match = sum(1 for score in noise_scores if score >= threshold)
         sweep.append({"threshold": threshold, "precision": round(precision, 4),
                       "recall": round(recall, 4), "f1": round(f1, 4),
                       "accepted": len(accepted),
-                      "false_match_rate": round(false_match / n, 4)})
+                      "false_match_rate": round(false_match / n, 4),
+                      "noise_match_rate": round(noise_match / len(noise_scores), 4)})
 
     # Chọn τCover theo ĐÚNG thứ tự ưu tiên của §16: trước hết phải đạt
-    # False Match Rate ≤ 5%, trong số đó mới lấy F1 cao nhất. Chọn theo F1 rồi
-    # mới xét FMR là cách chắc chắn để lặp lại đúng sai lầm của τMERT = 0.90.
-    safe = [r for r in sweep if r["false_match_rate"] <= 0.05]
+    # False Match Rate ≤ 5% và không nhận mẫu nhiễu nào, trong số đó mới lấy F1
+    # cao nhất. Chọn theo F1 rồi mới xét FMR là lặp lại sai lầm của τMERT = 0.90.
+    safe = [r for r in sweep
+            if r["false_match_rate"] <= 0.05 and r["noise_match_rate"] == 0.0]
     best = (max(safe, key=lambda r: (r["f1"], -r["threshold"])) if safe
             else max(sweep, key=lambda r: (r["f1"], r["threshold"])))
     metrics["threshold_sweep"] = sweep
@@ -300,6 +325,11 @@ def main() -> int:
             "mean": round(float(np.mean(held_out_scores)), 4),
             "p95": round(float(np.percentile(held_out_scores, 95)), 4),
             "max": round(float(np.max(held_out_scores)), 4),
+        },
+        "noise_best": {
+            "count": len(noise_scores),
+            "mean": round(float(np.mean(noise_scores)), 4),
+            "max": round(float(np.max(noise_scores)), 4),
         },
     }
     metrics["latency_ms"] = {
@@ -382,6 +412,9 @@ def main() -> int:
     held = metrics["score_distribution"]["held_out_best"]
     print(f"Điểm cao nhất khi bài KHÔNG có trong CSDL: TB {held['mean']} "
           f"(P95 {held['p95']}, max {held['max']})")
+    noise = metrics["score_distribution"]["noise_best"]
+    print(f"Điểm cao nhất của mẫu nhiễu ({noise['count']} mẫu): TB {noise['mean']}, "
+          f"max {noise['max']} — τCover phải cao hơn max này")
 
     pitch = [metrics["per_transformation"][t] for t in FAMILIES["Dịch cao độ"]
              if t in metrics["per_transformation"]]
@@ -404,7 +437,9 @@ def main() -> int:
             "feature": "chroma_cqt + Optimal Transposition Index (12 phép xoay)",
             "chroma_sr": CHROMA_SR,
             "descriptor_frames": reference_matrix.shape[1] // 12,
+            "descriptor_normalization": "trừ trung bình từng khung, chuẩn hoá L2 từng khung rồi toàn vector",
             "similarity": "cosine trên descriptor đã chuẩn hoá L2, lấy max qua 12 phép xoay",
+            "noise_probes": {"colors": list(NOISE_COLORS), "seeds": len(NOISE_SEEDS)},
             "compared_against_exp03": bool(mert),
         },
         metrics=metrics,
