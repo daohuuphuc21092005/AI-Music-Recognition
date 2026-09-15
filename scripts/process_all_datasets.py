@@ -27,9 +27,14 @@ import pandas as pd
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import config
+from backend.services.chromaprint_codec import is_plausible_fingerprint
 
 PREPROCESS_DIR = os.path.join(config.BASE_DIR, "data", "preprocess")
 PROCESSED_DIR = config.DATA_DIR
+JAMENDO_UNVERIFIED_SOURCE = (
+    "SIMULATED (MTG-Jamendo: loại giấy phép suy từ cờ audiodownload_allowed, "
+    "chưa đối chiếu giấy phép thật)"
+)
 
 
 def to_uuid(val: str, namespace_prefix: str = "amr_default") -> str:
@@ -280,9 +285,12 @@ def process_and_merge():
                 "platform": "ALL",
                 "valid_from": "2010-01-01",
                 "valid_until": "2035-12-31",
-                "source": "Jamendo Music Open API",
+                # license_type ở trên suy từ cờ `audiodownload_allowed`, KHÔNG phải
+                # giấy phép thật của bài. Tiền tố SIMULATED để Rule Engine trừ điểm
+                # đúng, verified_at để trống vì chưa từng đối chiếu với nguồn.
+                "source": JAMENDO_UNVERIFIED_SOURCE,
                 "source_url": f"https://www.jamendo.com/track/{jid}",
-                "verified_at": "2026-09-14T00:00:00",
+                "verified_at": "",
             })
             count_jam += 1
         print(f"  + Đã tích hợp {count_jam:,} bản ghi Jamendo Creative Commons.")
@@ -400,6 +408,16 @@ def process_and_merge():
         df_out_rights["recording_id"].isin(valid_rec_set) & df_out_rights["composition_id"].isin(valid_comp_set)
     ].copy()
     df_out_fp = df_out_fp[df_out_fp["recording_id"].isin(valid_rec_set)].copy()
+    # Chỉ giữ fingerprint là đầu ra thật của fpcalc: nguồn chỉ có metadata có thể
+    # kèm chuỗi mang nhãn chromaprint nhưng không sinh từ âm thanh nào, và tầng 1
+    # so khớp thẳng với bảng này.
+    if len(df_out_fp):
+        plausible = df_out_fp.apply(
+            lambda r: is_plausible_fingerprint(r["fingerprint"], r.get("duration")), axis=1)
+        if (~plausible).any():
+            print(f"  ! Loại {int((~plausible).sum()):,} fingerprint không phải "
+                  f"đầu ra thật của fpcalc")
+        df_out_fp = df_out_fp[plausible].copy()
 
     print(f"  * Tổng compositions : {len(df_out_comp):,}")
     print(f"  * Tổng recordings   : {len(df_out_rec):,}")

@@ -150,6 +150,19 @@ def main() -> int:
     else:
         record(PASS, "Fingerprint trùng lặp", "không có")
 
+    # Tầng 1 so khớp thẳng với bảng này, nên một chuỗi không sinh từ audio thật
+    # là nguồn EXACT_MATCH sai — kiểm tra nội dung, không tin nhãn `algorithm`.
+    from backend.services.chromaprint_codec import is_plausible_fingerprint
+    implausible = [r for r in fingerprints
+                   if not is_plausible_fingerprint(r["fingerprint"], r.get("duration"))]
+    if implausible:
+        record(FAIL, "Fingerprint là đầu ra thật của fpcalc",
+               f"{len(implausible)}/{len(fingerprints)} chuỗi không giải nén được hoặc "
+               f"quá ít hash so với độ dài (vd. recording {implausible[0]['recording_id']})")
+    else:
+        record(PASS, "Fingerprint là đầu ra thật của fpcalc",
+               f"{len(fingerprints)}/{len(fingerprints)} hợp lệ")
+
     orphan_comp = comp_ids - {r["composition_id"] for r in recordings}
     if orphan_comp:
         record(WARN, "Composition không có recording nào",

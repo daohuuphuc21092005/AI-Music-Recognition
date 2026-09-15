@@ -114,3 +114,29 @@ def decode_fingerprint(fp) -> tuple[list[int], int]:
         value |= 1 << (bit - 1)
 
     return result, algorithm
+
+
+# fpcalc mặc định chỉ đọc 120 giây đầu, và sinh khoảng 7–8 hash cho mỗi giây audio.
+FPCALC_DEFAULT_LENGTH_S = 120.0
+PLAUSIBLE_HASHES_PER_SECOND = (4.0, 12.0)
+# Bộ lọc của Chromaprint "ăn" mất vài chục khung ở hai đầu, nên đoạn ngắn cho tỉ lệ
+# hash/giây thấp hơn hẳn — nới biên một khoảng cố định để không loại nhầm chúng.
+HASH_COUNT_SLACK = 20
+
+
+def is_plausible_fingerprint(fp, duration) -> bool:
+    """
+    Chuỗi này có thể là đầu ra thật của fpcalc cho một đoạn dài `duration` giây không.
+
+    Kiểm tra chính nội dung chứ không tin nhãn `algorithm`: một chuỗi không sinh
+    từ audio thật hoặc không giải nén được, hoặc cho số hash quá ít so với độ dài.
+    """
+    try:
+        values, _ = decode_fingerprint(fp)
+        seconds = min(float(duration), FPCALC_DEFAULT_LENGTH_S)
+    except (InvalidFingerprintError, TypeError, ValueError):
+        return False
+    if seconds <= 0:
+        return False
+    low, high = PLAUSIBLE_HASHES_PER_SECOND
+    return low * seconds - HASH_COUNT_SLACK <= len(values) <= high * seconds + HASH_COUNT_SLACK
