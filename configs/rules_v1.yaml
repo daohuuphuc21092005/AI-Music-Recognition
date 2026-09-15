@@ -18,7 +18,7 @@
 # =============================================================================
 version: 1
 name: rules_v1
-updated: "2026-09-05"
+updated: "2026-09-15"
 
 # --- Cổng định danh: chạy TRƯỚC mọi nhóm ------------------------------------
 # Không nhận diện được bản ghi thì không có quyền gì để xét. Ở đây bắt buộc trả
@@ -294,3 +294,26 @@ rights_confidence:
     stale_verification_days: 365    # verified_at quá cũ
     stale_penalty: 0.10
     license_expired: 0.30
+
+# --- Cổng dữ liệu quyền: chạy SAU khi 5 nhóm đã cho ra kết luận tạm ----------
+# Kết luận LOW/CONDITIONAL/HIGH chỉ được trả ra khi rights_confidence đạt ngưỡng.
+# Dưới ngưỡng thì trả UNKNOWN + HUMAN_REVIEW_REQUIRED, còn kết luận tạm vẫn nằm
+# trong evidence (`provisional_decision`) để người kiểm tra tham khảo (§2).
+#
+# 0.50 tách đúng hai loại nguồn theo bảng phạt phía trên:
+#   PREDICTED, kể cả đã xác minh     : 1.00 − 0.60        = 0.40 -> CHẶN
+#   SIMULATED đã xác minh            : 1.00 − 0.30        = 0.70 -> qua
+#   SIMULATED chưa xác minh          : 1.00 − 0.30 − 0.20 = 0.50 -> qua (sát ngưỡng)
+#   Nguồn thật, giấy phép hết hạn    : 1.00 − 0.30        = 0.70 -> qua
+# Đổi bảng phạt thì PHẢI xem lại con số này (tests/test_license_classifier.py
+# kiểm tra đúng hai dòng đầu).
+rights_gate:
+  min_rights_confidence: 0.50
+  low_rights_confidence:
+    risk: UNKNOWN
+    category: UNCATEGORIZED
+    condition: HUMAN_REVIEW_REQUIRED
+    reason: >-
+      Dữ liệu quyền không đủ tin cậy để kết luận (ví dụ giấy phép do model suy đoán
+      từ âm thanh). Kết luận tạm theo dữ liệu hiện có được ghi trong bằng chứng để
+      tham khảo, cần người kiểm tra trước khi sử dụng.

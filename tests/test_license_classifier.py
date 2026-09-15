@@ -110,7 +110,7 @@ def test_cong_identity_co_khai_bao_license_predicted():
     )
 
 
-@pytest.mark.parametrize("license_type,context,expected_risk", [
+@pytest.mark.parametrize("license_type,context,expected_provisional", [
     ("CC0", COMMERCIAL, "LOW"),
     ("CC_BY", COMMERCIAL, "CONDITIONAL"),
     ("CC_BY", NON_COMMERCIAL, "CONDITIONAL"),
@@ -118,13 +118,40 @@ def test_cong_identity_co_khai_bao_license_predicted():
     ("CC_BY_NC_SA", COMMERCIAL, "HIGH"),
     ("CC_BY_NC_SA", NON_COMMERCIAL, "CONDITIONAL"),
 ])
-def test_quyen_suy_doan_van_chay_qua_dung_nhanh(license_type, context, expected_risk):
+def test_quyen_suy_doan_van_chay_qua_dung_nhanh(license_type, context, expected_provisional):
+    """
+    Quyền suy đoán vẫn đi qua đúng nhánh của 5 nhóm, nhưng kết luận đó chỉ được
+    giữ làm kết luận TẠM: cổng rights_gate hạ risk về UNKNOWN (§2).
+    """
     decision = evaluate_rights_and_risk(
         predicted_rights(license_type),
         {"match_type": "LICENSE_PREDICTED", "identity_confidence": 0.72},
         context,
     )
-    assert decision["risk_level"] == expected_risk
+    assert decision["risk_level"] == "UNKNOWN"
+    assert decision["condition"] == "HUMAN_REVIEW_REQUIRED"
+    assert decision["evidence"]["provisional_decision"]["risk_level"] == expected_provisional
+
+
+def test_nguong_cong_quyen_tach_duoc_predicted_va_simulated():
+    rules = load_rules()
+    min_rights = float(rules["rights_gate"]["min_rights_confidence"])
+    penalties = rules["rights_confidence"]["penalties"]
+    # PREDICTED dù đã xác minh vẫn phải dưới ngưỡng; metadata mô phỏng đã xác minh
+    # thì không — nếu không cổng sẽ chặn nhầm cả Audio Library / Creator Music.
+    assert 1.0 - penalties["predicted_source"] < min_rights
+    assert 1.0 - penalties["simulated_source"] >= min_rights
+
+
+def test_quyen_that_du_tin_cay_khong_bi_cong_chan():
+    real = {**rights_for_license_type("CC_BY"),
+            "source": "FMA (giấy phép do nguồn công bố)",
+            "verified_at": "2026-09-01T00:00:00"}
+    decision = evaluate_rights_and_risk(
+        real, {"match_type": "EXACT_MATCH", "identity_confidence": 0.99}, COMMERCIAL)
+    assert decision["risk_level"] == "CONDITIONAL"
+    assert "provisional_decision" not in decision["evidence"]
+    assert decision["evidence"]["rights_confidence_breakdown"]["final"] == 1.0
 
 
 def test_do_tin_cay_quyet_dinh_luon_thap_voi_quyen_suy_doan():

@@ -378,11 +378,18 @@ function renderEvidence(result) {
   const rightsRecord = evidence.rights_record || {};
   const composition = evidence.composition || {};
 
+  // "Không so được" và "so rồi nhưng không khớp" là hai kết luận khác hẳn nhau;
+  // hiện điểm 0.0000 cho trường hợp đầu sẽ khiến người đọc tưởng là trường hợp sau.
+  const fpRan = Boolean(fingerprint.match_type) && fingerprint.match_type !== 'UNAVAILABLE';
   dl($('#ev-fingerprint'), [
-    ['Điểm Chromaprint', fingerprint.fingerprint_score !== undefined
-      ? Number(fingerprint.fingerprint_score).toFixed(4) : null],
+    ['Điểm Chromaprint', !fpRan
+      ? 'không tính — tầng 1 không chạy'
+      : (fingerprint.fingerprint_score != null
+        ? Number(fingerprint.fingerprint_score).toFixed(4) : null)],
     ['Ngưỡng τFP', fingerprint.threshold],
     ['Kết luận tầng 1', fingerprint.match_type],
+    ...(fpRan ? [] : [['Lý do tầng 1 không chạy',
+      [fingerprint.reason_code, fingerprint.message].filter(Boolean).join(' — ') || null]]),
     ['Số fingerprint đã so', fingerprint.candidates_compared],
     ['Bỏ qua vì lệch độ dài', fingerprint.candidates_skipped_by_duration],
     ['Độ dài truy vấn (s)', fingerprint.query_duration
@@ -426,6 +433,16 @@ function renderEvidence(result) {
     ['Điều kiện đã khớp', rules.matched_conditions
       ? JSON.stringify(rules.matched_conditions) : null, { mono: true }],
     ['Trừ điểm dữ liệu quyền', (rules.rights_confidence_penalties || []).join('; ') || null],
+    ['Phép tính độ tin cậy dữ liệu quyền', rules.rights_confidence_breakdown
+      ? rules.rights_confidence_breakdown.formula : null],
+    ['Phép tính độ tin cậy quyết định', rules.decision_confidence_formula],
+    ...(rules.provisional_decision ? [
+      ['Kết luận tạm (bị chặn vì quyền kém tin cậy)',
+        [rules.provisional_decision.risk_level, rules.provisional_decision.category,
+          rules.provisional_decision.condition].filter(Boolean).join(' · ')],
+      ['Ngưỡng tin cậy quyền tối thiểu',
+        `${rules.min_rights_confidence} (còn thiếu ${rules.rights_shortfall})`],
+    ] : []),
     ['Ngữ cảnh sử dụng', rules.usage_context
       ? JSON.stringify(rules.usage_context) : null, { mono: true }],
   ]);

@@ -151,9 +151,16 @@ class Rights(BaseModel):
     source_url: Optional[str] = Field(None, description="Đường dẫn xác thực thông tin giấy phép.")
     verified_at: Optional[str] = Field(None, description="Thời điểm thông tin quyền được xác minh lần cuối.")
     rights_found: bool = Field(
-        False, description="Có tra được bản ghi quyền thật trong CSDL hay không. False nghĩa "
-                            "là mọi field phía trên đều None — không nhầm với việc quyền = "
-                            "'không có ai sở hữu'.",
+        False, description="Có dữ liệu quyền để đưa vào Rule Engine hay không — tra từ CSDL "
+                            "hoặc suy đoán (xem `predicted`). False nghĩa là mọi field phía "
+                            "trên đều None — không nhầm với việc quyền = 'không có ai sở hữu'.",
+    )
+    predicted: bool = Field(
+        False, description="True nếu dữ liệu quyền do license classifier SUY ĐOÁN từ âm thanh "
+                            "(bài không khớp bản ghi nào), không tra từ nguồn nào. Khi đó "
+                            "rights_confidence bị trừ nặng, cổng dữ liệu quyền hạ risk về "
+                            "UNKNOWN, và kết luận tạm nằm ở "
+                            "evidence.rule_engine.provisional_decision.",
     )
 
 
@@ -182,13 +189,17 @@ class Assessment(BaseModel):
                           "trùng với match.confidence).",
     )
     rights_confidence: float = Field(
-        0.0, description="Độ tin cậy của METADATA QUYỀN tra được (vd giảm khi license chỉ là "
-                          "suy đoán từ license_classifier_service thay vì tra trực tiếp từ CSDL).",
+        0.0, description="Độ tin cậy của METADATA QUYỀN = base − các khoản phạt khai báo trong "
+                          "configs/rules_v1.yaml (nguồn PREDICTED/SIMULATED, thiếu verified_at, "
+                          "giấy phép hết hạn...). Phép tính đầy đủ nằm ở "
+                          "evidence.rule_engine.rights_confidence_breakdown. Dưới "
+                          "rights_gate.min_rights_confidence thì risk bị hạ về UNKNOWN.",
     )
     decision_confidence: float = Field(
-        0.0, description="Độ tin cậy của QUYẾT ĐỊNH RỦI RO CUỐI CÙNG — tổng hợp từ hai loại "
-                          "trên (thường là min của hai giá trị), KHÔNG PHẢI trung bình cộng "
-                          "và không thay thế cho hai field kia.",
+        0.0, description="Độ tin cậy của QUYẾT ĐỊNH RỦI RO CUỐI CÙNG = min(identity_confidence, "
+                          "rights_confidence), và = 0 khi risk=UNKNOWN. KHÔNG PHẢI trung bình "
+                          "cộng, không thay thế hai field kia. Phép tính cụ thể nằm ở "
+                          "evidence.rule_engine.decision_confidence_formula.",
     )
 
 
@@ -208,13 +219,22 @@ class AnalysisResult(BaseModel):
         description=(
             "Bằng chứng chi tiết phục vụ giải thích/kiểm toán (§2: không hộp đen) — dict lồng "
             "nhau, KHÔNG ép kiểu cố định vì mỗi rule có thể gắn thêm field riêng qua "
-            "extra_evidence. Các khoá thường có: `identification` (fingerprint/embedding "
-            "score, threshold, timings_ms của từng tầng cascade); `candidates` (Top-K ứng "
-            "viên từ vector search); `rule_engine` (rules_version, rule_id, matched_conditions "
-            "— luật cụ thể đã kích hoạt); `composition`/`rights_record` (bản ghi gốc tra được "
-            "từ CSDL); `license_prediction` (nếu risk dựa một phần vào suy đoán license thay "
-            "vì tra trực tiếp); `production_features` (đặc trưng âm học phụ, không dùng để "
-            "suy luận quyền sử dụng)."
+            "extra_evidence. Các khoá thường có: "
+            "`identification` — từng tầng cascade: `fingerprint` (fingerprint_score, threshold "
+            "hiệu dụng; khi tầng 1 KHÔNG chạy thì fingerprint_score=null kèm `reason_code` "
+            "DATABASE_UNAVAILABLE|FPCALC_MISSING và `message`), `embedding` (top_k, threshold, "
+            "reference_vectors), `cover`, `thresholds`, `timings_ms`, `decision_reason`; "
+            "`candidates` — Top-K ứng viên từ vector search (vẫn có khi match.type=UNKNOWN); "
+            "`rule_engine` — rules_version, rule_id, matched_conditions, "
+            "`rights_confidence_penalties` (từng khoản trừ kèm mức trừ), "
+            "`rights_confidence_breakdown` ({base, penalties[{code, amount, reason}], final, "
+            "formula}), `decision_confidence_formula`; khi cổng dữ liệu quyền chặn thì thêm "
+            "`min_rights_confidence`, `rights_shortfall` và `provisional_decision` — kết luận "
+            "TẠM của 5 nhóm, chỉ để tham khảo, KHÔNG phải kết luận; "
+            "`composition`/`rights_record` — bản ghi gốc tra được từ CSDL (quyền suy đoán có "
+            "source bắt đầu bằng PREDICTED); `license_prediction` — đầu ra của license "
+            "classifier (xác suất, validation, warning); `production_features` — đặc trưng âm "
+            "học phụ, không dùng để suy luận quyền sử dụng."
         ),
     )
     latency_ms: Optional[float] = Field(None, description="Tổng thời gian xử lý toàn bộ pipeline (ms).")

@@ -98,6 +98,15 @@ Rule Engine chịu trách nhiệm xác định trạng thái bản quyền và m
 
 ---
 
+### Cổng dữ liệu quyền (`rights_gate`) — chạy SAU khi nhóm 1–5 đã ra kết luận tạm
+- **Điều kiện**: `rights_confidence < rights_gate.min_rights_confidence` (hiện `0.50`, khai báo trong `configs/rules_v1.yaml`) và kết luận tạm không phải `UNKNOWN`.
+- **Kết quả**: `category: UNCATEGORIZED`, `risk_level: UNKNOWN`, `condition: HUMAN_REVIEW_REQUIRED`.
+- Kết luận tạm **không bị bỏ đi**: nằm ở `evidence.provisional_decision` (`category`, `risk_level`, `condition`, `rule_id`, `matched_conditions`, `reason`), kèm `min_rights_confidence` và `rights_shortfall`.
+- **Lý do**: giấy phép do license classifier suy đoán từ âm thanh (nguồn `PREDICTED`) vẫn đi qua đúng nhánh và có thể ra `HIGH` — đó là kết luận từ kết quả nghi ngờ mà §2.3/§2.5 cấm.
+- `rights_confidence = base − các khoản phạt` trong `rights_confidence.penalties`. Ngưỡng 0.50 tách được: `PREDICTED` (≤ 0.40, bị chặn) / `SIMULATED` đã xác minh (0.70, qua) / `SIMULATED` chưa xác minh (0.50, qua sát ngưỡng). **Đổi bảng phạt thì phải xem lại ngưỡng** — `tests/test_license_classifier.py` kiểm tra đúng ràng buộc này.
+
+---
+
 ## 3. Cấu trúc đối tượng đầu ra (Decision Object Schema)
 
 Mỗi lần chạy qua Rule Engine phải sinh ra đối tượng kết quả với tối thiểu các trường sau:

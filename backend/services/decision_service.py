@@ -138,57 +138,84 @@ def build_facts(rights: dict, composition: dict = None, context: dict = None) ->
     return facts
 
 
-def compute_rights_confidence(rights: dict, rules: dict = None) -> tuple:
+def rights_confidence_breakdown(rights: dict, rules: dict = None) -> dict:
     """
-    Độ tin cậy của DỮ LIỆU QUYỀN — tách hẳn khỏi độ tin cậy nhận diện (§2).
-    Trả (điểm, danh sách lý do trừ điểm).
+    Độ tin cậy của DỮ LIỆU QUYỀN — tách hẳn khỏi độ tin cậy nhận diện (§2) —
+    kèm từng khoản trừ và mức trừ lấy từ rules.
+
+    Trả cả phép tính chứ không chỉ kết quả: mọi bản ghi PREDICTED chưa xác minh
+    đều ra đúng 0.20, và nếu chỉ hiện con số đó thì người đọc không phân biệt
+    được "phép tính cho ra 0.20" với "một hằng số mặc định".
     """
     rules = rules or load_rules()
     cfg = rules.get("rights_confidence", {})
     penalties = cfg.get("penalties", {})
-    score = float(cfg.get("base", 1.0))
-    reasons = []
+    base = float(cfg.get("base", 1.0))
 
     if not rights:
-        return 0.0, ["không có dữ liệu quyền"]
+        return {"base": base, "penalties": [], "final": 0.0,
+                "formula": "không có dữ liệu quyền -> 0.00"}
+
+    applied = []
+
+    def penalize(code: str, reason: str, default: float = 0.0) -> None:
+        applied.append({"code": code,
+                        "amount": float(penalties.get(code, default)),
+                        "reason": reason})
 
     if not rights.get("license_type") or rights.get("license_type") == "UNKNOWN":
-        score -= penalties.get("missing_license_type", 0.0)
-        reasons.append("thiếu license_type")
+        penalize("missing_license_type", "thiếu license_type")
     if not rights.get("copyright_status"):
-        score -= penalties.get("missing_copyright_status", 0.0)
-        reasons.append("thiếu copyright_status")
+        penalize("missing_copyright_status", "thiếu copyright_status")
 
     source = str(rights.get("source") or "")
     if source.upper().startswith("PREDICTED"):
         # Quyền do model suy đoán từ âm thanh, không tra từ nguồn nào. Phạt nặng
         # hơn metadata mô phỏng vì EXP-09 đo được bộ phân loại này không vượt
         # baseline ở đúng tình huống nó được dùng (bài của nghệ sĩ chưa từng thấy).
-        score -= penalties.get("predicted_source", 0.60)
-        reasons.append("quyền do model suy đoán từ âm thanh, chưa tra từ nguồn nào")
+        penalize("predicted_source",
+                 "quyền do model suy đoán từ âm thanh, chưa tra từ nguồn nào", 0.60)
     elif source.upper().startswith("SIMULATED"):
-        score -= penalties.get("simulated_source", 0.0)
-        reasons.append("metadata mô phỏng, chưa xác minh từ nguồn thật")
+        penalize("simulated_source", "metadata mô phỏng, chưa xác minh từ nguồn thật")
 
     verified_at = rights.get("verified_at")
     if not verified_at:
-        score -= penalties.get("unverified", 0.0)
-        reasons.append("thiếu verified_at")
+        penalize("unverified", "thiếu verified_at")
     else:
         try:
             verified = datetime.fromisoformat(str(verified_at)[:19])
             age_days = (datetime.now() - verified).days
             if age_days > penalties.get("stale_verification_days", 365):
-                score -= penalties.get("stale_penalty", 0.0)
-                reasons.append(f"metadata đã xác minh cách đây {age_days} ngày")
+                penalize("stale_penalty",
+                         f"metadata đã xác minh cách đây {age_days} ngày")
         except ValueError:
             pass
 
     if not _license_is_valid(rights):
-        score -= penalties.get("license_expired", 0.0)
-        reasons.append("giấy phép hết hạn hoặc chưa hiệu lực")
+        penalize("license_expired", "giấy phép hết hạn hoặc chưa hiệu lực")
 
-    return max(0.0, min(1.0, score)), reasons
+    raw = base - sum(p["amount"] for p in applied)
+    final = max(0.0, min(1.0, raw))
+    terms = "".join(f" − {p['amount']:.2f} ({p['reason']})" for p in applied)
+    clamped = " (kẹp về khoảng [0, 1])" if abs(raw - final) > 1e-9 else ""
+    return {
+        "base": base,
+        "penalties": applied,
+        "final": round(final, 4),
+        "formula": f"{base:.2f}{terms} = {final:.2f}{clamped}",
+    }
+
+
+def _summarize_rights_confidence(rights: dict, breakdown: dict) -> tuple:
+    if not rights:
+        return 0.0, ["không có dữ liệu quyền"]
+    reasons = [f"{p['reason']} (−{p['amount']:.2f})" for p in breakdown["penalties"]]
+    return breakdown["final"], reasons
+
+
+def compute_rights_confidence(rights: dict, rules: dict = None) -> tuple:
+    """Trả (điểm, danh sách lý do trừ điểm kèm mức trừ)."""
+    return _summarize_rights_confidence(rights, rights_confidence_breakdown(rights, rules))
 
 
 # --------------------------------------------------------------------------
@@ -228,6 +255,12 @@ def evaluate_rights_and_risk(rights_data: dict, match_info: dict,
         decision_confidence = 0.0 if risk == "UNKNOWN" else round(
             min(identity_confidence, rights_conf), 4
         )
+        decision_formula = (
+            "0.0000 — mức rủi ro UNKNOWN: chưa có kết luận nào để gán độ tin cậy"
+            if risk == "UNKNOWN" else
+            f"min(nhận diện {identity_confidence:.4f}, dữ liệu quyền {rights_conf:.4f}) "
+            f"= {decision_confidence:.4f}"
+        )
         return {
             "category": category,
             "risk_level": risk,
@@ -243,6 +276,8 @@ def evaluate_rights_and_risk(rights_data: dict, match_info: dict,
                 "match_type": match_type,
                 "min_identity_confidence": min_identity,
                 "rights_confidence_penalties": rights_reasons,
+                "rights_confidence_breakdown": rights_breakdown,
+                "decision_confidence_formula": decision_formula,
                 "usage_context": {
                     "platform": context.get("platform"),
                     "commercial_use": context.get("commercial_use"),
@@ -252,7 +287,8 @@ def evaluate_rights_and_risk(rights_data: dict, match_info: dict,
             },
         }
 
-    rights_conf, rights_reasons = compute_rights_confidence(rights_data, rules)
+    rights_breakdown = rights_confidence_breakdown(rights_data, rules)
+    rights_conf, rights_reasons = _summarize_rights_confidence(rights_data, rights_breakdown)
 
     # --- Cổng định danh (chạy trước mọi nhóm) ------------------------------
     if match_type in (None, "NO_MATCH") and not rights_data:
@@ -277,20 +313,55 @@ def evaluate_rights_and_risk(rights_data: dict, match_info: dict,
     # --- 5 nhóm, đúng thứ tự ưu tiên ---------------------------------------
     facts = build_facts(rights_data, rights_data.get("composition"), context)
 
+    rights_gate = rules.get("rights_gate") or {}
+    min_rights = rights_gate.get("min_rights_confidence")
+
+    def gate_on_rights(provisional: dict) -> dict:
+        """
+        Kết luận của 5 nhóm chỉ đứng được khi dữ liệu quyền đủ tin cậy.
+
+        Giấy phép do model đoán vẫn đi qua đúng nhánh và có thể ra HIGH — nhưng đó
+        là HIGH của một phỏng đoán. Hiện nó như kết luận là "kết luận từ kết quả
+        nghi ngờ" mà §2 cấm, nên hạ về UNKNOWN và giữ kết luận tạm trong evidence.
+        """
+        if (min_rights is None or provisional["risk_level"] == "UNKNOWN"
+                or rights_conf >= float(min_rights)):
+            return provisional
+        outcome = rights_gate["low_rights_confidence"]
+        provisional_evidence = provisional["evidence"]
+        return decision(
+            outcome, outcome["category"], "rights_gate.low_rights_confidence",
+            rights_conf, rights_reasons,
+            group_order=provisional_evidence.get("group_order"),
+            extra_evidence={
+                "min_rights_confidence": float(min_rights),
+                "rights_shortfall": round(float(min_rights) - rights_conf, 4),
+                "provisional_decision": {
+                    "category": provisional["category"],
+                    "risk_level": provisional["risk_level"],
+                    "condition": provisional["condition"],
+                    "rule_id": provisional_evidence.get("rule_id"),
+                    "matched_conditions": provisional_evidence.get("matched_conditions"),
+                    "reason": provisional["decision_reason"],
+                },
+            },
+        )
+
     for group in rules["groups"]:
         if not _group_matches(group, facts):
             continue
 
         for index, rule in enumerate(group.get("rules", [])):
             if _matches_conditions(rule.get("when", {}), facts):
-                return decision(
+                return gate_on_rights(decision(
                     rule, group["id"], f"{group['id']}.rule[{index}]",
                     rights_conf, rights_reasons, group_order=group["order"],
                     extra_evidence={"matched_conditions": rule.get("when", {})},
-                )
+                ))
 
-        return decision(group["default"], group["id"], f"{group['id']}.default",
-                        rights_conf, rights_reasons, group_order=group["order"])
+        return gate_on_rights(decision(
+            group["default"], group["id"], f"{group['id']}.default",
+            rights_conf, rights_reasons, group_order=group["order"]))
 
     outcome = rules["uncategorized"]
     return decision(outcome, outcome["category"], "uncategorized",

@@ -37,6 +37,11 @@ Rule Engine hoạt động dựa trên cây quyết định tuần tự, dừng 
 6. FALLBACK
    ├─ Unknown status / Low conf     ──> Risk: UNKNOWN (Human Review Required)
    └─ Unmatched in Database         ──> Risk: LOW (User-Generated Content)
+
+CỔNG DỮ LIỆU QUYỀN (chạy SAU khi nhóm 1–5 đã ra kết luận tạm)
+   └─ rights_confidence < rights_gate.min_rights_confidence (0.50)
+                                    ──> Risk: UNKNOWN (Human Review Required)
+                                        kết luận tạm giữ ở evidence.provisional_decision
 ```
 
 ---
@@ -51,6 +56,9 @@ Khi thêm hoặc chỉnh sửa bất kỳ rule nào trong `configs/rules_v1.yaml
    - Trạng thái chưa rõ bản quyền hoặc độ tin cậy thấp (`confidence < THRESHOLD_MIN`) BẮT BUỘC trả về `risk_level: UNKNOWN`. Không được tự tiện fallback về `LOW` hay `HIGH`.
 3. **Quy tắc Minh bạch (No Black-Box)**:
    - Output phải chứa danh sách cụ thể các mã luật được kích hoạt trong trường `rules_triggered`.
+4. **Quy tắc Tin cậy Dữ liệu quyền**:
+   - Kết luận LOW / CONDITIONAL / HIGH chỉ được trả ra khi `rights_confidence` đạt `rights_gate.min_rights_confidence`; dưới ngưỡng phải là `UNKNOWN`, kết luận tạm giữ ở `evidence.provisional_decision`.
+   - Mọi con số độ tin cậy phải truy ngược được: `evidence.rights_confidence_breakdown.formula` và `evidence.decision_confidence_formula`.
 
 ### Bước 2: Viết & Chạy Unit Tests cho Rule Engine
 Mỗi luật mới phải đi kèm tối thiểu 5–10 ca kiểm thử biên (edge cases). Cấu trúc một test case mẫu với `pytest`:

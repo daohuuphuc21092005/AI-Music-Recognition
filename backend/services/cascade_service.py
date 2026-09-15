@@ -63,18 +63,32 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
     fingerprint_available = True
     report("FINGERPRINTING")
     t0 = time.perf_counter()
+    # Tầng 1 không chạy vẫn phải ghi ngưỡng lẽ ra được áp và LÝ DO không chạy.
+    # Điểm để None chứ không phải 0.0: "không so được" khác hẳn "so rồi, 0 điểm",
+    # và hai nguyên nhân (thiếu CSDL / thiếu fpcalc) cần sửa theo hai cách khác nhau.
     try:
         if db is None:
             fingerprint_available = False
-            fp_result = {"match_type": "UNAVAILABLE", "fingerprint_score": 0.0,
-                         "message": "CSDL không khả dụng hoặc db=None"}
+            fp_result = {
+                "match_type": "UNAVAILABLE",
+                "fingerprint_score": None,
+                "threshold": config.FP_THRESHOLD,
+                "reason_code": "DATABASE_UNAVAILABLE",
+                "message": "Không kết nối được PostgreSQL nên không có fingerprint "
+                           "tham chiếu để so.",
+            }
         else:
             fp_result = search_fingerprint(db, audio_path)
     except FingerprintBackendUnavailable as e:
         # Không có fpcalc: ghi nhận rõ ràng rồi đi tiếp bằng MERT, KHÔNG im lặng.
         fingerprint_available = False
-        fp_result = {"match_type": "UNAVAILABLE", "fingerprint_score": 0.0,
-                     "message": str(e)}
+        fp_result = {
+            "match_type": "UNAVAILABLE",
+            "fingerprint_score": None,
+            "threshold": config.FP_THRESHOLD,
+            "reason_code": "FPCALC_MISSING",
+            "message": str(e),
+        }
     timings["fingerprint_ms"] = round((time.perf_counter() - t0) * 1000, 2)
 
     if fp_result.get("match_type") == "EXACT_MATCH":
@@ -198,11 +212,12 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
         # điểm MERT thật, không bị con số của classifier chạm vào.
         predicted_license = license_classifier_service.predict(query_vector)
 
-        reason = (
-            f"Chromaprint {fp_result.get('fingerprint_score', 0.0):.4f} < {config.FP_THRESHOLD}"
-            + ("" if fingerprint_available else " (fpcalc không khả dụng)")
-            + f"; MERT cao nhất {best_score:.4f} < {config.MERT_THRESHOLD}"
-        )
+        if fingerprint_available:
+            reason = (f"Chromaprint {fp_result.get('fingerprint_score') or 0.0:.4f} "
+                      f"< {fp_result.get('threshold', config.FP_THRESHOLD)}")
+        else:
+            reason = f"Chromaprint không chạy ({fp_result.get('reason_code')})"
+        reason += f"; MERT cao nhất {best_score:.4f} < {config.MERT_THRESHOLD}"
         if cover_evidence and cover_evidence.get("top_candidate"):
             top_c = cover_evidence["top_candidate"]
             reason += f"; Cover đạt {top_c['similarity_score']:.4f} < {config.COVER_THRESHOLD}"
