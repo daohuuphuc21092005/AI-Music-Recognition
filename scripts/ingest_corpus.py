@@ -16,12 +16,10 @@ Nên sau khi nạp:
 
   * Bản ghi có audio thật  -> có đủ recording + composition + rights + fingerprint,
     và embedding sinh sau bằng `build_embeddings.py`.
-  * Bản ghi chỉ có rights  -> giữ lại ĐÚNG ba nhóm không lấy được từ nguồn mở
-    (AUDIO_LIBRARY, CREATOR_MUSIC, CONTENT_ID) để Rule Engine vẫn có dữ liệu cho
-    cả 5 nhánh, nhưng **không fingerprint, không embedding**. Chúng giữ tiền tố
-    `SIMULATED` ở `source` để `compute_rights_confidence` trừ điểm đúng.
-  * Bản ghi mô phỏng thuộc nhóm CC/PUBLIC_DOMAIN bị **loại bỏ**, vì corpus thật
-    đã phủ các nhóm đó bằng giấy phép thật.
+  * Bản ghi của nguồn KHÁC nguồn đang nạp (nhạc Việt, Spotify, Jamendo chưa có
+    audio, Audio Library, Creator Music...) -> giữ nguyên, **không thêm fingerprint
+    hay embedding**. Chỉ bản ghi cùng `source_dataset` với corpus vừa tải mới bị
+    thay, vì corpus mới là bản đầy đủ hơn của chính nguồn đó.
 
 Về §2 (composition != recording): FMA và Jamendo chỉ công bố thông tin BẢN THU,
 không nói gì về tình trạng miền công cộng của TÁC PHẨM. Vì vậy mọi composition
@@ -61,10 +59,6 @@ STAGING = {
 MASTERS = {name: os.path.join(config.DATA_DIR, f"{name}_master.csv")
            for name in ("compositions", "metadata", "rights", "fingerprints",
                         "embeddings")}
-
-# Ba nhóm không có nguồn mở nào cấp được: thư viện âm thanh của nền tảng, nhạc
-# mua bản quyền của nhà sáng tạo, và yêu sách Content ID. Giữ lại dạng metadata.
-KEEP_SIMULATED_LICENSES = {"AUDIO_LIBRARY", "CREATOR_MUSIC", "CONTENT_ID", "COMMERCIAL"}
 
 FIELDS = {
     "compositions": ["composition_id", "title", "composer", "year",
@@ -243,22 +237,44 @@ def build_rows(tracks: list, now: str, compute_fingerprints: bool) -> tuple:
     return compositions, recordings, rights, fingerprints
 
 
-def keep_simulated(old_recordings: list, old_rights: list, old_compositions: list):
-    """Giữ lại các bản ghi mô phỏng thuộc nhóm không lấy được từ nguồn mở."""
-    rights_by_recording = {r["recording_id"]: r for r in old_rights}
-    keep_rec, keep_rights, keep_comp_ids = [], [], set()
+def keep_other_sources(old_recordings: list, old_rights: list, old_compositions: list,
+                       old_fingerprints: list, replaced_datasets: set) -> tuple:
+    """
+    Giữ nguyên mọi bản ghi thuộc nguồn KHÔNG có trong lần nạp này.
 
-    for recording in old_recordings:
-        right = rights_by_recording.get(recording["recording_id"])
-        if not right or right.get("license_type") not in KEEP_SIMULATED_LICENSES:
-            continue
-        # Bản ghi này không có audio -> xoá audio_path để không ai tưởng là có
-        keep_rec.append({**recording, "audio_path": ""})
-        keep_rights.append(right)
-        keep_comp_ids.add(recording["composition_id"])
-
+    Các nguồn chỉ có metadata (nhạc Việt, Spotify, Jamendo chưa tải audio, Audio
+    Library, Creator Music) không nạp lại được từ corpus audio — xoá đi là mất
+    hẳn. Chỉ bản ghi cùng `source_dataset` với corpus vừa tải mới bị thay.
+    """
+    keep_rec = [r for r in old_recordings
+                if r.get("source_dataset") not in replaced_datasets]
+    keep_ids = {r["recording_id"] for r in keep_rec}
+    keep_comp_ids = {r["composition_id"] for r in keep_rec}
+    keep_rights = [r for r in old_rights if r["recording_id"] in keep_ids]
     keep_comp = [c for c in old_compositions if c["composition_id"] in keep_comp_ids]
-    return keep_comp, keep_rec, keep_rights
+    keep_fp = [f for f in old_fingerprints if f["recording_id"] in keep_ids]
+    return keep_comp, keep_rec, keep_rights, keep_fp
+
+
+def prune_embeddings(path: str, keep_ids: set) -> tuple:
+    """Bỏ embedding của bản ghi bị thay. Đọc/ghi theo dòng vì file lên tới trăm MB."""
+    if not os.path.exists(path):
+        return 0, 0
+    temp = path + ".tmp"
+    kept = dropped = 0
+    with io.open(path, newline="", encoding="utf-8") as source, \
+            io.open(temp, "w", newline="", encoding="utf-8") as target:
+        reader = csv.DictReader(source)
+        writer = csv.DictWriter(target, fieldnames=reader.fieldnames)
+        writer.writeheader()
+        for row in reader:
+            if row["recording_id"] in keep_ids:
+                writer.writerow(row)
+                kept += 1
+            else:
+                dropped += 1
+    os.replace(temp, path)
+    return kept, dropped
 
 
 def main() -> int:
@@ -291,18 +307,23 @@ def main() -> int:
     old_recordings = read_csv(MASTERS["metadata"])
     old_rights = read_csv(MASTERS["rights"])
     old_compositions = read_csv(MASTERS["compositions"])
-    sim_comp, sim_rec, sim_rights = keep_simulated(
-        old_recordings, old_rights, old_compositions)
+    old_fingerprints = read_csv(MASTERS["fingerprints"])
+    replaced = {t["source_dataset"] for t in tracks}
+    kept_comp, kept_rec, kept_rights, kept_fp = keep_other_sources(
+        old_recordings, old_rights, old_compositions, old_fingerprints, replaced)
 
-    print(f"\nGiữ lại {len(sim_rec)} bản ghi mô phỏng thuộc nhóm không có nguồn mở "
-          f"({', '.join(sorted(KEEP_SIMULATED_LICENSES))})")
-    print(f"Loại bỏ {len(old_recordings) - len(sim_rec)} bản ghi mô phỏng còn lại")
-    print(f"Thêm    {len(recordings)} bản ghi có audio thật")
+    kept_sources = Counter(r.get("source_dataset", "") for r in kept_rec)
+    print(f"\nGiữ nguyên {len(kept_rec)} bản ghi của nguồn khác: "
+          + ", ".join(f"{name}={count}" for name, count in kept_sources.most_common()))
+    print(f"Thay       {len(old_recordings) - len(kept_rec)} bản ghi cũ của "
+          f"{', '.join(sorted(replaced))}")
+    print(f"Thêm       {len(recordings)} bản ghi có audio thật")
 
-    total_rec = len(recordings) + len(sim_rec)
+    total_rec = len(recordings) + len(kept_rec)
     print(f"\nSau khi nạp: {total_rec} bản ghi, trong đó "
-          f"{len(recordings)} có audio ({len(recordings) / max(total_rec, 1) * 100:.0f}%) "
-          f"và {len(fingerprints)} có fingerprint")
+          f"{len(recordings)} có audio vừa nạp "
+          f"({len(recordings) / max(total_rec, 1) * 100:.0f}%) "
+          f"và {len(fingerprints) + len(kept_fp)} có fingerprint")
     unique_fp = len({f["fingerprint"] for f in fingerprints})
     print(f"Fingerprint duy nhất: {unique_fp}/{len(fingerprints)}"
           f"{'  ✅ mỗi bản ghi một fingerprint riêng' if unique_fp == len(fingerprints) else '  ⚠️ có trùng lặp'}")
@@ -319,16 +340,17 @@ def main() -> int:
         os.remove(checkpoint_path)
         print("Đã xoá checkpoint ingest (nạp xong)")
 
-    write_csv(MASTERS["compositions"], FIELDS["compositions"], sim_comp + compositions)
-    write_csv(MASTERS["metadata"], FIELDS["metadata"], sim_rec + recordings)
-    write_csv(MASTERS["rights"], FIELDS["rights"], sim_rights + rights)
+    write_csv(MASTERS["compositions"], FIELDS["compositions"], kept_comp + compositions)
+    write_csv(MASTERS["metadata"], FIELDS["metadata"], kept_rec + recordings)
+    write_csv(MASTERS["rights"], FIELDS["rights"], kept_rights + rights)
     # Bản ghi không có audio thì không có fingerprint — đó là điểm mấu chốt
-    write_csv(MASTERS["fingerprints"], FIELDS["fingerprints"], fingerprints)
+    write_csv(MASTERS["fingerprints"], FIELDS["fingerprints"], kept_fp + fingerprints)
 
-    # Embedding cũ thuộc về các bản ghi vừa bị loại, giữ lại là dữ liệu rác
-    if os.path.exists(MASTERS["embeddings"]):
-        os.remove(MASTERS["embeddings"])
-        print("Đã xoá embeddings_master.csv cũ (thuộc về bản ghi đã loại)")
+    # Embedding của bản ghi vừa bị thay trỏ tới recording_id không còn tồn tại
+    kept_emb, dropped_emb = prune_embeddings(
+        MASTERS["embeddings"], {r["recording_id"] for r in kept_rec})
+    if dropped_emb:
+        print(f"Đã bỏ {dropped_emb} embedding của bản ghi bị thay (giữ {kept_emb})")
 
     print(f"\n💾 Đã ghi 4 file master vào {config.DATA_DIR}")
     # init_db.py phải chạy TRƯỚC build_embeddings.py: script đó lấy danh sách
