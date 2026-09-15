@@ -283,9 +283,39 @@ def min_score_for_duration(duration: float) -> float:
     return max(FP_THRESHOLD, floor * NOISE_FLOOR_MARGIN)
 
 
+_reference_cache = {"signature": None, "rows": [], "undecodable": 0}
+
+
+def _reference_fingerprints(db: Session) -> tuple:
+    """
+    ([(recording_id, vector, duration)], số dòng không giải nén được), cache theo tiến trình.
+
+    Tải + giải nén lại cả bảng ở mỗi truy vấn đo được ~1,3 ms/dòng — hơn 35 giây ở
+    28.000 fingerprint, gấp nhiều lần phần so khớp. fingerprint_id là UUID sinh mới
+    mỗi lần nạp dữ liệu, nên (số dòng, min id, max id) đổi khi bảng được nạp lại.
+    """
+    signature = tuple(db.execute(text(
+        "SELECT count(*), min(fingerprint_id::text), max(fingerprint_id::text) FROM fingerprints"
+    )).fetchone())
+    if _reference_cache["signature"] != signature:
+        rows = db.execute(
+            text("SELECT recording_id, fingerprint, duration FROM fingerprints")
+        ).fetchall()
+        decoded, undecodable = [], 0
+        for rec_id, db_fp, db_duration in rows:
+            try:
+                vector = np.asarray(decode_fingerprint(_as_bytes(db_fp))[0], dtype=np.uint32)
+            except (InvalidFingerprintError, ValueError):
+                undecodable += 1  # một dòng hỏng không được làm sập cả truy vấn
+                continue
+            decoded.append((str(rec_id), vector, db_duration))
+        _reference_cache.update(signature=signature, rows=decoded, undecodable=undecodable)
+    return _reference_cache["rows"], _reference_cache["undecodable"]
+
+
 def search_fingerprint(db: Session, audio_path: str) -> dict:
     """
-    Quét tuyến tính toàn bộ bảng fingerprints (reference DB < 10.000 bản ghi).
+    Quét tuyến tính mọi fingerprint tham chiếu (đã giải nén sẵn, cache theo tiến trình).
 
     Trả EXACT_MATCH khi điểm cao nhất >= FP_THRESHOLD, ngược lại NO_MATCH kèm
     điểm tốt nhất để tầng 2 (MERT) tiếp quản.
@@ -293,17 +323,13 @@ def search_fingerprint(db: Session, audio_path: str) -> dict:
     query_duration, query_fp = extract_query_fingerprint(audio_path)
     query_vec = _decode_array(query_fp)
 
-    rows = db.execute(
-        text("SELECT recording_id, fingerprint, duration FROM fingerprints")
-    ).fetchall()
+    references, undecodable = _reference_fingerprints(db)
 
     window = config.FP_DURATION_WINDOW_S
     best_match_id, best_score = None, 0.0
-    compared, skipped_by_duration, undecodable = 0, 0, 0
+    compared, skipped_by_duration = 0, 0
 
-    for row in rows:
-        rec_id, db_fp, db_duration = str(row[0]), row[1], row[2]
-
+    for rec_id, db_vec, db_duration in references:
         # Lọc theo độ dài (mặc định TẮT: window = 0) — bật lên sẽ nhanh hơn
         # nhiều nhưng có thể ảnh hưởng recall với truy vấn bị cắt (crop).
         if window > 0 and db_duration and query_duration:
@@ -311,12 +337,7 @@ def search_fingerprint(db: Session, audio_path: str) -> dict:
                 skipped_by_duration += 1
                 continue
 
-        try:
-            score = match_decoded(query_vec, _decode_array(db_fp))
-        except (InvalidFingerprintError, ValueError):
-            undecodable += 1  # một dòng hỏng không được làm sập cả truy vấn
-            continue
-
+        score = match_decoded(query_vec, db_vec)
         compared += 1
         if score > best_score:
             best_score, best_match_id = score, rec_id

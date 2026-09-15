@@ -79,16 +79,10 @@ def load_reference(db):
     return reference, equivalence
 
 
-def best_match(query_vec, reference, exclude_recordings=None):
-    exclude_recordings = exclude_recordings or set()
-    best_id, best_score = None, 0.0
-    for rec_id, vector in reference:
-        if rec_id in exclude_recordings:
-            continue
-        score = match_decoded(query_vec, vector)
-        if score > best_score:
-            best_score, best_id = score, rec_id
-    return best_id, best_score
+def score_all(query_vec, reference) -> np.ndarray:
+    """Điểm của truy vấn với MỌI reference — tính một lần, dùng cho cả lượt chính lẫn held-out."""
+    return np.fromiter((match_decoded(query_vec, vector) for _, vector in reference),
+                       dtype=np.float64, count=len(reference))
 
 
 def main() -> int:
@@ -110,16 +104,16 @@ def main() -> int:
     print(f"Reference: {len(reference)} fingerprint | Truy vấn: {len(queries)}")
     print(f"Bản ghi có fingerprint trùng với bản ghi khác: {ambiguous}/{len(equivalence)}")
 
-    # Checkpoint: mỗi truy vấn phải dò qua TOÀN BỘ reference hai lượt (lượt
-    # thường và lượt held-out), nên chi phí tăng theo tích số truy vấn × quy mô
-    # reference. Với 1.900 truy vấn trên 4.000 fingerprint là hàng chục triệu
-    # phép so khớp — quá dài để chấp nhận mất trắng khi bị ngắt.
+    # Checkpoint: mỗi truy vấn phải dò qua TOÀN BỘ reference, nên chi phí tăng
+    # theo tích số truy vấn × quy mô reference — hàng giờ ở quy mô hàng chục nghìn
+    # fingerprint, quá dài để chấp nhận mất trắng khi bị ngắt.
     checkpoint = Checkpoint(EXPERIMENT_ID, {
         "queries": len(queries),
         "reference_fingerprints": len(reference),
         "fp_max_align_offset": config.FP_MAX_ALIGN_OFFSET,
         "threshold_sweep": list(THRESHOLD_SWEEP),
     })
+    reference_ids = np.array([rec_id for rec_id, _ in reference])
 
     for query in queries:
         path = os.path.join(config.BASE_DIR, query["path"])
@@ -137,15 +131,18 @@ def main() -> int:
             print(f"⏭️  {query['transformation']}: không tạo được fingerprint ({e})")
             continue
 
-        predicted, score = best_match(query_vec, reference)
+        scores = score_all(query_vec, reference)
+        best = int(np.argmax(scores))
+        score = float(scores[best])
+        predicted = str(reference_ids[best]) if score > 0.0 else None
         latency_ms = (time.perf_counter() - start) * 1000
 
         true_class = equivalence.get(query["source_recording_id"],
                                      {query["source_recording_id"]})
 
-        # Lượt held-out: loại CẢ LỚP tương đương khỏi reference
-        _held_id, held_score = best_match(query_vec, reference,
-                                          exclude_recordings=true_class)
+        # Lượt held-out: loại CẢ LỚP tương đương khỏi reference, trên cùng bộ điểm
+        outside = ~np.isin(reference_ids, list(true_class))
+        held_score = float(scores[outside].max()) if outside.any() else 0.0
 
         checkpoint.add(query["path"], {
             "transformation": query["transformation"],
