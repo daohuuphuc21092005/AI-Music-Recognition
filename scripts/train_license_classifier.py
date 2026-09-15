@@ -21,9 +21,13 @@ Chọn LogisticRegression chứ không phải MLP: MLP thoái hoá hoàn toàn v
 không dùng được; logistic ít nhất còn cho macro-F1 nhỉnh hơn baseline (+0.075) nhờ
 `class_weight="balanced"`, tức là có phân biệt được chút ít giữa các lớp hiếm.
 
+Độ phức tạp (`--sweep`): quét C — nghịch đảo độ mạnh regularization — theo đánh đổi
+bias–variance, chọn C có tổng lỗi kiểm định thấp nhất rồi mới train model cuối.
+
 Dùng:
-    python scripts/train_license_classifier.py
-    python scripts/train_license_classifier.py --target commercial_use
+    python scripts/train_license_classifier.py --sweep
+    python scripts/train_license_classifier.py --C 0.1
+    python scripts/train_license_classifier.py --target commercial_use --sweep
 """
 import argparse
 import csv
@@ -43,6 +47,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import StratifiedGroupKFold
 
 from backend import config
+from experiments.common import save_result
 
 csv.field_size_limit(10 ** 9)
 
@@ -50,10 +55,17 @@ MODEL_DIR = os.path.join(config.BASE_DIR, "models", "license")
 MODEL_VERSION = "license_clf_v1"
 FOLDS = 5
 SEED = 42
+DEFAULT_C = 1.0
+# C nhỏ ép trọng số về 0: mô hình đơn giản, lỗi độ chênh cao. C lớn để mô hình bám
+# sát tập train: lỗi phương sai cao. Thang log vì hiệu ứng của C là theo bậc độ lớn.
+COMPLEXITY_GRID = (0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0)
+SWEEP_EXPERIMENT_ID = "exp09_license_complexity_sweep"
+# Nhãn từ các nguồn này không phải giấy phép thật — học từ chúng là học nhiễu.
+UNTRUSTED_LABEL_SOURCES = ("SIMULATED", "PREDICTED")
 
 
 def load_dataset(target: str):
-    """Trả (X, y, groups=artist, ids). Chỉ lấy bản ghi có audio thật."""
+    """Trả (X, y, groups=artist, ids). Chỉ lấy bản ghi có audio thật và nhãn thật."""
     import faiss
 
     meta = {}
@@ -67,6 +79,8 @@ def load_dataset(target: str):
         for row in csv.DictReader(f):
             rec = meta.get(row["recording_id"])
             if not rec or not rec.get("audio_path"):
+                continue
+            if str(row.get("source") or "").upper().startswith(UNTRUSTED_LABEL_SOURCES):
                 continue
             if target == "commercial_use":
                 value = ("cho_phep"
@@ -102,17 +116,18 @@ def load_dataset(target: str):
     return ids, np.vstack(X).astype("float32"), np.array(y), np.array(groups)
 
 
-def build_model():
-    return LogisticRegression(max_iter=2000, C=1.0,
+def build_model(C: float = DEFAULT_C):
+    return LogisticRegression(max_iter=2000, C=C,
                               class_weight="balanced", random_state=SEED)
 
 
-def validate_by_artist(X, y, groups) -> dict:
+def validate_by_artist(X, y, groups, C: float = DEFAULT_C) -> dict:
     """
     Kiểm định bằng split theo NGHỆ SĨ — con số duy nhất phản ánh tình huống thật.
 
     Không báo cáo split ngẫu nhiên ở đây: nó cho điểm cao hơn chỉ vì nghệ sĩ nằm
     ở cả hai bên, và người đọc rất dễ tưởng đó là năng lực thật của model.
+    Điểm trên tập train được đo kèm để thấy khoảng cách train↔kiểm định.
     """
     counts = Counter(y)
     keep = np.array([counts[v] >= FOLDS for v in y])
@@ -120,31 +135,73 @@ def validate_by_artist(X, y, groups) -> dict:
 
     splitter = StratifiedGroupKFold(FOLDS, shuffle=True, random_state=SEED)
     true_all, pred_all = [], []
+    train_accuracy, train_macro_f1 = [], []
     for train_idx, test_idx in splitter.split(X, y, groups):
-        model = build_model()
+        model = build_model(C)
         model.fit(X[train_idx], y[train_idx])
+        fitted = model.predict(X[train_idx])
+        train_accuracy.append(accuracy_score(y[train_idx], fitted))
+        train_macro_f1.append(f1_score(y[train_idx], fitted, average="macro", zero_division=0))
         true_all.extend(y[test_idx])
         pred_all.extend(model.predict(X[test_idx]))
 
-    majority = Counter(y).most_common(1)[0][1] / len(y)
+    majority_label, majority_count = Counter(y).most_common(1)[0]
+    majority = majority_count / len(y)
     accuracy = float(accuracy_score(true_all, pred_all))
+    macro_f1 = float(f1_score(true_all, pred_all, average="macro", zero_division=0))
+    baseline_macro_f1 = float(f1_score(true_all, [majority_label] * len(true_all),
+                                       average="macro", zero_division=0))
     return {
         "protocol": "StratifiedGroupKFold theo nghệ sĩ (nghệ sĩ trong test là mới)",
         "folds": FOLDS,
+        "C": C,
         "n_eval": len(true_all),
         "accuracy": round(accuracy, 4),
-        "macro_f1": round(float(f1_score(true_all, pred_all,
-                                         average="macro", zero_division=0)), 4),
+        "macro_f1": round(macro_f1, 4),
+        "train_accuracy": round(float(np.mean(train_accuracy)), 4),
+        "train_macro_f1": round(float(np.mean(train_macro_f1)), 4),
         "baseline_accuracy": round(majority, 4),
+        "baseline_macro_f1": round(baseline_macro_f1, 4),
         "accuracy_vs_baseline": round(accuracy - majority, 4),
         "beats_baseline": bool(accuracy > majority),
+        "macro_f1_beats_baseline": bool(macro_f1 > baseline_macro_f1),
     }
+
+
+def complexity_sweep(X, y, groups) -> dict:
+    """
+    Quét độ phức tạp theo đánh đổi bias–variance, chọn C có tổng lỗi thấp nhất.
+
+    Đây là xấp xỉ, không phải phân rã chính xác: lỗi trên tập train đại diện cho
+    lỗi độ chênh, khoảng cách train↔kiểm định đại diện cho lỗi phương sai, lỗi
+    kiểm định (nghệ sĩ mới) là tổng lỗi. Tính theo macro-F1 vì các lớp giấy phép
+    lệch mạnh — accuracy sẽ thưởng cho việc luôn đoán lớp phổ biến.
+    """
+    grid = []
+    for C in COMPLEXITY_GRID:
+        result = validate_by_artist(X, y, groups, C)
+        bias = 1.0 - result["train_macro_f1"]
+        total = 1.0 - result["macro_f1"]
+        grid.append({**result,
+                     "bias_error": round(bias, 4),
+                     "variance_error": round(total - bias, 4),
+                     "total_error": round(total, 4)})
+        print(f"  C={C:<7g} train_f1={result['train_macro_f1']:.4f}  "
+              f"val_f1={result['macro_f1']:.4f}  lỗi độ chênh={bias:.4f}  "
+              f"lỗi phương sai={total - bias:.4f}  tổng lỗi={total:.4f}", flush=True)
+    # Hoà điểm thì chọn C nhỏ hơn: cùng lỗi thì mô hình đơn giản hơn an toàn hơn.
+    selected = min(grid, key=lambda row: (row["total_error"], row["C"]))
+    return {"grid": grid, "selected": selected}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", default="license_type",
                         choices=["license_type", "commercial_use"])
+    parser.add_argument("--C", type=float, default=DEFAULT_C,
+                        help="Nghịch đảo độ mạnh regularization (bỏ qua khi --sweep)")
+    parser.add_argument("--sweep", action="store_true",
+                        help="Quét độ phức tạp theo bias–variance rồi train với C tốt nhất")
     args = parser.parse_args()
 
     ids, X, y, groups = load_dataset(args.target)
@@ -157,9 +214,38 @@ def main() -> int:
     for label, count in Counter(y).most_common():
         print(f"  {label:<16}{count:>5}  ({count / len(y) * 100:.1f}%)")
 
-    print("\nKiểm định (split theo nghệ sĩ)...")
-    validation = validate_by_artist(X, y, groups)
-    for key in ("accuracy", "macro_f1", "baseline_accuracy", "accuracy_vs_baseline"):
+    sweep = None
+    if args.sweep:
+        print(f"\nSweep độ phức tạp: {len(COMPLEXITY_GRID)} mức C, split theo nghệ sĩ...")
+        sweep = complexity_sweep(X, y, groups)
+        validation = sweep["selected"]
+        path = save_result(
+            SWEEP_EXPERIMENT_ID,
+            params={
+                "target": args.target,
+                "model": "LogisticRegression(class_weight=balanced)",
+                "grid_C": list(COMPLEXITY_GRID),
+                "folds": FOLDS,
+                "seed": SEED,
+                "features": "MERT-v1-95M mean-pooled theo bản ghi, chuẩn hoá L2",
+                "n_recordings": int(X.shape[0]),
+                "n_artists": len(set(groups)),
+                "label_sources": "loại nhãn có source SIMULATED/PREDICTED",
+            },
+            metrics={"selected_C": validation["C"], "selected": validation,
+                     "grid": sweep["grid"]},
+            notes=("Lỗi độ chênh ≈ 1 − macro-F1 trên tập train; lỗi phương sai ≈ khoảng "
+                   "cách train↔kiểm định; tổng lỗi = 1 − macro-F1 kiểm định với nghệ sĩ "
+                   "mới. Chọn C có tổng lỗi thấp nhất, hoà thì chọn C nhỏ hơn."),
+        )
+        print(f"\n💾 Kết quả sweep: {path}")
+    else:
+        print("\nKiểm định (split theo nghệ sĩ)...")
+        validation = validate_by_artist(X, y, groups, args.C)
+
+    chosen_C = validation["C"]
+    for key in ("C", "accuracy", "macro_f1", "train_macro_f1", "baseline_accuracy",
+                "baseline_macro_f1", "accuracy_vs_baseline"):
         print(f"  {key:<22} {validation[key]}")
 
     if not validation["beats_baseline"]:
@@ -167,18 +253,19 @@ def main() -> int:
         print("   Vẫn train và lưu theo yêu cầu, nhưng cảnh báo này được ghi vào")
         print("   metadata và sẽ đi kèm MỌI dự đoán mà service trả ra.")
 
-    print("\nTrain trên toàn bộ dữ liệu...")
-    model = build_model()
+    print(f"\nTrain trên toàn bộ dữ liệu với C={chosen_C:g}...")
+    model = build_model(chosen_C)
     model.fit(X, y)
 
     os.makedirs(MODEL_DIR, exist_ok=True)
     model_path = os.path.join(MODEL_DIR, f"{MODEL_VERSION}__{args.target}.joblib")
     joblib.dump(model, model_path)
 
+    verdict = "VƯỢT" if validation["beats_baseline"] else "KHÔNG vượt"
     metadata = {
         "model_version": MODEL_VERSION,
         "target": args.target,
-        "algorithm": "LogisticRegression(class_weight=balanced, C=1.0)",
+        "algorithm": f"LogisticRegression(class_weight=balanced, C={chosen_C:g})",
         "features": "MERT-v1-95M mean-pooled theo bản ghi, chuẩn hoá L2",
         "embedding_dim": int(X.shape[1]),
         "mert_model_version": config.MERT_MODEL_VERSION,
@@ -188,11 +275,15 @@ def main() -> int:
         "class_distribution": {k: int(v) for k, v in Counter(y).items()},
         "trained_at": datetime.now().isoformat(timespec="seconds"),
         "validation": validation,
+        "complexity_sweep": ({"experiment_id": SWEEP_EXPERIMENT_ID,
+                              "grid_C": list(COMPLEXITY_GRID),
+                              "selected_C": chosen_C} if sweep else None),
         "warning": (
-            "EXP-09: bộ phân loại này KHÔNG vượt baseline khi gặp nghệ sĩ chưa từng "
-            "thấy — đúng tình huống 'bài ngoài cơ sở dữ liệu' mà nó được dùng. "
-            "Giấy phép là thuộc tính pháp lý gắn với hợp đồng, không gắn với tín "
-            "hiệu âm thanh. Mọi dự đoán chỉ nên đọc như một gợi ý cần người kiểm tra."
+            f"Kiểm định theo nghệ sĩ chưa từng thấy: accuracy {validation['accuracy']} so "
+            f"với baseline {validation['baseline_accuracy']} ({verdict} baseline) — đúng "
+            "tình huống 'bài ngoài cơ sở dữ liệu' mà bộ phân loại được dùng. Giấy phép là "
+            "thuộc tính pháp lý gắn với hợp đồng, không gắn với tín hiệu âm thanh. Mọi dự "
+            "đoán chỉ nên đọc như một gợi ý cần người kiểm tra."
         ),
     }
     meta_path = os.path.join(MODEL_DIR, f"{MODEL_VERSION}__{args.target}.json")

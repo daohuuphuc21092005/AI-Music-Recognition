@@ -86,6 +86,16 @@ Mỗi thí nghiệm phải ghi nhận vào file cấu hình (CSV/JSON, không b�
   - Đánh giá toàn diện toàn bộ chu trình từ âm thanh thô đến quyết định bản quyền cuối cùng.
   - Đo lường: Macro-F1 trên 5 nhóm bản quyền, Confusion Matrix, tỷ lệ Unknown Detection Rate, tổng độ trễ End-to-End.
 
+### Thí nghiệm mở rộng (ngoài 8 thí nghiệm bắt buộc)
+
+- **`EXP-09` — License Learnability** (`experiments/exp09_license_learnability/run.py`):
+  - Kiểm định "giấy phép có đoán được từ embedding MERT không" bằng split theo **nghệ sĩ** (nghệ sĩ trong test là mới) — đúng tình huống bài ngoài cơ sở dữ liệu.
+  - Kết quả gốc: accuracy 0.382 < baseline lớp phổ biến 0.569. Bộ phân loại chỉ sinh quyền `PREDICTED`, và cổng dữ liệu quyền (`rights_gate`) hạ mọi kết luận từ nguồn này về `UNKNOWN`.
+- **License Complexity Sweep** (`python scripts/train_license_classifier.py --sweep` → `experiments/results/exp09_license_complexity_sweep.json`):
+  - Quét `C` của LogisticRegression trên thang log (0.001 → 100), cùng giao thức split theo nghệ sĩ; chỉ dùng nhãn từ nguồn thật (loại `SIMULATED`/`PREDICTED`).
+  - Mỗi mức ghi: lỗi độ chênh ≈ 1 − macro-F1 train, lỗi phương sai ≈ khoảng cách train↔kiểm định, tổng lỗi = 1 − macro-F1 kiểm định. Chọn C có tổng lỗi thấp nhất (hoà → C nhỏ hơn).
+  - Luôn báo cáo kèm baseline accuracy và baseline macro-F1. Chạy lại mỗi khi tập bản ghi có audio + nhãn thật đổi quy mô.
+
 ---
 
 ## 5. Ngưỡng Nghiệm thu Nội bộ (Internal Acceptance Thresholds)
