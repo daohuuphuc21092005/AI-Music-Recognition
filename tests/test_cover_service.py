@@ -13,6 +13,7 @@ dịch cao độ là điểm mù 0% của cả Chromaprint lẫn MERT).
 import numpy as np
 import pytest
 
+from backend import config
 from backend.services.cover_service import (
     CHROMA_SR,
     DESCRIPTOR_FRAMES,
@@ -22,6 +23,7 @@ from backend.services.cover_service import (
     build_descriptor,
     cover_similarity,
     extract_chroma,
+    normalize_frames,
     search,
     transpositions,
 )
@@ -136,3 +138,28 @@ def test_search_reference_rong_tra_danh_sach_rong(reference_descriptor):
 def test_search_ton_trong_top_k(reference_descriptor):
     references = np.vstack([build_descriptor(chord(k), CHROMA_SR) for k in range(4)])
     assert len(search(reference_descriptor, references, top_k=2)) == 2
+
+
+# --------------------------------------------------------------------------
+# Không có hoà âm thì không được giống bài nào
+# --------------------------------------------------------------------------
+def test_khung_chroma_phang_thanh_vector_0():
+    assert not np.any(normalize_frames(np.ones((N_CHROMA, DESCRIPTOR_FRAMES))))
+
+
+def test_nhieu_trang_khong_khop_cover():
+    """Trước khi trừ trung bình, nhiễu trắng đạt 0.985 so với nhạc thật — vượt τCover."""
+    noise = np.random.RandomState(42).normal(
+        0, 0.2, int(CHROMA_SR * DURATION_S)).astype(np.float32)
+    references = np.vstack([build_descriptor(chord(k), CHROMA_SR) for k in range(N_CHROMA)])
+    best = search(build_descriptor(noise, CHROMA_SR), references, top_k=1)[0]
+    # 0.8 là mức một phép dịch cao độ thật phải vượt (test_oti_bat_dung_luong_dich_cao_do)
+    assert best["similarity_score"] < 0.8
+    assert best["similarity_score"] < config.COVER_THRESHOLD
+
+
+def test_chuan_hoa_lai_descriptor_da_luu_bang_tinh_tu_audio():
+    """Nhờ tính chất này, index cũ nâng cấp được mà không cần audio gốc."""
+    chroma = _resample_time(extract_chroma(chord(3.0), CHROMA_SR))
+    per_frame = chroma / np.linalg.norm(chroma, axis=0, keepdims=True)
+    assert np.allclose(normalize_frames(per_frame), normalize_frames(chroma), atol=1e-5)

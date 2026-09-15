@@ -115,6 +115,20 @@ def _resample_time(chroma: np.ndarray, n_frames: int = DESCRIPTOR_FRAMES) -> np.
     )
 
 
+def normalize_frames(chroma: np.ndarray) -> np.ndarray:
+    """Chroma (12, F) -> descriptor (12 * F,): trừ trung bình từng khung rồi chuẩn hoá L2."""
+    # Chroma không âm nên cosine giữa hai vector bất kỳ đã cao sẵn, và khung phẳng
+    # (nhiễu, không có hoà âm) gần mọi bài: nhiễu trắng từng đạt 0.985 > τCover.
+    # Trừ trung bình đưa khung phẳng về 0; phép này bất biến theo tỉ lệ từng khung.
+    centered = chroma - chroma.mean(axis=0, keepdims=True)
+    norms = np.linalg.norm(centered, axis=0, keepdims=True)
+    centered = np.divide(centered, norms, out=np.zeros_like(centered), where=norms > 1e-8)
+
+    flat = centered.reshape(-1)
+    total = np.linalg.norm(flat)
+    return (flat / total).astype("float32") if total > 1e-8 else flat.astype("float32")
+
+
 def build_descriptor(audio: np.ndarray, sr: int = CHROMA_SR) -> np.ndarray:
     """
     Đặc trưng cover của một đoạn: vector (12 * DESCRIPTOR_FRAMES,) đã chuẩn hoá L2.
@@ -122,16 +136,7 @@ def build_descriptor(audio: np.ndarray, sr: int = CHROMA_SR) -> np.ndarray:
     Giữ nguyên trục 12 bậc ở chiều ĐẦU khi trải phẳng, để phép xoay cao độ vẫn là
     một phép `np.roll` đơn giản trên ma trận (12, F) trước khi trải.
     """
-    chroma = _resample_time(extract_chroma(audio, sr))
-
-    # Chuẩn hoá từng khung: chỉ giữ HÌNH DẠNG hợp âm, bỏ đi độ to nhỏ — nhờ vậy
-    # thay đổi biên độ/EQ không ảnh hưởng tới điểm số.
-    norms = np.linalg.norm(chroma, axis=0, keepdims=True)
-    chroma = np.divide(chroma, norms, out=np.zeros_like(chroma), where=norms > 1e-8)
-
-    flat = chroma.reshape(-1)
-    total = np.linalg.norm(flat)
-    return (flat / total).astype("float32") if total > 1e-8 else flat.astype("float32")
+    return normalize_frames(_resample_time(extract_chroma(audio, sr)))
 
 
 def descriptor_from_file(audio_path: str, offset: float = 0.0,

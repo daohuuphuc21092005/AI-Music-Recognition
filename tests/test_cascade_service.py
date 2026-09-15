@@ -57,7 +57,10 @@ def test_khong_khop_tang_1_thi_xuong_tang_2(db_session, vector_index, unmatched_
     """Nhiễu trắng phải trượt Chromaprint rồi được tầng 2 xử lý."""
     result = process_music_query(unmatched_audio, db_session, vector_index, top_k=5)
 
-    assert result["pipeline_stage"] == "STAGE_2_MERT_RETRIEVAL"
+    # MERT trượt ngưỡng thì tầng 3 (Cover) chạy tiếp, nên khi Cover được bật tầng
+    # sâu nhất đã chạy có thể là STAGE_3_COVER. Điều cần kiểm ở đây là đã rời tầng 1.
+    allowed = {"STAGE_2_MERT_RETRIEVAL"} | ({"STAGE_3_COVER"} if config.COVER_ENABLED else set())
+    assert result["pipeline_stage"] in allowed
     assert result["match_type"] in ("NEAR_MATCH", "UNKNOWN")
     evidence = result["evidence"]
     fingerprint = evidence["fingerprint"]
