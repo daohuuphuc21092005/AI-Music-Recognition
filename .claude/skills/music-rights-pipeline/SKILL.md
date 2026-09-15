@@ -95,3 +95,9 @@ Skill này hướng dẫn quy trình chuẩn hóa để xây dựng, kiểm th�
 | Chromaprint không nhận diện được audio nén | Audio bị méo tần số hoặc cắt dải cao | Chuyển tiếp sang tầng MERT Retrieval theo đúng thiết kế cascade |
 | Trả về traceback ra API client | Thiếu try/catch ở tầng Controller | Bao bọc service call bằng HTTPException với mã lỗi chuẩn (`MODEL_FAILURE`, `TIMEOUT`) |
 | Quên giải phóng file tạm | AudioService không có hook cleanup | Sử dụng `tempfile.NamedTemporaryFile` hoặc `finally: os.remove(temp_path)` |
+| Tầng 1 báo `UNAVAILABLE`, `reason_code=DATABASE_UNAVAILABLE` | Server không kết nối được PostgreSQL (vd. `DATABASE_URL` trỏ cổng 5433 của Docker cũ trong khi PostgreSQL chạy ở 5432) | Sửa `DATABASE_URL`; kiểm tra `/health` → `components.database` |
+| Tầng 1 báo `UNAVAILABLE`, `reason_code=FPCALC_MISSING` | Tiến trình server không thấy `fpcalc` (PATH của server khác PATH của shell) | Đặt `FPCALC_PATH` trong `.env` hoặc để binary ở `~/bin` |
+| Nhiễu / tạp âm bị trả `COVER_MATCH` | Descriptor chroma không trừ trung bình → cosine giữa hai bài bất kỳ đã cao sẵn | Dùng `cover_service.normalize_frames`; dựng lại `cover_descriptors.npy` và chạy lại EXP-07 (có mẫu nhiễu) để hiệu chỉnh τCover |
+| Tầng 1 trả `EXACT_MATCH` cho bài không có audio | Fingerprint không sinh từ audio thật lọt vào bảng (gộp dữ liệu chỉ có metadata) | `python scripts/check_data_integrity.py` — mục "Fingerprint là đầu ra thật của fpcalc" phải PASS |
+| Badge HIGH/CONDITIONAL từ giấy phép do model đoán | Thiếu cổng độ tin cậy dữ liệu quyền | `rights_gate` trong `configs/rules_v1.yaml` hạ về UNKNOWN; kết luận tạm ở `evidence.rule_engine.provisional_decision` |
+| Mở rộng corpus xong nhưng ngưỡng không còn đúng | τFP / τMERT / τCover phụ thuộc quy mô reference | Chạy lại EXP-01 / EXP-06 / EXP-07 rồi cập nhật `.env`, `backend/config.py` và `min_identity_confidence_by_match_type` trong `rules_v1.yaml` cùng lúc |
