@@ -23,21 +23,37 @@ Tài liệu này đóng vai trò là **bộ nhớ ngữ cảnh liên tục** (Pe
 - **Milestone đang thực hiện**: **`M6 — Full Application Ready`** / chuẩn bị nghiệm thu **`M7 — Final Evaluation`**.
 - **Hạng mục đã hoàn thành**:
   - [x] Thiết lập hệ thống Modular Rules chuẩn trong `.claude/rules/` (7 files).
-  - [x] Xây dựng CSDL tham chiếu 4.922 bản ghi (4.000 bản ghi FMA có audio thật + 922 bản ghi mô phỏng).
+  - [x] Xây dựng CSDL tham chiếu — **đã mở rộng lên 138.164 compositions/recordings/rights** (từ mốc 4.922 ban đầu; xem cảnh báo quy mô artifact bên dưới).
   - [x] Tầng 1 (Chromaprint): Codec thuần Python, vectorised bit-error matching, τFP = 0.15 (`EXP-01`).
   - [x] Tầng 2 (MERT Deep Retrieval): MERT-v1-95M + FAISS FlatIP, τMERT = 0.97 (`EXP-02`, `EXP-03`, `EXP-06`).
-  - [x] Tầng 3 (Cover Service): CQT + Optimal Transposition Index, τCover = 0.97 (`EXP-07`).
+  - [x] Tầng 3 (Cover Service): CQT + Optimal Transposition Index, τCover = 0.97 (`EXP-07`) — **đã nối chính thức vào `cascade_service.py`** (nhánh `STAGE_3_COVER`, bật qua `config.COVER_ENABLED`).
   - [x] Rule Engine: Cây quyết định tuần tự 5 nhóm bản quyền theo `configs/rules_v1.yaml` (65 unit tests PASS).
   - [x] License Classifier & Production Features: `EXP-09`, trích xuất RMS/Crest factor/Dynamic range.
-  - [x] REST API FastAPI & Giao diện tĩnh 4 màn hình (Upload, Processing, Result, Evidence).
-  - [x] Chạy hoàn tất 9/9 thí nghiệm (`EXP-01` đến `EXP-09`), lưu kết quả trong `experiments/results/`.
+  - [x] REST API FastAPI & Giao diện tĩnh (frontend/index.html+app.js+styles.css, mount trực tiếp ở `/` từ `backend/main.py`, không cần build).
+  - [x] Chạy hoàn tất 9/9 thí nghiệm (`EXP-01` đến `EXP-09`), lưu kết quả trong `experiments/results/` — **vượt 8 thí nghiệm gốc trong `06-experiments-evaluation.md`** (chưa đồng bộ tài liệu, xem known-gap bên dưới).
   - [x] Bộ test tự động: 174 tests PASS (đã xử lý tương thích torchvision cho MERT).
+  - [x] **`git init` + commit đầu tiên** (`f4cc43f`, 120 file, `.git` ~75MB) — đã audit an toàn: không secret (`.env` biến thể), không file >50MB, `.gitignore` loại đúng dữ liệu sinh-lại-được (`data/preprocess/`, `data/processed/_archive_*/`, `data/test_queries/`, config `*.local.*`, audio test mẫu).
+  - [x] Response schema API (`backend/schemas/analysis.py`) — mọi field đã có `Field(description=...)`, kể cả `evidence` (mô tả cấu trúc dict động: `identification`/`candidates`/`rule_engine`/`composition`/`rights_record`).
+
+- **⚠️ Gap mới phát sinh sau khi mở rộng corpus lên 138k — artifact dẫn xuất CHƯA đuổi kịp**:
+  | Bảng | Số dòng |
+  |---|---|
+  | compositions/metadata/rights_master.csv | **138.164** |
+  | fingerprints_master.csv | 104.000 |
+  | embeddings_master.csv | 8.000 |
+  | test_queries_master.csv | 2.150 |
+  | cover_descriptors.npy | ~100 reference window |
+
+  Threshold hiện tại (τFP/τMERT/τCover) được hiệu chỉnh trên quy mô nhỏ hơn nhiều — `config.py` tự cảnh báo: ngưỡng phụ thuộc quy mô reference, mở rộng corpus mà không hiệu chỉnh lại là sai.
 
 - **Hạng mục tiếp theo (Next Actions)**:
-  - [ ] Nối chính thức Tầng 3 (Cover OTI) vào luồng `cascade_service.py` để lấp điểm mù pitch shift của tầng 1 và 2.
-  - [ ] Kết nối PostgreSQL và chạy `python init_db.py` để hoàn tất dữ liệu runtime cho API và pass 17 integration tests còn lại.
-  - [ ] Tạo commit Git đầu tiên lưu toàn bộ trạng thái code.
+  - [ ] Chạy `scripts/build_embeddings.py --all` rồi `scripts/rebuild_faiss_index.py` để embedding/FAISS đuổi kịp corpus 138k (hiện mới 8k).
+  - [ ] Sinh lại `test_queries_master.csv` qua `scripts/augment_audio.py` cho tương xứng quy mô mới, rồi **chạy lại EXP-01/04/05/06/08** để threshold còn đúng.
+  - [ ] Mở rộng `cover_descriptors.npy` (hiện ~100 window) để Stage 3 Cover phát huy tác dụng trên toàn corpus.
+  - [ ] Kết nối PostgreSQL và chạy `python init_db.py` để hoàn tất dữ liệu runtime cho API (chưa xác nhận đã chạy ở quy mô 138k).
   - [ ] Đánh giá và tối ưu hóa UI/UX Frontend trên trình duyệt.
+  - [ ] (chưa làm) 3 nguồn dataset ngoài FMA/Jamendo: YouTube Audio Library, Public Domain, Cover dataset thật (SecondHandSongs subset).
+  - [ ] (known-gap, chưa đồng bộ) `.claude/rules/06-experiments-evaluation.md` vẫn ghi "8 thí nghiệm EXP-01..08" — chưa thêm EXP-09.
 
 ---
 
@@ -92,3 +108,10 @@ Tài liệu này đóng vai trò là **bộ nhớ ngữ cảnh liên tục** (Pe
   - Thiết lập hệ thống Hooks tự động trong `.claude/hooks/format_and_lint.py` và cấu hình `PostToolUse` trong `settings.json`.
   - Tạo file `settings.local.json` cấu hình biến môi trường cục bộ và quyền thực thi riêng cho máy Windows.
   - Kích hoạt cơ chế Tự động đồng bộ & Cập nhật Rules, Skills và Memory (Self-Updating System) trong `01-core-invariants.md` và `format_and_lint.py`.
+
+- **2026-09-15 (phiên đồng bộ nền tảng)**:
+  - Phát hiện `memory.md` lỗi thời so với thực tế filesystem (vẫn ghi "M1 đang làm" trong khi đã có 9 experiment, 14 service, FAISS index, license classifier) — đồng bộ lại mục 2.
+  - Rà soát `.gitignore` trước `git init`, phát hiện và chặn 3 gap nghiêm trọng: `data/preprocess/` (1.3GB dump FMA thô, gồm 2 file >100MB), `data/processed/_archive_*/` (390MB snapshot trùng lặp không bị chặn do pattern cũ có `/` neo path), `data/test_queries/` (2.1GB audio test sinh lại được). Thêm pattern `.env.*` bắt được 1 file `.env.bi-ghi-de-20260910` lọt qua rule `.env.bak*` cũ (nội dung an toàn, chỉ password mặc định dev). Loại thêm 2 file cấu hình riêng máy (`settings.local.json`, `CLAUDE.local.md`) và 2 file audio mẫu (`test.mp3`, `test_audio/`) theo quyết định của chủ dự án.
+  - `git init` + rà soát staging trước commit — song song, một phiên khác đã tự hoàn tất bước này trước (commit `f4cc43f`, dùng đúng `.gitignore` vừa sửa cộng thêm 1 rule); đã audit lại xác nhận an toàn thay vì làm trùng.
+  - Phát hiện quy mô corpus đã tăng từ 4.922 lên 138.164 bản ghi trong lúc thao tác (do một phiên khác chạy song song) — cập nhật lại mục 2 theo đúng số liệu mới nhất, thêm bảng cảnh báo artifact dẫn xuất (embedding/FAISS/test queries) chưa đuổi kịp quy mô.
+  - Bổ sung `Field(description=...)` cho toàn bộ field trong `backend/schemas/analysis.py` (trước đó chỉ 2/20+ field có mô tả) để làm rõ tham số đầu ra API, đặc biệt `evidence` (dict động, mô tả bằng văn xuôi thay vì ép kiểu Pydantic lồng nhau để tránh lệch schema mỗi khi Rule Engine thêm `extra_evidence` mới).
