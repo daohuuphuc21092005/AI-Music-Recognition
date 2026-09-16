@@ -216,7 +216,19 @@ def main() -> int:
             print(f"⏭️  Không tìm thấy {audio_path}")
             continue
         processed += 1
-        segments, duration = segment_embeddings(audio_path)
+        try:
+            segments, duration = segment_embeddings(audio_path)
+        except Exception as e:
+            # Một file hỏng KHÔNG được giết cả lượt chạy nhiều giờ. Ghi lỗi vào
+            # checkpoint để lần sau bỏ qua file đó, rồi THOÁT để vòng lặp ngoài mở
+            # tiến trình mới: lỗi CUDA làm hỏng context của cả tiến trình (mọi lệnh
+            # GPU sau đó đều hỏng theo), nên bắt ngoại lệ rồi chạy tiếp trong CÙNG
+            # tiến trình là vô ích.
+            checkpoint.add(audio_path, {"recording_id": rec_id,
+                                        "error": f"{type(e).__name__}: {e}"})
+            print(f"❌ {os.path.basename(audio_path)}: {type(e).__name__}: {e}")
+            checkpoint.close()
+            return EXIT_MORE_WORK
         checkpoint.add(audio_path, {
             "recording_id": rec_id,
             "duration": round(float(duration), 2),
@@ -240,7 +252,7 @@ def main() -> int:
     # Ghi thẳng ra file tạm rồi thay thế: vừa không giữ 48.000 dòng trong RAM,
     # vừa không để lại CSV cụt nếu tiến trình bị giết giữa chừng.
     tmp_path = config.EMBEDDINGS_CSV + ".tmp"
-    kept = added = 0
+    kept = added = failed = 0
     with open(tmp_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -248,6 +260,9 @@ def main() -> int:
             writer.writerow(row)
             kept += 1
         for entry in checkpoint.iter_records():
+            if "error" in entry:
+                failed += 1
+                continue
             for segment in entry["segments"]:
                 writer.writerow({
                     "embedding_id": str(uuid.uuid4()),
@@ -266,6 +281,8 @@ def main() -> int:
     checkpoint.close(remove=True)
     print(f"\n💾 Đã ghi {config.EMBEDDINGS_CSV}: {kept + added} dòng "
           f"({kept} giữ lại + {added} mới)")
+    if failed:
+        print(f"⚠️  {failed} bản ghi không trích được embedding (xem dòng ❌ ở trên)")
 
     if not args.no_rebuild:
         print("\n▶️  Dựng lại FAISS index...")
