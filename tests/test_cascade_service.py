@@ -84,15 +84,26 @@ def test_nguong_duoc_nang_cho_truy_van_ngan(db_session, vector_index, unmatched_
 
     Đây là chốt chặn cho một dương tính giả có thật: đoạn 8 giây bất kỳ, kể cả
     nhiễu trắng thuần, đạt điểm Chromaprint quanh 0.16 — từng vượt τFP = 0.15
-    hiệu chỉnh trên tập truy vấn 30 giây. Ngưỡng nền của đoạn ngắn cao hơn hẳn,
-    nên phép nâng theo độ dài vẫn cần dù τFP hiện đã là 0.30.
+    hiệu chỉnh trên tập truy vấn 30 giây.
+
+    Kỳ vọng KHÔNG đóng đinh "luôn được nâng": phép nâng chỉ kích hoạt khi sàn nhiễu
+    của độ dài đó cao hơn τFP. Ở τFP = 0.30 thì sàn nhiễu 8 giây (0.2558 × 1.15 =
+    0.2942) đã nằm dưới τFP, nên không còn gì để nâng — chính τFP đang gánh. Điều
+    phải đúng trong MỌI trường hợp là hai điều dưới: ngưỡng hiệu dụng bằng đúng
+    hàm theo độ dài, và nhiễu trắng bị từ chối.
     """
+    from backend.services.fingerprint_service import min_score_for_duration
+
     result = process_music_query(unmatched_audio, db_session, vector_index, top_k=5)
     fingerprint = result["evidence"]["fingerprint"]
+    expected = min_score_for_duration(fingerprint["query_duration"])
 
-    assert fingerprint["threshold_raised_for_short_query"] is True
-    assert fingerprint["threshold"] > config.FP_THRESHOLD
     assert fingerprint["threshold_base"] == config.FP_THRESHOLD
+    assert fingerprint["threshold"] == pytest.approx(expected)
+    assert fingerprint["threshold"] >= config.FP_THRESHOLD
+    assert fingerprint["threshold_raised_for_short_query"] is (expected > config.FP_THRESHOLD)
+    # Thứ thực sự bảo vệ hệ thống: nhiễu trắng không được nhận là EXACT_MATCH
+    assert fingerprint["fingerprint_score"] < fingerprint["threshold"]
 
 
 def test_cascade_stage3_cover_match_unit(monkeypatch):

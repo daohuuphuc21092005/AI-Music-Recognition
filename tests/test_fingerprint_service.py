@@ -54,6 +54,32 @@ def test_nguong_khong_bao_gio_thap_hon_tau_fp():
         assert min_score_for_duration(duration) >= config.FP_THRESHOLD
 
 
+def test_co_che_nang_nguong_van_con_song():
+    """
+    Phải còn ÍT NHẤT một độ dài mà phép nâng thực sự kích hoạt.
+
+    Nếu τFP hiệu chỉnh lại mà vượt mọi sàn nhiễu đã đo, cơ chế này lặng lẽ thành
+    mã chết: mọi truy vấn ngắn đều dùng τFP, và bảng NOISE_FLOOR_BY_DURATION không
+    còn bảo vệ gì. Lúc đó phải đo lại sàn nhiễu trên corpus mới chứ không phải xoá
+    test. (Ở τFP = 0.30, phép nâng còn kích hoạt cho đoạn dưới 8 giây: 5 giây ->
+    0.4237, trong khi 8 giây trở lên đã bằng chính τFP.)
+    """
+    from backend.services.fingerprint_service import (
+        NOISE_FLOOR_BY_DURATION,
+        NOISE_FLOOR_MARGIN,
+        min_score_for_duration,
+    )
+
+    engaged = [d for d, floor in NOISE_FLOOR_BY_DURATION
+               if floor * NOISE_FLOOR_MARGIN > config.FP_THRESHOLD]
+    assert engaged, (
+        f"τFP = {config.FP_THRESHOLD} đã cao hơn mọi sàn nhiễu đã đo -> cơ chế nâng "
+        f"ngưỡng theo độ dài không còn tác dụng, cần đo lại sàn nhiễu"
+    )
+    for duration in engaged:
+        assert min_score_for_duration(duration) > config.FP_THRESHOLD
+
+
 def test_nguong_chan_duoc_diem_nen_da_do():
     """
     Ngưỡng phải nằm TRÊN điểm nền lớn nhất đã đo cho từng độ dài — nếu không thì
