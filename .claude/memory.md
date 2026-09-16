@@ -42,15 +42,17 @@ Tài liệu này đóng vai trò là **bộ nhớ ngữ cảnh liên tục** (Pe
   | fingerprints_master.csv | 24.375 | fingerprint THẬT của fpcalc (149 bài trùng audio với bài khác) |
   | cover_descriptors.npy | 24.375 | mọi bản ghi có audio, 30 giây đầu |
   | data/test_queries/manifest.csv | 1.900 | 100 bài nguồn × 19 biến đổi |
-  | embeddings_master.csv | **đang dựng** | ~1 s/bài trên GPU (GTX 1650, torch 2.13.0+cu130); trên CPU là ~4 s/bài |
-  | test_queries_master.csv | cũ (2.150) | chờ `generate_test_queries.py` sau khi có embedding |
+  | embeddings_master.csv | 48.750 | 24.375 bài × 2 đoạn 15s; GPU ~1 s/bài, 10 bài lỗi CUDA đã dựng lại trên CPU |
+  | mert_faiss.index | 48.750 vector / 24.375 bản ghi | 142,8 MB, nằm ngoài git |
+  | test_queries_master.csv | 1.075 | 50 bản ghi × 21 biến đổi + 25 truy vấn ngoài CSDL |
 
   133.742 bản ghi còn lại (nhạc Việt, Spotify, Jamendo…) là **metadata-only**: tra được qua `/api/v1/tracks/{id}` nhưng không nhận diện được qua audio.
 
 - **Hạng mục tiếp theo (Next Actions)**:
-  - [ ] `build_embeddings.py --all` (đang chạy) → `generate_test_queries.py` → `init_db.py` → **EXP-06** để hiệu chỉnh lại τMERT trên 24.375 bài.
-  - [ ] `train_license_classifier.py --sweep` lại trên embedding mới (bản hiện tại là C=30 trên 4.000 bản ghi).
-  - [ ] Độ trễ Tầng 1 tăng theo quy mô: 4,8 s/truy vấn với 24.375 fingerprint (0,185 ms/cặp × 24.375). Cần phương án trước khi demo.
+  - [x] Dựng embedding (48.750 vector), `generate_test_queries`, `init_db`, **EXP-06** → τMERT 0.98. Xong 2026-09-16.
+  - [x] `train_license_classifier.py --sweep` trên 24.375 mẫu → C=100. Xong 2026-09-16, nhưng vẫn dưới baseline (xem nhật ký).
+  - [ ] **Nới lưới sweep license (C=300, 1000)**: tổng lỗi vẫn giảm tới rìa lưới C=100 nên chưa biết điểm tối ưu nằm ở đâu.
+  - [ ] **Độ trễ Tầng 1: 4,8 s/truy vấn** với 24.375 fingerprint (0,185 ms/cặp). Đã đo khả thi chỉ mục ngược (`scratchpad/probe_fp_prefilter.py`: 84–100% top-1 ở nhóm Chromaprint làm được, 60–240 hash trùng). Bước còn thiếu để dám đổi: chạy `scratchpad/compare_fp_prefilter.py` trên 1.900 truy vấn (~2,5 giờ CPU) để chứng minh không bỏ sót truy vấn nào có điểm ≥ τFP.
   - [ ] EXP-03 chạy ở giao thức cũ (6.098 cửa sổ) nên EXP-07 không so được cột MERT — chạy lại nếu cần bảng so sánh.
   - [ ] (known-gap) EXP-04/EXP-05/EXP-08 chưa chạy lại ở quy mô 24.375.
   - [ ] Đánh giá và tối ưu hóa UI/UX Frontend trên trình duyệt.
@@ -149,3 +151,8 @@ Tài liệu này đóng vai trò là **bộ nhớ ngữ cảnh liên tục** (Pe
   - `init_db.py` nạp CSV theo khối 2.000 dòng: `embeddings_master.csv` sắp là ~48.750 dòng × vector 768 chiều dạng text (~800 MB), đọc cả file là vài GB RAM. Đọc khối đầu TRƯỚC khi `TRUNCATE` để file hỏng không làm mất bảng cũ.
   - **Evidence hết UUID trần**: `analysis_pipeline._label_candidates` gắn tên bài + nghệ sĩ cho ứng viên của cả tầng 2 lẫn tầng 3 trong một truy vấn; evidence tầng Cover thêm `reference_recordings` (τCover phụ thuộc số bài trong chỉ mục nên thiếu con số này thì điểm tương đồng đọc sai). Giao diện thêm `escapeHtml` vì tên bài là văn bản tự do từ dataset ngoài. 4 test hồi quy trong `tests/test_analysis_pipeline.py`.
   - **Đo khả thi chỉ mục ngược cho Tầng 1** (`scratchpad/probe_fp_prefilter.py`, 200 truy vấn / 5,39 triệu hash): lọc theo hash trùng tuyệt đối giữ được bản ghi đúng ở top-1 cho 84–100% truy vấn thuộc nhóm Chromaprint vốn làm được (60–240 hash trùng), và 0 hash trùng ở nhóm dịch cao độ/đổi tốc độ — đúng nhóm EXP-01 đo được 0/100. ⚠️ Cột "top-10 = 100%" của nhóm pitch trong bảng đo là ẢO: mọi bản ghi cùng 0 hash trùng nên hoà nhau. CHƯA đổi Tầng 1: còn phải chứng minh "điểm ≥ τFP thì luôn có ít nhất 1 hash trùng" bằng `scratchpad/compare_fp_prefilter.py` trên toàn bộ 1.900 truy vấn (~2,5 giờ CPU).
+  - **τMERT 0.97 → 0.98** (EXP-06 trên 48.750 vector / 24.375 bản ghi): FMR 2,65%, unknown recall 0.9735, true accept 0.3812. Chính τ = 0.97 nay cho **FMR 6,10%**, trượt trần 5% của §16 — đúng quy luật "ngưỡng phụ thuộc quy mô reference" (cùng τ đó chỉ 4,40% khi reference còn 8.000 vector). Giá phải trả ở 0.98 là chỉ 38% truy vấn known được nhận; đổi lại, ở 0.97 thì cứ 16 bài lạ có 1 bài bị gán cho bản ghi có sẵn, tức một kết luận SAI về quyền.
+  - **Bộ ba ngưỡng cuối: τFP 0.30 / τMERT 0.98 / τCover 0.90** — đồng bộ ở `.env`, `backend/config.py` (kể cả giá trị mặc định trong mã, để bản clone không có `.env` vẫn đúng) và `min_identity_confidence_by_match_type` trong `configs/rules_v1.yaml`.
+  - Dựng embedding hoàn tất: 48.750 vector / 24.375 bản ghi, không sót bài nào (10 bài lỗi CUDA dựng lại trên CPU). `check_data_integrity`: **14 PASS / 2 WARN / 0 FAIL**. Bộ test: **199 pass / 5 skip**.
+  - **Lượt cuối của vòng lặp thoát mã 1 dù dữ liệu đã đủ**: `checkpoint.close(remove=True)` gặp `PermissionError WinError 32` vì CHÍNH TÔI đang đọc file checkpoint để đếm tiến độ — Windows giữ handle nên không xoá được. Hậu quả dây chuyền: script bao ngoài bỏ qua bước dựng FAISS, và nếu không có chốt chặn "kiểm `rebuild_faiss exit code` + số vector trong bản đồ ID" thì EXP-06 đã chạy trên bản đồ cũ 8.000 vector và chốt τMERT sai mà không có dấu hiệu nào. Bài học: đừng đọc file mà tiến trình khác sắp xoá; và "HOAN TAT" của script bao ngoài không đồng nghĩa mọi bước con đã thành công.
+  - **Sweep license trên 24.375 mẫu** (gấp 6 lần lần trước, 7 lớp, 5.206 nghệ sĩ): chọn **C=100**, val macro-F1 **0.1816** (baseline 0.0838) nhưng accuracy **0.2975 < baseline lớp phổ biến 0.4153**. Gấp 6 lần dữ liệu chỉ nhích macro-F1 từ 0.1734 lên 0.1816 → **vẫn KHÔNG vượt baseline khi gặp nghệ sĩ mới**, đúng kết luận của EXP-09 gốc; `rights_gate` tiếp tục là thứ chặn mọi kết luận từ nguồn PREDICTED. ⚠️ Known-gap: tổng lỗi giảm đều tới tận C=100 — **rìa lưới** — nên điểm tối ưu có thể nằm ngoài; muốn kết luận chắc phải nới lưới (C=300, 1000) rồi chạy lại.

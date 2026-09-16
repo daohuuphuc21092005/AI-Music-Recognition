@@ -134,24 +134,26 @@ def resolve_audio_path(audio_path: str) -> str:
 #   Recall trần của tầng này chỉ ~0.58: dịch cao độ và đổi tốc độ (8/19 phép biến
 #   đổi) Chromaprint không bắt được bài nào, đó là việc của tầng MERT và Cover.
 #
-# MERT_THRESHOLD = 0.97 — hiệu chỉnh bằng EXP-06 (Unknown Track Detection).
-# ⚠️ Các con số dưới đây đo trên CORPUS CŨ (4.000 bản ghi / 8.000 vector). Corpus
-# đã lên 24.375 bản ghi và embedding đang được dựng lại; phải chạy lại EXP-06 rồi
-# cập nhật cả ngưỡng lẫn đoạn này.
-# Xem experiments/results/exp06_unknown_detection.json (8.000 truy vấn known +
-# 8.000 truy vấn unknown):
-#   τ = 0.90 -> False Match Rate 74.86%
-#   τ = 0.95 -> False Match Rate 14.52%   (KHÔNG đạt ngưỡng <=5% của §16)
-#   τ = 0.97 -> False Match Rate  4.40%, unknown recall 0.956   <- đang dùng
-#   τ = 0.98 -> False Match Rate  1.84%, nhưng true accept tụt còn 0.155
-#   Giá trị cũ 0.95 từng được ghi là "FMR 1.87%" khi reference chỉ có 114 bản
-#   ghi. Trên 8.000 vector, CHÍNH ngưỡng đó cho 14.52% — gấp gần 8 lần.
+# MERT_THRESHOLD = 0.98 — hiệu chỉnh bằng EXP-06 (Unknown Track Detection) trên
+# 48.750 vector / 24.375 bản ghi; mỗi vector vừa làm truy vấn known (leave-one-out)
+# vừa làm truy vấn unknown (bỏ cả bản ghi khỏi reference).
+# Xem experiments/results/exp06_unknown_detection.json:
+#   τ = 0.90 -> False Match Rate 83.59%, true accept 0.8715
+#   τ = 0.96 -> False Match Rate 11.79%, true accept 0.6857
+#   τ = 0.97 -> False Match Rate  6.10%   (KHÔNG đạt ngưỡng <=5% của §16)
+#   τ = 0.98 -> False Match Rate  2.65%, unknown recall 0.9735, true accept 0.3812  <- đang dùng
+#   τ = 1.00 -> False Match Rate  0.43%, nhưng true accept 0.0 -> vô dụng
+#   Cái giá của 0.98 là thật: chỉ 38% truy vấn known được nhận. Nhưng ở 0.97 thì cứ
+#   16 bài lạ có 1 bài bị gán cho một bản ghi có sẵn, và trong hệ thống bản quyền
+#   một kết luận SAI về quyền tốn kém hơn nhiều so với một lần bỏ sót — bỏ sót còn
+#   được tầng Cover xử lý tiếp, nhận nhầm thì ra thẳng khuyến nghị sai.
 #
 # NGƯỠNG PHỤ THUỘC QUY MÔ REFERENCE. Đây là quan hệ ĐO ĐƯỢC, không phải suy
 # đoán: ở cùng τFP = 0.10, FPR tăng từ 0.0044 (1.000 bản ghi) lên 0.0095 (4.000)
 # rồi 0.0226 (24.375). Tầng Cover cũng vậy — chấm trên 100 bài nguồn thì τ = 0.71
 # đã đạt §16, nhưng chính vùng ngưỡng đó trên chỉ mục 24.375 bài cho FMR 17%.
-# Còn τMERT = 0.97 cho FMR 4.40% trên corpus CŨ, tức ĐÃ SÁT trần 5% của §16.
+# Còn τMERT thì ở CÙNG τ = 0.97: FMR 4,40% trên 8.000 vector nhưng 6,10% trên
+# 48.750 vector — phải nâng lên 0.98 mới giữ được §16.
 # Mở rộng corpus thêm nữa thì BẮT BUỘC chạy lại EXP-01, EXP-06 và EXP-07 trước
 # khi tin ba con số này.
 #
@@ -160,7 +162,7 @@ def resolve_audio_path(audio_path: str) -> str:
 # COVER_MATCH = τCover). Lệch nhau thì cascade nhận một khớp rồi Rule Engine vứt
 # chính khớp đó thành UNKNOWN.
 # --------------------------------------------------------------------------
-FP_THRESHOLD = _get_float("FP_THRESHOLD", 0.15)
+FP_THRESHOLD = _get_float("FP_THRESHOLD", 0.30)
 # Bộ lọc sơ bộ theo độ dài trước khi so khớp fingerprint (giây).
 # 0 = TẮT (mặc định) để không âm thầm ảnh hưởng recall với truy vấn bị cắt.
 FP_DURATION_WINDOW_S = _get_float("FP_DURATION_WINDOW_S", 0.0)
@@ -168,7 +170,7 @@ FP_DURATION_WINDOW_S = _get_float("FP_DURATION_WINDOW_S", 0.0)
 # 0 = dò toàn bộ (mặc định). Đặt 120 để tái lập đúng hành vi của pyacoustid —
 # nhưng khi đó đoạn cắt từ giữa bài sẽ không khớp được (xem EXP-01).
 FP_MAX_ALIGN_OFFSET = _get_int("FP_MAX_ALIGN_OFFSET", 0)
-MERT_THRESHOLD = _get_float("MERT_THRESHOLD", 0.97)
+MERT_THRESHOLD = _get_float("MERT_THRESHOLD", 0.98)
 
 # COVER_THRESHOLD = 0.90 — hiệu chỉnh bằng EXP-07, đo ĐÚNG điều kiện server:
 # truy vấn là 30 giây đầu của file, tìm trên toàn bộ chỉ mục 24.375 bài
@@ -182,7 +184,7 @@ MERT_THRESHOLD = _get_float("MERT_THRESHOLD", 0.97)
 #
 # Đã nối vào cascade (STAGE_3_COVER). Chỉ mục dựng bằng
 # scripts/build_cover_index.py cho mọi bản ghi có audio thật.
-COVER_THRESHOLD = _get_float("COVER_THRESHOLD", 0.97)
+COVER_THRESHOLD = _get_float("COVER_THRESHOLD", 0.90)
 COVER_ENABLED = _get("COVER_ENABLED", "true").lower() in ("true", "1", "yes")
 COVER_INDEX_PATH = _path("COVER_INDEX_PATH", "data/processed/cover_descriptors.npy")
 COVER_ID_MAP_PATH = _path("COVER_ID_MAP_PATH", "data/processed/cover_id_map.json")

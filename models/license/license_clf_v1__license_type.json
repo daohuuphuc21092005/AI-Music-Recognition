@@ -1,12 +1,12 @@
 {
   "model_version": "license_clf_v1",
   "target": "license_type",
-  "algorithm": "LogisticRegression(class_weight=balanced, C=30)",
+  "algorithm": "LogisticRegression(class_weight=balanced, C=100)",
   "features": "MERT-v1-95M mean-pooled theo bản ghi, chuẩn hoá L2",
   "embedding_dim": 768,
   "mert_model_version": "MERT-v1-95M",
-  "n_train": 4000,
-  "n_artists": 1387,
+  "n_train": 24375,
+  "n_artists": 5206,
   "classes": [
     "CC0",
     "CC_BY",
@@ -17,32 +17,32 @@
     "CC_BY_SA"
   ],
   "class_distribution": {
-    "CC_BY_NC_SA": 1531,
-    "CC_BY_NC_ND": 1511,
-    "CC_BY": 377,
-    "CC_BY_NC": 313,
-    "CC_BY_SA": 200,
-    "CC_BY_ND": 28,
-    "CC0": 40
+    "CC_BY_NC_SA": 9697,
+    "CC_BY_NC_ND": 10124,
+    "CC_BY": 1689,
+    "CC_BY_ND": 209,
+    "CC0": 117,
+    "CC_BY_NC": 1672,
+    "CC_BY_SA": 867
   },
-  "trained_at": "2026-09-15T18:53:13",
+  "trained_at": "2026-09-16T17:13:01",
   "validation": {
     "protocol": "StratifiedGroupKFold theo nghệ sĩ (nghệ sĩ trong test là mới)",
     "folds": 5,
-    "C": 30.0,
-    "n_eval": 4000,
-    "accuracy": 0.293,
-    "macro_f1": 0.1734,
-    "train_accuracy": 0.5669,
-    "train_macro_f1": 0.5786,
-    "baseline_accuracy": 0.3827,
-    "baseline_macro_f1": 0.0791,
-    "accuracy_vs_baseline": -0.0897,
+    "C": 100.0,
+    "n_eval": 24375,
+    "accuracy": 0.2975,
+    "macro_f1": 0.1816,
+    "train_accuracy": 0.4163,
+    "train_macro_f1": 0.3747,
+    "baseline_accuracy": 0.4153,
+    "baseline_macro_f1": 0.0838,
+    "accuracy_vs_baseline": -0.1179,
     "beats_baseline": false,
     "macro_f1_beats_baseline": true,
-    "bias_error": 0.4214,
-    "variance_error": 0.4052,
-    "total_error": 0.8266
+    "bias_error": 0.6253,
+    "variance_error": 0.1931,
+    "total_error": 0.8184
   },
   "complexity_sweep": {
     "experiment_id": "exp09_license_complexity_sweep",
@@ -59,7 +59,7 @@
       30.0,
       100.0
     ],
-    "selected_C": 30.0
+    "selected_C": 100.0
   },
-  "warning": "Kiểm định theo nghệ sĩ chưa từng thấy: accuracy 0.293 so với baseline 0.3827 (KHÔNG vượt baseline) — đúng tình huống 'bài ngoài cơ sở dữ liệu' mà bộ phân loại được dùng. Giấy phép là thuộc tính pháp lý gắn với hợp đồng, không gắn với tín hiệu âm thanh. Mọi dự đoán chỉ nên đọc như một gợi ý cần người kiểm tra."
+  "warning": "Kiểm định theo nghệ sĩ chưa từng thấy: accuracy 0.2975 so với baseline 0.4153 (KHÔNG vượt baseline) — đúng tình huống 'bài ngoài cơ sở dữ liệu' mà bộ phân loại được dùng. Giấy phép là thuộc tính pháp lý gắn với hợp đồng, không gắn với tín hiệu âm thanh. Mọi dự đoán chỉ nên đọc như một gợi ý cần người kiểm tra."
 }

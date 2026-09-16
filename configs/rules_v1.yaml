@@ -36,9 +36,10 @@ identity_gate:
   # hiệu chỉnh trên corpus FMA medium thật (24.375 bản ghi có fingerprint và có
   # descriptor cover, 1.900 truy vấn biến đổi từ 100 bài nguồn):
   #   EXACT_MATCH = τFP    = 0.30 — EXP-01: Precision 0.9981, FPR 0.0021
-  #   NEAR_MATCH  = τMERT  = 0.97 — EXP-06 trên corpus CŨ (4.000 bản ghi, 8.000
-  #                                 vector): FMR 4,4%. ⚠️ Embedding của corpus mới
-  #                                 đang dựng; phải chạy lại EXP-06 rồi cập nhật.
+  #   NEAR_MATCH  = τMERT  = 0.98 — EXP-06 trên 48.750 vector / 24.375 bản ghi:
+  #                                 FMR 2,65%, đổi lại chỉ nhận đúng 38,1% truy vấn
+  #                                 known. Chính τ = 0.97 cũ nay cho FMR 6,1%, tức
+  #                                 trượt ngưỡng ≤5% của §16 khi corpus lớn lên.
   #   COVER_MATCH = τCover = 0.90 — EXP-07 đo ĐÚNG điều kiện server (30 giây đầu
   #                                 của truy vấn, chỉ mục 24.375 bài): FMR 0,4%,
   #                                 và không nhận mẫu nhiễu nào (nhiễu cao nhất
@@ -60,7 +61,7 @@ identity_gate:
   # khớp rồi Rule Engine lại vứt chính khớp đó thành UNKNOWN.
   min_identity_confidence_by_match_type:
     EXACT_MATCH: 0.30
-    NEAR_MATCH: 0.97
+    NEAR_MATCH: 0.98
     COVER_MATCH: 0.90
     # Bài KHÔNG khớp bản ghi nào, nhưng giấy phép được model suy đoán từ âm
     # thanh. Ngưỡng 0.0 vì ở đây không hề có "định danh" để mà đặt ngưỡng —
