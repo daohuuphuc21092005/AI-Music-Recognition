@@ -23,6 +23,42 @@ from backend.services.rights_service import (
 )
 
 
+def _label_candidates(db: Session, *candidate_lists) -> None:
+    """
+    Gắn `track` + `artist` vào từng ứng viên (sửa tại chỗ).
+
+    Evidence chỉ có UUID thì người đọc không kiểm chứng được gì: "0.9348 với
+    b83646be-a05b-…" không cho biết đó là bài nào của ai. Tra một lần cho toàn bộ
+    ứng viên của cả tầng 2 lẫn tầng 3; tra hỏng thì bỏ qua, vì thiếu tên trong
+    evidence vẫn tốt hơn là làm hỏng cả lượt phân tích.
+    """
+    from sqlalchemy import bindparam, text
+
+    ids = {str(c["recording_id"]) for lst in candidate_lists for c in (lst or [])
+           if isinstance(c, dict) and c.get("recording_id")}
+    if not ids:
+        return
+    try:
+        # recording_id là UUID trong CSDL còn ứng viên mang chuỗi -> ép về text,
+        # nếu không PostgreSQL báo "operator does not exist: uuid = text".
+        rows = db.execute(
+            text("SELECT recording_id::text, title, artist FROM recordings "
+                 "WHERE recording_id::text IN :ids")
+            .bindparams(bindparam("ids", expanding=True)),
+            {"ids": sorted(ids)},
+        ).fetchall()
+    except Exception:
+        return
+
+    by_id = {row[0]: (row[1], row[2]) for row in rows}
+    for lst in candidate_lists:
+        for candidate in (lst or []):
+            if isinstance(candidate, dict):
+                title, artist = by_id.get(str(candidate.get("recording_id")), (None, None))
+                candidate["track"] = title
+                candidate["artist"] = artist
+
+
 def analyze_audio(audio_path: str, filename: str, db: Session,
                   vector_index, usage_context: dict, on_stage=None) -> dict:
     """
@@ -142,6 +178,17 @@ def analyze_audio(audio_path: str, filename: str, db: Session,
             "identity_confidence": cascade.get("identity_confidence", 0.0),
         },
         usage_context=usage_context,
+    )
+
+    # Gắn tên bài cho ứng viên của tầng 2 và tầng 3 trước khi đóng gói evidence.
+    # `top_candidate` của tầng Cover trỏ vào chính phần tử đầu của `candidates`
+    # nên được gắn theo, không cần xử lý riêng.
+    cascade_evidence = cascade.get("evidence") or {}
+    _label_candidates(
+        db,
+        cascade.get("candidates"),
+        (cascade_evidence.get("embedding") or {}).get("top_k"),
+        (cascade_evidence.get("cover") or {}).get("candidates"),
     )
 
     latency_ms = (time.time() - start) * 1000

@@ -55,6 +55,15 @@ function humanSize(bytes) {
 }
 
 /** Trả về text hiển thị cho giá trị có thể là null/bool — KHÔNG bịa mặc định. */
+// Tên bài và nghệ sĩ là văn bản tự do lấy từ dataset ngoài (FMA, Jamendo), nên có
+// thể chứa < > & " '. Bảng top-K dựng bằng innerHTML, chèn thẳng vào đó là mở
+// đường cho mã lạ chạy trong trang.
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+}
+
 function show(value, { yes = 'Có', no = 'Không', empty = '—' } = {}) {
   if (value === null || value === undefined || value === '') return empty;
   if (value === true) return yes;
@@ -409,7 +418,10 @@ function renderEvidence(result) {
       const segment = c.best_segment
         ? `${c.best_segment.start ?? c.best_segment[0] ?? '?'}–${c.best_segment.end ?? c.best_segment[1] ?? '?'}s`
         : '—';
-      tr.innerHTML = `<td>${i + 1}</td><td class="mono">${c.recording_id}</td>
+      // Chỉ có UUID thì không ai đối chiếu được "0.9348 với b83646be-…" là bài nào
+      const label = [c.track, c.artist].filter(Boolean).map(escapeHtml).join(' — ');
+      tr.innerHTML = `<td>${i + 1}</td>
+        <td>${label ? `${label}<br>` : ''}<span class="mono muted">${escapeHtml(c.recording_id)}</span></td>
         <td>${Number(c.similarity_score).toFixed(4)}</td>
         <td>${segment}</td><td>${show(c.segments_hit)}</td>`;
       tbody.append(tr);
@@ -482,6 +494,10 @@ function renderEvidence(result) {
         ['Điểm tương đồng CQT', topCand.similarity_score !== undefined ? Number(topCand.similarity_score).toFixed(4) : null],
         ['Dịch cao độ (OTI)', topCand.oti !== undefined ? `${topCand.oti} bán cung` : null],
         ['Ngưỡng τCover', cover.threshold],
+        // τCover hiệu chỉnh theo SỐ BÀI trong chỉ mục, nên thiếu con số này thì
+        // điểm tương đồng ở trên không đọc được đúng
+        ['Số bài đã tìm trong chỉ mục', cover.reference_recordings],
+        ['Bài khớp nhất', [topCand.track, topCand.artist].filter(Boolean).join(' — ') || null],
         ['recording_id', topCand.recording_id, { mono: true }],
         ['Lỗi (nếu có)', cover.error],
       ]);

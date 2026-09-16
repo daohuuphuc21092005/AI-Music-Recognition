@@ -165,9 +165,16 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
                     top_k=top_k,
                 )
                 timings["cover_ms"] = round((time.perf_counter() - t_cover) * 1000, 2)
+                cover_index_used = (cover_index if cover_index is not None
+                                    else cover_service.get_default_cover_index())
                 cover_evidence = {
                     "matched": cover_res.get("matched", False),
                     "threshold": config.COVER_THRESHOLD,
+                    # τCover phụ thuộc SỐ BÀI trong chỉ mục: cùng bộ truy vấn, τ = 0.70
+                    # cho nhận nhầm 4,9% khi chỉ mục có 100 bài nhưng 17,4% khi có
+                    # 24.375 bài (EXP-07). Không hiện con số này thì điểm tương đồng ở
+                    # trên không đọc được đúng.
+                    "reference_recordings": cover_index_used.n_items if cover_index_used else 0,
                     "top_candidate": cover_res.get("top_candidate"),
                     "candidates": cover_res.get("candidates", []),
                 }
