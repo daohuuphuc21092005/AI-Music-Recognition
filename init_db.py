@@ -190,29 +190,41 @@ def init_database():
     # khoá ngoại, nhưng df.to_sql() mở một connection KHÁC nên lệnh đó không có
     # tác dụng gì. Nay giữ nguyên kiểm tra khoá ngoại: dữ liệu sai phải báo lỗi,
     # không được nạp vào im lặng. Thứ tự nạp bên dưới đã đúng chiều phụ thuộc.
+    # Đọc theo KHỐI thay vì nạp cả file vào RAM: với 24.375 bài có audio thì
+    # embeddings_master.csv là ~48.750 dòng, mỗi dòng một vector 768 chiều dạng
+    # text (~16 KB) — khoảng 800 MB trên đĩa và vài GB khi pandas dựng DataFrame.
+    # Máy chạy dự án có 15,8 GB RAM và đã bị hệ điều hành cắt tiến trình nhiều lần
+    # ở khâu dựng embedding, nên đọc cả file là hỏng chắc.
+    CHUNK_ROWS = 2000
+
     with engine.connect() as conn:
-        
+
         for csv_file, table_name in files_to_import:
             file_path = os.path.join(data_dir, csv_file)
             if os.path.exists(file_path):
                 try:
-                    df = pd.read_csv(file_path)
-                    
-                    # Dọn dẹp tên cột và lọc cột chuẩn
-                    df = clean_and_filter_df(df, table_name, engine)
-                    
-                    # Xóa dữ liệu cũ
+                    reader = pd.read_csv(file_path, chunksize=CHUNK_ROWS)
+                    # Lấy khối đầu TRƯỚC khi xoá bảng: file hỏng thì lỗi ném ở đây,
+                    # và dữ liệu cũ trong bảng vẫn còn nguyên thay vì mất trắng.
+                    chunk = next(reader, None)
+
                     conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE;"))
                     conn.commit()
-                    
-                    # Nạp dữ liệu mới
-                    df.to_sql(table_name, engine, if_exists='append', index=False, method='multi', chunksize=1000)
-                    print(f"-> Nạp thành công {len(df)} bản ghi vào bảng '{table_name}' từ {csv_file}")
+
+                    total = 0
+                    while chunk is not None:
+                        # Dọn dẹp tên cột và lọc cột chuẩn
+                        chunk = clean_and_filter_df(chunk, table_name, engine)
+                        chunk.to_sql(table_name, engine, if_exists='append',
+                                     index=False, method='multi', chunksize=1000)
+                        total += len(chunk)
+                        chunk = next(reader, None)
+                    print(f"-> Nạp thành công {total} bản ghi vào bảng '{table_name}' từ {csv_file}")
                 except Exception as e:
                     print(f"❌ Lỗi khi nạp file {csv_file} vào bảng '{table_name}': {e}")
             else:
                 print(f"-> Bỏ qua nạp '{table_name}': Chưa tìm thấy file {file_path}")
-                
+
         conn.commit()
 
     print("\n=== HOÀN THÀNH QUÁ TRÌNH TẠO VÀ NẠP CSDL ===")
