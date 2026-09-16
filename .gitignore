@@ -44,6 +44,16 @@ experiments/results/.checkpoints/
 # trong AUDIO_ROOT. Cùng lý do với mert_faiss_ALL.index ở trên.
 data/processed/embeddings_master.csv
 
+# Index dựng từ các file trên, luôn đi theo cặp ma trận + bản đồ ID. Với FMA medium
+# (24.375 bài) FAISS index ~150 MB (48.750 vector x 768 x 4 byte) vượt giới hạn
+# GitHub; chỉ mục Cover ~75 MB. Dựng lại bằng `build_embeddings.py --all` (tự gọi
+# rebuild_faiss_index.py) và `build_cover_index.py`. Bỏ cả bản đồ ID: giữ bản đồ
+# mà thiếu ma trận thì lệch nhau ngay lần dựng lại sau.
+data/processed/mert_faiss.index
+data/processed/faiss_id_map.json
+data/processed/cover_descriptors.npy
+data/processed/cover_id_map.json
+
 # Dump metadata gốc từ nguồn (908 MB features.csv + 249 MB tracks.csv của FMA...):
 # đây là dữ liệu THÔ do nguồn công bố, không phải sản phẩm của pipeline này, và
 # sinh lại được bằng `fetch_fma.py`/`fetch_jamendo.py` rồi `ingest_corpus.py`.

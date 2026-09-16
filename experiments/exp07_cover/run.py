@@ -25,8 +25,10 @@ Metrics (§15): Recall@1/@5, MRR, mAP; kèm sweep để hiệu chỉnh τCover (
 
 Chạy trước:
     python scripts/augment_audio.py --from-db
-    python experiments/exp03_pooling/run.py
+    python scripts/build_cover_index.py      # cho phần chấm theo điều kiện server
+    python experiments/exp03_pooling/run.py  # tuỳ chọn: cột so sánh MERT
 """
+import csv
 import json
 import os
 import sys
@@ -38,7 +40,14 @@ import librosa
 import numpy as np
 
 from backend import config
-from backend.services.cover_service import CHROMA_SR, build_descriptor, search
+from backend.services.cover_service import (
+    CHROMA_SR,
+    build_descriptor,
+    descriptor_from_file,
+    load_cover_index,
+    search,
+    transpositions,
+)
 from experiments.common import (
     OVERLAP_MIN,
     QUERY_HOP_S,
@@ -59,7 +68,12 @@ from experiments.common import (
 
 EXPERIMENT_ID = "exp07_cover"
 K_VALUES = (1, 5)
-THRESHOLD_SWEEP = [round(0.80 + 0.01 * i, 2) for i in range(21)]  # 0.80 .. 1.00
+# Từ 0.50: descriptor trừ trung bình cho điểm thấp hơn hẳn bản cũ (bài khác nhau
+# còn ~0.87 thay vì ~0.97), dải cũ 0.80–1.00 có thể bỏ sót ngưỡng đúng.
+THRESHOLD_SWEEP = [round(0.50 + 0.01 * i, 2) for i in range(51)]  # 0.50 .. 1.00
+SWEEP_PRINT = (0.60, 0.70, 0.80, 0.85, 0.90, 0.92, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99, 1.0)
+MAX_FALSE_MATCH = 0.05       # §16: False Match Rate <= 5% (ràng buộc CỨNG)
+PREFERRED_FALSE_MATCH = 0.005  # mục tiêu chặt hơn, xem pick_threshold()
 
 # Nhóm phép biến đổi, để đọc bảng theo bản chất tác động chứ không theo tên file
 FAMILIES = {
@@ -75,10 +89,13 @@ FAMILIES = {
 NOISE_COLORS = {"trang": 0.0, "hong": 0.5, "nau": 1.0}  # biên độ phổ ∝ 1 / f^alpha
 NOISE_SEEDS = range(10)
 
+# Server trích 30 giây đầu của file truy vấn (tham số mặc định của identify_cover)
+RUNTIME_DURATION_S = 30.0
 
-def noise_probe_descriptors() -> list:
-    """Descriptor của nhiễu trắng/hồng/nâu dài một cửa sổ — sinh tổng hợp, lặp lại được."""
-    length = int(WINDOW_S * CHROMA_SR)
+
+def noise_probe_descriptors(seconds: float = WINDOW_S) -> list:
+    """Descriptor của nhiễu trắng/hồng/nâu dài `seconds` giây — sinh tổng hợp, lặp lại được."""
+    length = int(seconds * CHROMA_SR)
     freqs = np.fft.rfftfreq(length, 1.0 / CHROMA_SR)
     freqs[0] = freqs[1]
     probes = []
@@ -112,6 +129,187 @@ def is_relevant(ref: dict, query: dict) -> bool:
     return (ref["source"] == query["source"]
             and overlap_ratio(ref["start"], ref["end"],
                               query["orig_start"], query["orig_end"]) >= OVERLAP_MIN)
+
+
+def threshold_sweep(top1_records: list, held_out_scores: list, noise_scores: list) -> list:
+    """
+    Precision/Recall/F1 khi chấp nhận Top-1 có điểm >= τ, kèm tỉ lệ nhận nhầm.
+
+    `false_match_rate`: tỉ lệ truy vấn mà điểm cao nhất SAU KHI bỏ hẳn bài nguồn
+    vẫn >= τ — tức một bài ngoài CSDL sẽ bị gán nhầm (§16 yêu cầu <= 5%).
+    """
+    n = len(top1_records)
+    sweep = []
+    for threshold in THRESHOLD_SWEEP:
+        accepted = [ok for score, ok in top1_records if score >= threshold]
+        correct = sum(accepted)
+        precision = correct / len(accepted) if accepted else 0.0
+        recall = correct / n if n else 0.0
+        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
+        false_match = sum(1 for score in held_out_scores if score >= threshold)
+        noise_match = sum(1 for score in noise_scores if score >= threshold)
+        sweep.append({"threshold": threshold, "precision": round(precision, 4),
+                      "recall": round(recall, 4), "f1": round(f1, 4),
+                      "accepted": len(accepted),
+                      "false_match_rate": round(false_match / max(len(held_out_scores), 1), 4),
+                      "noise_match_rate": round(noise_match / max(len(noise_scores), 1), 4)})
+    return sweep
+
+
+def pick_threshold(sweep: list) -> tuple:
+    """
+    (dòng sweep được chọn, có đạt mục tiêu an toàn không).
+
+    Ràng buộc trước, F1 sau — chọn theo F1 rồi mới xét FMR là lặp lại sai lầm của
+    τMERT = 0.90. Thứ tự: không nhận mẫu nhiễu nào, FMR ≤ 0.005, rồi mới F1 cao
+    nhất; không ngưỡng nào đạt 0.005 thì nới về trần 5% của §16.
+
+    Vì sao siết tới 0.005 chứ không dừng ở §16 (giống hệt lý do của τFP trong
+    scripts/apply_calibrated_thresholds.py): trên chỉ mục 24.375 bài, trần 5% chọn
+    τ = 0.82 (FMR 4,5%), còn τ = 0.90 cho FMR 0,4% mà recall chỉ giảm 0.76 -> 0.68.
+    Cover là tầng CUỐI của cascade: nhận nhầm ở đây đi thẳng ra một kết luận về
+    quyền, không còn tầng nào phía dưới đỡ, nên 1/20 bài lạ bị gán bừa là quá đắt.
+    """
+    for bound in (PREFERRED_FALSE_MATCH, MAX_FALSE_MATCH):
+        safe = [r for r in sweep
+                if r["false_match_rate"] <= bound and r["noise_match_rate"] == 0.0]
+        if safe:
+            return max(safe, key=lambda r: (r["f1"], -r["threshold"])), True
+    return max(sweep, key=lambda r: (r["f1"], r["threshold"])), False
+
+
+def describe(values: list, percentile: int = None) -> dict:
+    if not values:
+        return {"count": 0}
+    out = {"count": len(values), "mean": round(float(np.mean(values)), 4),
+           "max": round(float(np.max(values)), 4)}
+    if percentile is not None:
+        out[f"p{percentile:02d}"] = round(float(np.percentile(values, percentile)), 4)
+    return out
+
+
+def same_audio_groups() -> dict:
+    """recording_id -> tập recording_id có CÙNG fingerprint (FMA có bài trùng audio)."""
+    path = os.path.join(config.DATA_DIR, "fingerprints_master.csv")
+    if not os.path.exists(path):
+        return {}
+    csv.field_size_limit(10 ** 9)
+    by_fingerprint = {}
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            by_fingerprint.setdefault(row["fingerprint"], set()).add(row["recording_id"])
+    return {rec: ids for ids in by_fingerprint.values() for rec in ids}
+
+
+def runtime_protocol(manifest: list):
+    """
+    Chấm τCover đúng điều kiện server: 30 giây đầu của file truy vấn, tìm trên
+    TOÀN BỘ chỉ mục cover (cover_service.identify_cover).
+
+    Phần cấp cửa sổ chỉ có reference của các bài nguồn. Điểm cao nhất mà một bài
+    ngoài CSDL đạt được tăng theo số ứng viên, nên ngưỡng chọn ở đó quá lạc quan
+    khi chỉ mục thật có hàng chục nghìn bài.
+    """
+    index = load_cover_index()
+    if index is None or not index.n_items:
+        print("\nChưa có chỉ mục cover -> bỏ phần chấm theo điều kiện server. "
+              "Chạy: python scripts/build_cover_index.py")
+        return None
+
+    id_map = [str(rec) for rec in index.id_map]
+    columns_of = {}
+    for column, rec in enumerate(id_map):
+        columns_of.setdefault(rec, []).append(column)
+    groups = same_audio_groups()
+
+    print(f"\nChấm theo điều kiện server: {len(manifest)} truy vấn x chỉ mục "
+          f"{len(columns_of)} bài...")
+    top1_records, held_out, timing, per_transformation = [], [], [], {}
+    skipped = 0
+    for row in manifest:
+        source = row["source_recording_id"]
+        same_audio = groups.get(source, {source})
+        excluded = [c for rec in same_audio for c in columns_of.get(rec, [])]
+        path = row["path"] if os.path.isabs(row["path"]) else os.path.join(config.BASE_DIR, row["path"])
+        # Bài nguồn không nằm trong chỉ mục thì không có đáp án đúng để chấm
+        if not excluded or not os.path.exists(path):
+            skipped += 1
+            continue
+        try:
+            t0 = time.perf_counter()
+            descriptor = descriptor_from_file(path, offset=0.0, duration=RUNTIME_DURATION_S)
+            best = (transpositions(descriptor) @ index.matrix.T).max(axis=0)
+            timing.append((time.perf_counter() - t0) * 1000)
+        except Exception as e:
+            print(f"  bỏ qua {row['path']}: {type(e).__name__}: {e}")
+            skipped += 1
+            continue
+
+        top = int(best.argmax())
+        score = float(best[top])
+        correct = id_map[top] in same_audio
+        best[excluded] = -np.inf
+        held_out.append(float(best.max()) if len(excluded) < len(best) else 0.0)
+        top1_records.append((score, correct))
+
+        bucket = per_transformation.setdefault(row["transformation"],
+                                               {"n": 0, "hit@1": 0, "scores": []})
+        bucket["n"] += 1
+        bucket["hit@1"] += int(correct)
+        bucket["scores"].append(score)
+
+    if not top1_records:
+        print("  không chấm được truy vấn nào (bài nguồn không có trong chỉ mục?)")
+        return None
+
+    noise_scores = [float((transpositions(descriptor) @ index.matrix.T).max())
+                    for _, descriptor in noise_probe_descriptors(RUNTIME_DURATION_S)]
+    sweep = threshold_sweep(top1_records, held_out, noise_scores)
+    best_row, safe = pick_threshold(sweep)
+    return {
+        "gallery_recordings": len(columns_of),
+        "queries": len(top1_records),
+        "skipped_queries": skipped,
+        "accuracy@1": round(sum(ok for _, ok in top1_records) / len(top1_records), 4),
+        "threshold_sweep": sweep,
+        "recommended_tau_cover": best_row,
+        "tau_cover_meets_fmr_target": safe,
+        "score_distribution": {
+            "top1_correct": describe([s for s, ok in top1_records if ok], 5),
+            "top1_wrong": describe([s for s, ok in top1_records if not ok], 95),
+            "held_out_best": describe(held_out, 95),
+            "noise_best": describe(noise_scores),
+        },
+        "latency_ms": {"query_mean": round(float(np.mean(timing)), 1),
+                       "query_p95": round(float(np.percentile(timing, 95)), 1)},
+        "per_transformation": {
+            t: {"n": b["n"], "accuracy@1": round(b["hit@1"] / b["n"], 4),
+                "mean_top1_score": round(float(np.mean(b["scores"])), 4)}
+            for t, b in sorted(per_transformation.items())
+        },
+    }
+
+
+def print_runtime(runtime: dict) -> None:
+    print_table(
+        f"EXP-07 — Sweep τCover theo điều kiện server ({runtime['queries']} truy vấn, "
+        f"chỉ mục {runtime['gallery_recordings']} bài)",
+        [[r["threshold"], r["precision"], r["recall"], r["f1"], r["accepted"],
+          f"{r['false_match_rate'] * 100:.1f}%", f"{r['noise_match_rate'] * 100:.0f}%"]
+         for r in runtime["threshold_sweep"] if r["threshold"] in SWEEP_PRINT],
+        ["τCover", "Precision", "Recall", "F1", "Chấp nhận", "False Match", "Nhiễu"],
+    )
+    dist = runtime["score_distribution"]
+    print(f"Accuracy@1 {runtime['accuracy@1']} | điểm Top-1 khi đúng TB "
+          f"{dist['top1_correct'].get('mean')} | bài ngoài CSDL TB "
+          f"{dist['held_out_best'].get('mean')} (P95 {dist['held_out_best'].get('p95')}, "
+          f"max {dist['held_out_best'].get('max')}) | nhiễu max {dist['noise_best'].get('max')}")
+    best = runtime["recommended_tau_cover"]
+    print(f"τCover đề xuất (đưa vào cấu hình): {best['threshold']} — P={best['precision']} "
+          f"R={best['recall']} F1={best['f1']} "
+          f"False Match Rate={best['false_match_rate'] * 100:.1f}% "
+          f"({'ĐẠT' if runtime['tau_cover_meets_fmr_target'] else 'KHÔNG ĐẠT'} "
+          f"ngưỡng ≤5% của §16 và không nhận nhiễu)")
 
 
 def load_exp03_reference(reference_windows: int, query_windows: int):
@@ -282,32 +480,19 @@ def main() -> int:
                     for _, descriptor in noise_probe_descriptors()]
 
     # --- Sweep ngưỡng τCover ----------------------------------------------
-    sweep = []
-    for threshold in THRESHOLD_SWEEP:
-        accepted = [(score, ok) for score, ok in top1_records if score >= threshold]
-        correct = sum(1 for _, ok in accepted if ok)
-        precision = correct / len(accepted) if accepted else 0.0
-        recall = correct / n
-        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) else 0.0
-        # Tỉ lệ truy vấn NGOÀI CSDL bị gán nhầm cho một bài — §16 yêu cầu ≤ 5%
-        false_match = sum(1 for score in held_out_scores if score >= threshold)
-        noise_match = sum(1 for score in noise_scores if score >= threshold)
-        sweep.append({"threshold": threshold, "precision": round(precision, 4),
-                      "recall": round(recall, 4), "f1": round(f1, 4),
-                      "accepted": len(accepted),
-                      "false_match_rate": round(false_match / n, 4),
-                      "noise_match_rate": round(noise_match / len(noise_scores), 4)})
-
-    # Chọn τCover theo ĐÚNG thứ tự ưu tiên của §16: trước hết phải đạt
-    # False Match Rate ≤ 5% và không nhận mẫu nhiễu nào, trong số đó mới lấy F1
-    # cao nhất. Chọn theo F1 rồi mới xét FMR là lặp lại sai lầm của τMERT = 0.90.
-    safe = [r for r in sweep
-            if r["false_match_rate"] <= 0.05 and r["noise_match_rate"] == 0.0]
-    best = (max(safe, key=lambda r: (r["f1"], -r["threshold"])) if safe
-            else max(sweep, key=lambda r: (r["f1"], r["threshold"])))
+    sweep = threshold_sweep(top1_records, held_out_scores, noise_scores)
+    best, safe = pick_threshold(sweep)
     metrics["threshold_sweep"] = sweep
-    metrics["recommended_tau_cover"] = best
-    metrics["tau_cover_meets_fmr_target"] = bool(safe)
+    metrics["window_level_recommended_tau_cover"] = best
+
+    # Ngưỡng đưa vào cấu hình phải đo đúng điều kiện server; cấp cửa sổ chỉ là
+    # phương án dự phòng khi chưa dựng chỉ mục cover.
+    runtime = runtime_protocol(manifest)
+    metrics["runtime_protocol"] = runtime
+    chosen = runtime or {"recommended_tau_cover": best, "tau_cover_meets_fmr_target": safe}
+    metrics["recommended_tau_cover"] = chosen["recommended_tau_cover"]
+    metrics["tau_cover_meets_fmr_target"] = chosen["tau_cover_meets_fmr_target"]
+    metrics["recommended_tau_cover_source"] = "runtime_protocol" if runtime else "window_level"
 
     metrics["score_distribution"] = {
         "top1_correct": {
@@ -392,11 +577,10 @@ def main() -> int:
     )
 
     print_table(
-        "EXP-07 — Sweep τCover (chấp nhận khi điểm Top-1 >= τ)",
+        f"EXP-07 — Sweep τCover cấp cửa sổ (reference = {len(sources)} bài nguồn)",
         [[r["threshold"], r["precision"], r["recall"], r["f1"], r["accepted"],
           f"{r['false_match_rate'] * 100:.1f}%"]
-         for r in sweep if r["threshold"] in (0.80, 0.85, 0.90, 0.92, 0.94,
-                                              0.95, 0.96, 0.97, 0.98, 0.99, 1.0)],
+         for r in sweep if r["threshold"] in SWEEP_PRINT],
         ["τCover", "Precision", "Recall", "F1", "Chấp nhận", "False Match"],
     )
 
@@ -405,16 +589,18 @@ def main() -> int:
           f"(P05 {dist['top1_correct']['p05']}, n={dist['top1_correct']['count']})")
     print(f"Điểm Top-1 khi SAI  : TB {dist['top1_wrong']['mean']} "
           f"(P95 {dist['top1_wrong']['p95']}, n={dist['top1_wrong']['count']})")
-    print(f"\nτCover đề xuất: {best['threshold']} — P={best['precision']} "
+    print(f"\nτCover cấp cửa sổ: {best['threshold']} — P={best['precision']} "
           f"R={best['recall']} F1={best['f1']} "
           f"False Match Rate={best['false_match_rate'] * 100:.1f}% "
-          f"({'ĐẠT' if metrics['tau_cover_meets_fmr_target'] else 'KHÔNG ĐẠT'} ngưỡng ≤5% của §16)")
+          f"({'ĐẠT' if safe else 'KHÔNG ĐẠT'} ngưỡng ≤5% của §16)")
     held = metrics["score_distribution"]["held_out_best"]
     print(f"Điểm cao nhất khi bài KHÔNG có trong CSDL: TB {held['mean']} "
           f"(P95 {held['p95']}, max {held['max']})")
     noise = metrics["score_distribution"]["noise_best"]
     print(f"Điểm cao nhất của mẫu nhiễu ({noise['count']} mẫu): TB {noise['mean']}, "
           f"max {noise['max']} — τCover phải cao hơn max này")
+    if runtime:
+        print_runtime(runtime)
 
     pitch = [metrics["per_transformation"][t] for t in FAMILIES["Dịch cao độ"]
              if t in metrics["per_transformation"]]
@@ -440,6 +626,11 @@ def main() -> int:
             "descriptor_normalization": "trừ trung bình từng khung, chuẩn hoá L2 từng khung rồi toàn vector",
             "similarity": "cosine trên descriptor đã chuẩn hoá L2, lấy max qua 12 phép xoay",
             "noise_probes": {"colors": list(NOISE_COLORS), "seeds": len(NOISE_SEEDS)},
+            "runtime_protocol": {
+                "query": f"{RUNTIME_DURATION_S:g} giây đầu của file truy vấn (offset 0)",
+                "gallery": "toàn bộ chỉ mục cover (scripts/build_cover_index.py)",
+                "held_out": "bỏ mọi bản ghi CÙNG fingerprint với bài nguồn",
+            },
             "compared_against_exp03": bool(mert),
         },
         metrics=metrics,
@@ -448,10 +639,10 @@ def main() -> int:
             "cầu subset SecondHandSongs, 100–200 composition × 2–5 version). Thí nghiệm "
             "này đo tính BẤT BIẾN VỚI DỊCH CAO ĐỘ và đổi tốc độ — cơ chế cốt lõi mà một "
             "hệ cover dựa vào, tức điều kiện CẦN chứ không phải điều kiện đủ. "
-            "τCover đề xuất ở đây hiệu chỉnh trên reference là cửa sổ của 60 bản ghi "
-            "nguồn. Chroma là đặc trưng thô: số ứng viên tăng lên thì dương tính giả "
-            "tăng nhanh, nên trước khi nối tầng này vào cascade vẫn phải có một thí "
-            "nghiệm unknown-detection riêng cho nó, tương tự EXP-06 của tầng MERT."
+            "`recommended_tau_cover` lấy từ `runtime_protocol` khi đã có chỉ mục cover: "
+            "truy vấn và reference cùng quy ước với server, và bài ngoài CSDL phải thắng "
+            "cả chỉ mục chứ không chỉ vài chục bài nguồn. Ngưỡng cấp cửa sổ (reference = "
+            f"{len(sources)} bài nguồn) lạc quan hơn vì có ít ứng viên để nhận nhầm."
         ),
     )
     print(f"\nĐã lưu kết quả: {path}")

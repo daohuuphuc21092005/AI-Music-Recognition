@@ -23,10 +23,10 @@ Tài liệu này đóng vai trò là **bộ nhớ ngữ cảnh liên tục** (Pe
 - **Milestone đang thực hiện**: **`M6 — Full Application Ready`** / chuẩn bị nghiệm thu **`M7 — Final Evaluation`**.
 - **Hạng mục đã hoàn thành**:
   - [x] Thiết lập hệ thống Modular Rules chuẩn trong `.claude/rules/` (7 files).
-  - [x] Xây dựng CSDL tham chiếu — **đã mở rộng lên 138.164 compositions/recordings/rights** (từ mốc 4.922 ban đầu; xem cảnh báo quy mô artifact bên dưới).
-  - [x] Tầng 1 (Chromaprint): Codec thuần Python, vectorised bit-error matching, τFP = 0.15 (`EXP-01`).
-  - [x] Tầng 2 (MERT Deep Retrieval): MERT-v1-95M + FAISS FlatIP, τMERT = 0.97 (`EXP-02`, `EXP-03`, `EXP-06`).
-  - [x] Tầng 3 (Cover Service): CQT + Optimal Transposition Index, τCover = 0.97 (`EXP-07`) — **đã nối chính thức vào `cascade_service.py`** (nhánh `STAGE_3_COVER`, bật qua `config.COVER_ENABLED`).
+  - [x] Xây dựng CSDL tham chiếu — **158.117 compositions/recordings/rights**, trong đó 24.375 bài FMA medium có audio thật trên đĩa (từ mốc 4.922 ban đầu).
+  - [x] Tầng 1 (Chromaprint): Codec thuần Python, vectorised bit-error matching, **τFP = 0.30** (`EXP-01` trên 24.375 fingerprint thật / 1.900 truy vấn).
+  - [x] Tầng 2 (MERT Deep Retrieval): MERT-v1-95M + FAISS FlatIP, τMERT = 0.97 (`EXP-02`, `EXP-03`, `EXP-06`) — ⚠️ con số của corpus CŨ, chờ EXP-06 chạy lại.
+  - [x] Tầng 3 (Cover Service): CQT + Optimal Transposition Index, **τCover = 0.90** (`EXP-07` đo đúng điều kiện server trên chỉ mục 24.375 bài) — **đã nối chính thức vào `cascade_service.py`** (nhánh `STAGE_3_COVER`, bật qua `config.COVER_ENABLED`).
   - [x] Rule Engine: Cây quyết định tuần tự 5 nhóm bản quyền theo `configs/rules_v1.yaml` (65 unit tests PASS).
   - [x] License Classifier & Production Features: `EXP-09`, trích xuất RMS/Crest factor/Dynamic range.
   - [x] REST API FastAPI & Giao diện tĩnh (frontend/index.html+app.js+styles.css, mount trực tiếp ở `/` từ `backend/main.py`, không cần build).
@@ -35,22 +35,24 @@ Tài liệu này đóng vai trò là **bộ nhớ ngữ cảnh liên tục** (Pe
   - [x] **`git init` + commit đầu tiên** (`f4cc43f`, 120 file, `.git` ~75MB) — đã audit an toàn: không secret (`.env` biến thể), không file >50MB, `.gitignore` loại đúng dữ liệu sinh-lại-được (`data/preprocess/`, `data/processed/_archive_*/`, `data/test_queries/`, config `*.local.*`, audio test mẫu).
   - [x] Response schema API (`backend/schemas/analysis.py`) — mọi field đã có `Field(description=...)`, kể cả `evidence` (mô tả cấu trúc dict động: `identification`/`candidates`/`rule_engine`/`composition`/`rights_record`).
 
-- **⚠️ Gap mới phát sinh sau khi mở rộng corpus lên 138k — artifact dẫn xuất CHƯA đuổi kịp**:
-  | Bảng | Số dòng |
-  |---|---|
-  | compositions/metadata/rights_master.csv | **138.164** |
-  | fingerprints_master.csv | 104.000 |
-  | embeddings_master.csv | 8.000 |
-  | test_queries_master.csv | 2.150 |
-  | cover_descriptors.npy | ~100 reference window |
+- **Quy mô artifact sau đợt nạp FMA medium (2026-09-16)**:
+  | Bảng | Số dòng | Trạng thái |
+  |---|---|---|
+  | compositions/metadata/rights_master.csv | **158.117** | đã nạp vào PostgreSQL |
+  | fingerprints_master.csv | 24.375 | fingerprint THẬT của fpcalc (149 bài trùng audio với bài khác) |
+  | cover_descriptors.npy | 24.375 | mọi bản ghi có audio, 30 giây đầu |
+  | data/test_queries/manifest.csv | 1.900 | 100 bài nguồn × 19 biến đổi |
+  | embeddings_master.csv | **đang dựng** | ~5 s/bài trên CPU, phải chạy một mình |
+  | test_queries_master.csv | cũ (2.150) | chờ `generate_test_queries.py` sau khi có embedding |
 
-  Threshold hiện tại (τFP/τMERT/τCover) được hiệu chỉnh trên quy mô nhỏ hơn nhiều — `config.py` tự cảnh báo: ngưỡng phụ thuộc quy mô reference, mở rộng corpus mà không hiệu chỉnh lại là sai.
+  133.742 bản ghi còn lại (nhạc Việt, Spotify, Jamendo…) là **metadata-only**: tra được qua `/api/v1/tracks/{id}` nhưng không nhận diện được qua audio.
 
 - **Hạng mục tiếp theo (Next Actions)**:
-  - [ ] Chạy `scripts/build_embeddings.py --all` rồi `scripts/rebuild_faiss_index.py` để embedding/FAISS đuổi kịp corpus 138k (hiện mới 8k).
-  - [ ] Sinh lại `test_queries_master.csv` qua `scripts/augment_audio.py` cho tương xứng quy mô mới, rồi **chạy lại EXP-01/04/05/06/08** để threshold còn đúng.
-  - [ ] Mở rộng `cover_descriptors.npy` (hiện ~100 window) để Stage 3 Cover phát huy tác dụng trên toàn corpus.
-  - [ ] Kết nối PostgreSQL và chạy `python init_db.py` để hoàn tất dữ liệu runtime cho API (chưa xác nhận đã chạy ở quy mô 138k).
+  - [ ] `build_embeddings.py --all` (đang chạy) → `generate_test_queries.py` → `init_db.py` → **EXP-06** để hiệu chỉnh lại τMERT trên 24.375 bài.
+  - [ ] `train_license_classifier.py --sweep` lại trên embedding mới (bản hiện tại là C=30 trên 4.000 bản ghi).
+  - [ ] Độ trễ Tầng 1 tăng theo quy mô: 4,8 s/truy vấn với 24.375 fingerprint (0,185 ms/cặp × 24.375). Cần phương án trước khi demo.
+  - [ ] EXP-03 chạy ở giao thức cũ (6.098 cửa sổ) nên EXP-07 không so được cột MERT — chạy lại nếu cần bảng so sánh.
+  - [ ] (known-gap) EXP-04/EXP-05/EXP-08 chưa chạy lại ở quy mô 24.375.
   - [ ] Đánh giá và tối ưu hóa UI/UX Frontend trên trình duyệt.
   - [ ] (chưa làm) 3 nguồn dataset ngoài FMA/Jamendo: YouTube Audio Library, Public Domain, Cover dataset thật (SecondHandSongs subset).
   - [ ] (known-gap, chưa đồng bộ) `.claude/rules/06-experiments-evaluation.md` vẫn ghi "8 thí nghiệm EXP-01..08" — chưa thêm EXP-09.
@@ -115,3 +117,28 @@ Tài liệu này đóng vai trò là **bộ nhớ ngữ cảnh liên tục** (Pe
   - `git init` + rà soát staging trước commit — song song, một phiên khác đã tự hoàn tất bước này trước (commit `f4cc43f`, dùng đúng `.gitignore` vừa sửa cộng thêm 1 rule); đã audit lại xác nhận an toàn thay vì làm trùng.
   - Phát hiện quy mô corpus đã tăng từ 4.922 lên 138.164 bản ghi trong lúc thao tác (do một phiên khác chạy song song) — cập nhật lại mục 2 theo đúng số liệu mới nhất, thêm bảng cảnh báo artifact dẫn xuất (embedding/FAISS/test queries) chưa đuổi kịp quy mô.
   - Bổ sung `Field(description=...)` cho toàn bộ field trong `backend/schemas/analysis.py` (trước đó chỉ 2/20+ field có mô tả) để làm rõ tham số đầu ra API, đặc biệt `evidence` (dict động, mô tả bằng văn xuôi thay vì ép kiểu Pydantic lồng nhau để tránh lệch schema mỗi khi Rule Engine thêm `extra_evidence` mới).
+
+- **2026-09-15 (phiên mở rộng dữ liệu & làm rõ kết quả — pipeline dài đang chạy)**:
+  - `Chromaprint UNAVAILABLE` trong UI là do `.env` trỏ PostgreSQL cổng 5433 (Docker cũ, đã gỡ) trong khi máy chạy PostgreSQL 18 native cổng 5432 → `db=None`, không phải thiếu fpcalc (fpcalc có ở `~/bin`). Chủ dự án tự sửa `DATABASE_URL`. Nhánh UNAVAILABLE nay trả `reason_code` (DATABASE_UNAVAILABLE | FPCALC_MISSING), `threshold`, `fingerprint_score=null`.
+  - Loại 100.000 fingerprint giả của `dataset_G_vietnam_100k_api` (nhạc Việt mới có metadata, CHƯA có audio; `audio_path` là placeholder `sp_mb_NNNNNN`). Thêm `chromaprint_codec.is_plausible_fingerprint`, check FAIL trong `check_data_integrity.py`, và chặn trong `process_all_datasets.py`.
+  - Nhãn giấy phép 29.881 dòng Jamendo do `process_all_datasets.py` suy từ cờ `audiodownload_allowed` → `source` đổi sang tiền tố `SIMULATED`, `verified_at` rỗng; `train_license_classifier.py` loại nhãn SIMULATED/PREDICTED.
+  - `ingest_corpus.py` từng ghi đè master và xoá mọi nguồn trừ AUDIO_LIBRARY/CREATOR_MUSIC/CONTENT_ID → sửa thành chỉ thay bản ghi cùng `source_dataset`.
+  - Rule Engine: thêm `rights_gate` (min_rights_confidence 0.50) — quyền PREDICTED không còn ra LOW/CONDITIONAL/HIGH; evidence có `rights_confidence_breakdown`, `decision_confidence_formula`, `provisional_decision`.
+  - Cover: nhiễu trắng đạt 0.985 > τCover → descriptor trừ trung bình từng khung (nhiễu còn 0.14, bài khác max 0.87); `cover_descriptors.npy` đã nâng cấp tại chỗ; τCover = 0.97 chờ EXP-07 hiệu chỉnh lại. EXP-07 thêm nhiễu làm mẫu âm.
+  - EXP-06 tính theo khối (ma trận N×N ở 50k vector ≈ 10 GB, máy có 15,8 GB RAM).
+  - License classifier: sweep C trên 4.000 bản ghi FMA — tổng lỗi thấp nhất ở C=30 (macro-F1 0.173 vs baseline 0.079; accuracy 0.293 < baseline 0.383).
+  - Sửa lỗi có sẵn: `PipelineStage` thiếu `COVER_SEARCH` → mọi job chạy tới Tầng 3 làm `GET /jobs/{job_id}` trả 500 (thêm `tests/test_pipeline_stages.py`).
+  - Kiểm thử trên server thật: nhiễu trắng → Tầng 1 0.086 < 0.15, MERT 0.935 < 0.97, Cover 0.166 → `UNKNOWN` qua `rights_gate`; bài FMA chưa có trong index bị model đoán `CC_BY_NC` → kết luận tạm HIGH được hạ về `UNKNOWN` kèm phép tính. Điểm Cover của nhạc thật trên thang mới: 0.41–0.57.
+  - Đã tải xong FMA medium: 44 shard (22,4 GB), 24.801 file audio, 24.375 bài có giấy phép đọc được (`data/processed/corpus_fma_medium.csv`).
+  - Độ trễ Tầng 1 theo quy mô: chi phí chính là tải + giải nén lại cả bảng fingerprint ở MỖI truy vấn (2,2 s + 2,9 s ở 4.000 dòng; ~40 s ở 28.000), không phải so khớp (0,185 ms/cặp). `fingerprint_service` nay cache bảng đã giải nén theo tiến trình (làm mới theo số dòng + min/max `fingerprint_id`). Đã thử so khớp theo khối tensor: đúng tuyệt đối nhưng CHẬM hơn (0,276 ms/cặp) nên bỏ.
+  - EXP-01 tính điểm một lần cho mỗi truy vấn rồi dùng lại cho lượt held-out (trùng khớp bản cũ, nhanh gấp đôi).
+  - Đang chạy: `ingest_corpus.py --sources fma_medium` → `init_db.py` → `build_embeddings.py --all` (CPU, ước ~1 ngày) → EXP-01/06/07 + sweep lại → cập nhật τ.
+
+- **2026-09-16 (hiệu chỉnh lại ngưỡng trên corpus 24.375 bài có audio)**:
+  - Nạp xong FMA medium: 158.117 bản ghi trong PostgreSQL, 24.375 fingerprint thật. `check_data_integrity.py`: 13 PASS / 2 WARN / 1 FAIL (FAIL ở FAISS id map là dự kiến tới khi dựng lại embedding).
+  - **τFP 0.15 → 0.30** (EXP-01: P 0.9981, R 0.5558, FPR 0.0021). Bỏ quy tắc "lấy ngưỡng thấp nhất còn giữ FPR = 0" trong `apply_calibrated_thresholds.py`: quy tắc đó chọn 0.95 (recall 0.4679) để đổi lấy khác biệt mà dữ liệu không phân biệt được — 0 và 0.0011 chỉ cách nhau 2/1.900 truy vấn. Recall trần của tầng 1 là ~0.58 vì dịch cao độ và đổi tốc độ cho 0/100.
+  - **τCover 0.97 → 0.90**. `build_cover_index.py` viết lại: lấy bài theo `audio_path` (bản cũ ghép theo TÊN FILE và ưu tiên chính file truy vấn trong `data/test_queries/`, nên chỉ mục chỉ có ~100 bài — đúng các bài đang dùng làm truy vấn, và mã bài đã chết sau khi nạp lại FMA). Có checkpoint, 24.375 bài trong 110 phút, không file nào lỗi.
+  - EXP-07 thêm giao thức chấm **đúng điều kiện server** (`metrics.runtime_protocol`): 30 giây đầu của truy vấn, tìm trên toàn bộ chỉ mục, held-out loại cả bài trùng fingerprint. Ngưỡng cấp cửa sổ quá lạc quan: τ = 0.70 cho FMR 4,9% trên 100 bài nguồn nhưng 17,4% trên 24.375 bài. Ở τ = 0.90: P 0.9946, R 0.6837, FMR 0,4%, nhiễu 0% (nhiễu cao nhất 0.7278). Accuracy@1 0.8311, OTI đúng 91%, và nhóm dịch cao độ đạt 68% — đúng chỗ Chromaprint được 0%.
+  - `pick_threshold` của EXP-07 siết FMR ≤ 0.005 trước, chỉ nới về trần 5% của §16 khi không có ngưỡng nào đạt: Cover là tầng CUỐI, nhận nhầm ở đây ra thẳng kết luận về quyền.
+  - Máy hết RAM khiến tiến trình nền bị dừng 3 lần (IDE 2,4 GB + Chrome 2 GB + WSL + Docker). Quy tắc rút ra: **chỉ chạy một tiến trình nặng một lúc**; embedding MERT chiếm ~1,2 GB.
+  - `.gitignore` thêm cặp `mert_faiss.index`/`faiss_id_map.json` (~150 MB, vượt giới hạn GitHub) và `cover_descriptors.npy`/`cover_id_map.json` (~75 MB) — dựng lại được từ audio.

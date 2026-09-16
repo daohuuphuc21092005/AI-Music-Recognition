@@ -115,25 +115,30 @@ def resolve_audio_path(audio_path: str) -> str:
 # --------------------------------------------------------------------------
 # Ngưỡng nhận diện
 #
-# HIỆU CHỈNH TRÊN CORPUS FMA THẬT: 4.000 bản ghi có fingerprint, 8.000 vector
-# embedding, 1.900 truy vấn biến đổi. Bộ ngưỡng cũ (0.70 / 0.95) hiệu chỉnh
-# trên đúng 2 file audio -> 36 truy vấn, và đo lại trên corpus thật cho thấy nó
-# lệch CÓ HỆ THỐNG về phía lạc quan: tập nhỏ hiếm khi chứa cặp gây nhầm.
+# HIỆU CHỈNH TRÊN CORPUS FMA MEDIUM THẬT: 24.375 bản ghi có fingerprint và có
+# descriptor cover, 1.900 truy vấn biến đổi từ 100 bài nguồn. Bộ ngưỡng đầu tiên
+# (0.70 / 0.95) hiệu chỉnh trên đúng 2 file audio -> 36 truy vấn, và mỗi lần đo
+# lại trên corpus lớn hơn đều cho thấy nó lệch CÓ HỆ THỐNG về phía lạc quan: tập
+# nhỏ hiếm khi chứa cặp gây nhầm.
 #
-# FP_THRESHOLD = 0.15 — hiệu chỉnh bằng EXP-01 (Fingerprint Baseline),
+# FP_THRESHOLD = 0.30 — hiệu chỉnh bằng EXP-01 (Fingerprint Baseline),
 # xem experiments/results/exp01_fingerprint_baseline.json:
-#   τ = 0.05 -> P 0.9905 / R 0.6042 / F1 0.7506 / FPR 0.0216
-#   τ = 0.10 -> P 0.9936 / R 0.5721 / F1 0.7261 / FPR 0.0095
-#   τ = 0.15 -> P 0.9963 / R 0.5632 / F1 0.7196 / FPR 0.0032   <- đang dùng
-#   τ = 0.70 -> P 0.9990 / R 0.5268 / F1 0.6899 / FPR 0.0005
+#   τ = 0.05 -> P 0.9880 / R 0.6053 / F1 0.7507 / FPR 0.0484
+#   τ = 0.15 -> P 0.9972 / R 0.5642 / F1 0.7207 / FPR 0.0163
+#   τ = 0.30 -> P 0.9981 / R 0.5558 / F1 0.7140 / FPR 0.0021   <- đang dùng
+#   τ = 0.95 -> P 1.0000 / R 0.4679 / F1 0.6375 / FPR 0.0
 #   Tiêu chí chọn, tường minh chứ không theo cảm tính: F1 cao nhất trong nhóm
-#   giữ FPR <= 0.005. Trên corpus thật KHÔNG ngưỡng nào cho FPR = 0, nên tiêu
-#   chí "FPR = 0" của bản cũ không còn dùng được nữa.
-#   Giá trị cũ 0.70 không sai về precision, nhưng bỏ phí ~3,6 điểm recall để
-#   đổi lấy vỏn vẹn 0.0027 FPR.
+#   giữ FPR <= 0.005. KHÔNG lấy τ = 0.95 dù ở đó FPR = 0: "0 lần nhận nhầm trên
+#   1.900 truy vấn" không phân biệt được với 0.0011 (đúng 2 truy vấn) — khoảng
+#   tin cậy 95% của 0/1.900 vẫn kéo tới ~0.0016 — mà cái giá là 8,8 điểm recall.
+#   Recall trần của tầng này chỉ ~0.58: dịch cao độ và đổi tốc độ (8/19 phép biến
+#   đổi) Chromaprint không bắt được bài nào, đó là việc của tầng MERT và Cover.
 #
-# MERT_THRESHOLD = 0.97 — hiệu chỉnh bằng EXP-06 (Unknown Track Detection),
-# xem experiments/results/exp06_unknown_detection.json (8.000 truy vấn known +
+# MERT_THRESHOLD = 0.97 — hiệu chỉnh bằng EXP-06 (Unknown Track Detection).
+# ⚠️ Các con số dưới đây đo trên CORPUS CŨ (4.000 bản ghi / 8.000 vector). Corpus
+# đã lên 24.375 bản ghi và embedding đang được dựng lại; phải chạy lại EXP-06 rồi
+# cập nhật cả ngưỡng lẫn đoạn này.
+# Xem experiments/results/exp06_unknown_detection.json (8.000 truy vấn known +
 # 8.000 truy vấn unknown):
 #   τ = 0.90 -> False Match Rate 74.86%
 #   τ = 0.95 -> False Match Rate 14.52%   (KHÔNG đạt ngưỡng <=5% của §16)
@@ -143,14 +148,17 @@ def resolve_audio_path(audio_path: str) -> str:
 #   ghi. Trên 8.000 vector, CHÍNH ngưỡng đó cho 14.52% — gấp gần 8 lần.
 #
 # NGƯỠNG PHỤ THUỘC QUY MÔ REFERENCE. Đây là quan hệ ĐO ĐƯỢC, không phải suy
-# đoán: ở cùng τFP = 0.10, FPR tăng từ 0.0044 (1.000 bản ghi) lên 0.0095 (4.000
-# bản ghi). Còn τMERT = 0.97 hiện cho FMR 4.40%, tức ĐÃ SÁT trần 5% của §16.
-# Mở rộng corpus thêm nữa thì BẮT BUỘC chạy lại EXP-01 và EXP-06 trước khi tin
-# hai con số này.
+# đoán: ở cùng τFP = 0.10, FPR tăng từ 0.0044 (1.000 bản ghi) lên 0.0095 (4.000)
+# rồi 0.0226 (24.375). Tầng Cover cũng vậy — chấm trên 100 bài nguồn thì τ = 0.71
+# đã đạt §16, nhưng chính vùng ngưỡng đó trên chỉ mục 24.375 bài cho FMR 17%.
+# Còn τMERT = 0.97 cho FMR 4.40% trên corpus CŨ, tức ĐÃ SÁT trần 5% của §16.
+# Mở rộng corpus thêm nữa thì BẮT BUỘC chạy lại EXP-01, EXP-06 và EXP-07 trước
+# khi tin ba con số này.
 #
 # PHẢI khớp với `min_identity_confidence_by_match_type` trong
-# configs/rules_v1.yaml (EXACT_MATCH = τFP, NEAR_MATCH = τMERT). Lệch nhau thì
-# cascade nhận một khớp rồi Rule Engine vứt chính khớp đó thành UNKNOWN.
+# configs/rules_v1.yaml (EXACT_MATCH = τFP, NEAR_MATCH = τMERT,
+# COVER_MATCH = τCover). Lệch nhau thì cascade nhận một khớp rồi Rule Engine vứt
+# chính khớp đó thành UNKNOWN.
 # --------------------------------------------------------------------------
 FP_THRESHOLD = _get_float("FP_THRESHOLD", 0.15)
 # Bộ lọc sơ bộ theo độ dài trước khi so khớp fingerprint (giây).
@@ -162,15 +170,18 @@ FP_DURATION_WINDOW_S = _get_float("FP_DURATION_WINDOW_S", 0.0)
 FP_MAX_ALIGN_OFFSET = _get_int("FP_MAX_ALIGN_OFFSET", 0)
 MERT_THRESHOLD = _get_float("MERT_THRESHOLD", 0.97)
 
-# COVER_THRESHOLD = 0.97 — hiệu chỉnh bằng EXP-07 (Cover/Version Identification),
-# xem experiments/results/exp07_cover.json: tại 0.97 thì Precision = 1.0 và
-# False Match Rate = 0% trên tập held-out (điểm cao nhất của một bài ngoài CSDL
-# chỉ đạt 0.9419, tức còn biên an toàn thật).
+# COVER_THRESHOLD = 0.90 — hiệu chỉnh bằng EXP-07, đo ĐÚNG điều kiện server:
+# truy vấn là 30 giây đầu của file, tìm trên toàn bộ chỉ mục 24.375 bài
+# (experiments/results/exp07_cover.json -> metrics.runtime_protocol):
+#   τ = 0.80 -> P 0.9846 / R 0.7732 / FMR 5.7%   (trượt trần 5% của §16)
+#   τ = 0.85 -> P 0.9908 / R 0.7405 / FMR 3.3%
+#   τ = 0.90 -> P 0.9946 / R 0.6837 / FMR 0.4%   <- đang dùng
+#   30 mẫu nhiễu trắng/hồng/nâu đạt cao nhất 0.7278, nên τ phải trên mức đó.
+#   Siết FMR <= 0.005 thay vì dừng ở trần 5% của §16 vì Cover là tầng CUỐI:
+#   nhận nhầm ở đây ra thẳng một kết luận về quyền, không còn tầng nào đỡ.
 #
-# CHƯA ĐƯỢC NỐI VÀO CASCADE, và không phải vì ngại: tầng này cần descriptor
-# chroma của toàn bộ reference, mà muốn có thì phải có AUDIO — repo hiện không
-# còn audio của 2750 bản ghi nào (`audio_path` trỏ tới `audio/...` đã mất).
-# Không có reference thì không có gì để tìm. Xem README mục EXP-07.
+# Đã nối vào cascade (STAGE_3_COVER). Chỉ mục dựng bằng
+# scripts/build_cover_index.py cho mọi bản ghi có audio thật.
 COVER_THRESHOLD = _get_float("COVER_THRESHOLD", 0.97)
 COVER_ENABLED = _get("COVER_ENABLED", "true").lower() in ("true", "1", "yes")
 COVER_INDEX_PATH = _path("COVER_INDEX_PATH", "data/processed/cover_descriptors.npy")

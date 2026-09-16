@@ -11,9 +11,10 @@ nghĩa là hai thí nghiệm quan trọng nhất vẫn dùng con số cũ — đ
     python scripts/run_all_experiments.py --only exp04,exp05,exp08   # lượt 2
 
 Ngưỡng lấy từ đâu:
-  * τFP    <- EXP-01. Ưu tiên ngưỡng THẤP NHẤT còn giữ FPR = 0 thay vì ngưỡng cho
-             F1 cao nhất: nhận nhầm một bản thu có bản quyền tốn kém hơn nhiều so
-             với việc bỏ sót rồi để tầng MERT xử lý tiếp.
+  * τFP    <- EXP-01. F1 cao nhất TRONG SỐ các ngưỡng giữ tỉ lệ nhận nhầm ≤ 0.005:
+             nhận nhầm một bản thu có bản quyền tốn kém hơn nhiều so với việc bỏ
+             sót rồi để tầng MERT xử lý tiếp, nên siết nhận nhầm trước, tối đa hoá
+             F1 sau.
   * τMERT  <- EXP-06, mục tiêu False Match Rate ≤ 5% của §16.
   * τCover <- EXP-07, `recommended_tau_cover`.
 
@@ -64,23 +65,24 @@ def tau_fp() -> tuple:
     (giá trị, giải thích) cho τFP, lấy từ EXP-01.
 
     Quy tắc chọn, theo đúng thứ tự:
-      1. Có ngưỡng nào giữ FPR = 0 thì lấy ngưỡng THẤP NHẤT trong số đó — giữ
-         recall cao nhất mà vẫn không nhận nhầm lần nào.
-      2. Không có thì lấy F1 cao nhất TRONG SỐ các ngưỡng đạt cả hai điều kiện
-         §16. Hoà F1 thì lấy ngưỡng cao hơn (nhận nhầm tốn kém hơn bỏ sót: bỏ
-         sót còn được tầng MERT xử lý tiếp, nhận nhầm thì ra thẳng kết luận sai).
+      1. Lấy F1 cao nhất TRONG SỐ các ngưỡng đạt §16 (Precision ≥ 0.95) và giữ
+         tỉ lệ nhận nhầm ≤ 0.005. Hoà F1 thì lấy ngưỡng THẤP hơn — trong nhóm đã
+         siết nhận nhầm, ngưỡng thấp hơn cho recall cao hơn mà không phải trả thêm.
+      2. Không ngưỡng nào đạt 0.005 -> nới về ràng buộc §16 (FPR ≤ 0.05).
       3. Không ngưỡng nào đạt §16 -> KHÔNG đề xuất gì, để người chạy tự quyết.
+
+    Bản cũ có thêm một quy tắc đứng trước: "ngưỡng THẤP NHẤT còn giữ FPR = 0". Bỏ
+    quy tắc đó vì trên corpus 24.375 bản ghi nó chọn τ = 0.95 (recall 0.4679) thay
+    vì 0.30 (recall 0.5558) — đổi 8,8 điểm recall lấy một khác biệt mà dữ liệu
+    KHÔNG phân biệt được: FPR đo trên 1.900 truy vấn, nên "0 lần nhận nhầm" và
+    "0.0011" chỉ cách nhau 2 truy vấn, và khoảng tin cậy 95% của 0/1.900 vẫn kéo
+    tới ~0.0016. Con số 0 ở đây là giới hạn của phép đo, không phải bằng chứng
+    rằng rủi ro bằng 0.
     """
     data = load("exp01_fingerprint_baseline.json")
     if not data:
         return None, ""
     metrics = data.get("metrics", {})
-
-    zero_fpr = metrics.get("lowest_threshold_with_zero_fpr")
-    if zero_fpr:
-        return zero_fpr["threshold"], (
-            f"ngưỡng thấp nhất giữ FPR = 0 (P={zero_fpr.get('precision')}, "
-            f"R={zero_fpr.get('recall')}, F1={zero_fpr.get('f1')})")
 
     sweep = metrics.get("sweep") or []
     passing = [r for r in sweep

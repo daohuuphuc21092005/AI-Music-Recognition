@@ -81,7 +81,8 @@ INPUT AUDIO/VIDEO
 - **Điều kiện phát triển**: Chỉ được triển khai sau khi AI-1 và AI-2 đã hoạt động trơn tru và đạt ngưỡng nghiệm thu.
 - **Baseline bắt buộc**: Biểu diễn CQT (Constant-Q Transform) / Chroma features kết hợp so khớp chuỗi thời gian (dynamic time warping / dynamic alignment).
 - **Descriptor đang dùng** (`cover_service.normalize_frames`): chroma-CQT gộp về 64 khung, **trừ trung bình từng khung** rồi chuẩn hoá L2; so khớp bằng cosine lấy max qua 12 phép xoay (OTI). Không trừ trung bình thì chroma (luôn không âm) cho cosine cao sẵn giữa hai bài bất kỳ — nhiễu trắng từng đạt 0.985 > τCover.
-- **Ngưỡng `τCover` phụ thuộc thang điểm của descriptor**: đổi descriptor thì bắt buộc dựng lại `cover_descriptors.npy` và chạy lại EXP-07 (có nhiễu làm mẫu âm) trước khi tin ngưỡng.
+- **Ngưỡng `τCover` phụ thuộc thang điểm của descriptor VÀ quy mô chỉ mục**: đổi descriptor hoặc đổi số bài trong chỉ mục thì bắt buộc dựng lại `cover_descriptors.npy` (`scripts/build_cover_index.py`, mọi bản ghi có audio thật) và chạy lại EXP-07 (có nhiễu làm mẫu âm) trước khi tin ngưỡng.
+- **`τCover` hiện tại = 0.90**, hiệu chỉnh trên chỉ mục 24.375 bài đúng điều kiện server (30 giây đầu của truy vấn): Precision 0.9946, nhận nhầm bài ngoài CSDL 0,4%, mẫu nhiễu cao nhất chỉ 0.7278. Ở quy mô này tầng Cover nhận đúng 83% truy vấn ở vị trí 1 và bắt đúng lượng dịch cao độ (OTI) 91% — đúng chỗ Chromaprint được 0%.
 - **Phương án nâng cao**: Sử dụng model chuyên dụng như CoverHunter (hoặc tương đương) dưới dạng **pretrained inference**. Tuyệt đối **không huấn luyện từ đầu (train from scratch)**.
 
 ---

@@ -68,8 +68,10 @@ def test_khong_khop_tang_1_thi_xuong_tang_2(db_session, vector_index, unmatched_
     # So với ngưỡng HIỆU DỤNG, không phải τFP cơ sở. Fixture là nhiễu trắng 8
     # giây, mà điểm nền của một đoạn ngắn cao hơn hẳn đoạn 30 giây (đo được:
     # 0.2558 so với 0.0814), nên `search_fingerprint` tự nâng ngưỡng theo độ dài.
-    # Chính con số 0.1628 của đoạn 8 giây này VƯỢT τFP cơ sở 0.15 — nếu chỉ dùng
-    # một ngưỡng cố định thì nhiễu trắng đã bị gán EXACT_MATCH.
+    # Con số 0.1628 của đoạn 8 giây này từng VƯỢT τFP cơ sở hồi τFP = 0.15 — nếu
+    # chỉ dùng một ngưỡng cố định thì nhiễu trắng đã bị gán EXACT_MATCH. τFP hiện
+    # là 0.30 nên nhiễu trắng trượt sẵn, nhưng phép nâng ngưỡng vẫn phải giữ: nó
+    # bảo vệ theo ĐỘ DÀI truy vấn, độc lập với giá trị τFP đang hiệu chỉnh.
     assert fingerprint["fingerprint_score"] < fingerprint["threshold"]
     assert fingerprint["threshold"] >= config.FP_THRESHOLD
     assert "embedding_ms" in evidence["timings_ms"]
@@ -81,8 +83,9 @@ def test_nguong_duoc_nang_cho_truy_van_ngan(db_session, vector_index, unmatched_
     Truy vấn ngắn phải được áp ngưỡng CAO HƠN τFP cơ sở.
 
     Đây là chốt chặn cho một dương tính giả có thật: đoạn 8 giây bất kỳ, kể cả
-    nhiễu trắng thuần, đạt điểm Chromaprint quanh 0.16 — vượt τFP = 0.15 hiệu
-    chỉnh trên tập truy vấn 30 giây.
+    nhiễu trắng thuần, đạt điểm Chromaprint quanh 0.16 — từng vượt τFP = 0.15
+    hiệu chỉnh trên tập truy vấn 30 giây. Ngưỡng nền của đoạn ngắn cao hơn hẳn,
+    nên phép nâng theo độ dài vẫn cần dù τFP hiện đã là 0.30.
     """
     result = process_music_query(unmatched_audio, db_session, vector_index, top_k=5)
     fingerprint = result["evidence"]["fingerprint"]

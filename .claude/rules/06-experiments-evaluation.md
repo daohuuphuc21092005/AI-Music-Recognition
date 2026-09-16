@@ -82,6 +82,11 @@ Mỗi thí nghiệm phải ghi nhận vào file cấu hình (CSV/JSON, không b�
   - Đảm bảo hệ thống không đưa ra nhận diện sai lệch khi gặp nhạc lạ.
 - **`EXP-07` — Cover Identification** *(Nếu triển khai AI-3)*:
   - Đánh giá khả năng nhận diện các bản cover / biến thể giai điệu so với bản thu gốc.
+  - Chấm ở **hai giao thức**, và `recommended_tau_cover` luôn lấy từ giao thức thứ hai:
+    1. *Cấp cửa sổ* — cửa sổ 15s, reference chỉ là các bài nguồn của tập truy vấn. Dùng để so với MERT của EXP-03 trên CÙNG bộ cửa sổ (đo điểm mù dịch cao độ).
+    2. *Điều kiện server* (`metrics.runtime_protocol`) — 30 giây đầu của file truy vấn, tìm trên TOÀN BỘ chỉ mục cover (`scripts/build_cover_index.py`, mọi bản ghi có audio thật). Bài ngoài CSDL phải thắng cả chỉ mục, và loại trừ mọi bản ghi CÙNG fingerprint với bài nguồn.
+  - Ngưỡng chọn theo ràng buộc trước, F1 sau: không nhận mẫu nhiễu nào → FMR ≤ 0.005 → F1 cao nhất; không đạt 0.005 mới nới về trần 5% của §16. Siết hơn §16 vì Cover là tầng CUỐI của cascade, nhận nhầm ở đây ra thẳng kết luận về quyền.
+  - **Quy mô reference đổi thì phải chạy lại**: cùng bộ truy vấn, τ = 0.70 cho FMR 4,9% trên 100 bài nguồn nhưng 17,4% trên chỉ mục 24.375 bài.
 - **`EXP-08` — End-to-End System Evaluation**:
   - Đánh giá toàn diện toàn bộ chu trình từ âm thanh thô đến quyết định bản quyền cuối cùng.
   - Đo lường: Macro-F1 trên 5 nhóm bản quyền, Confusion Matrix, tỷ lệ Unknown Detection Rate, tổng độ trễ End-to-End.

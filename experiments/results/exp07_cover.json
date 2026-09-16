@@ -1,24 +1,24 @@
 {
   "experiment_id": "exp07_cover",
-  "date": "2026-09-09T07:02:06",
-  "git_commit": "17faca9",
+  "date": "2026-09-16T06:55:47",
+  "git_commit": "1b15e1f",
   "git_dirty": true,
   "dataset_version": {
     "metadata_master.csv": {
-      "bytes": 869989,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 41539919,
+      "mtime": "2026-09-15T21:59:09"
     },
     "rights_master.csv": {
-      "bytes": 1517215,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 52732750,
+      "mtime": "2026-09-15T21:59:10"
     },
     "fingerprints_master.csv": {
-      "bytes": 3746156,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 22719740,
+      "mtime": "2026-09-15T21:59:11"
     },
     "embeddings_master.csv": {
-      "bytes": 131916100,
-      "mtime": "2026-09-07T16:09:12"
+      "bytes": 101,
+      "mtime": "2026-09-15T21:59:21"
     }
   },
   "model": {
@@ -29,7 +29,7 @@
     "sample_rate": 24000
   },
   "environment": {
-    "python": "3.12.13",
+    "python": "3.12.1",
     "platform": "Windows-11-10.0.26200-SP0"
   },
   "parameters": {
@@ -40,447 +40,1371 @@
     "crop_start_source": "manifest",
     "overlap_min": 0.5,
     "reference_windows": 200,
-    "query_windows": 6098,
+    "query_windows": 6059,
     "k_values": [
       1,
       5
     ],
     "source_files": [
-      "fma/00_0006.mp3",
-      "fma/00_0067.mp3",
-      "fma/00_0100.mp3",
-      "fma/00_0115.mp3",
-      "fma/00_0217.mp3",
-      "fma/00_0228.mp3",
-      "fma/00_0266.mp3",
-      "fma/00_0278.mp3",
-      "fma/00_0326.mp3",
-      "fma/00_0347.mp3",
-      "fma/00_0454.mp3",
-      "fma/00_0475.mp3",
-      "fma/00_0476.mp3",
-      "fma/01_0126.mp3",
-      "fma/01_0130.mp3",
-      "fma/01_0144.mp3",
-      "fma/01_0146.mp3",
-      "fma/01_0242.mp3",
-      "fma/01_0250.mp3",
-      "fma/01_0281.mp3",
-      "fma/01_0295.mp3",
-      "fma/01_0315.mp3",
-      "fma/01_0376.mp3",
-      "fma/01_0416.mp3",
-      "fma/01_0493.mp3",
-      "fma/02_0005.mp3",
-      "fma/02_0118.mp3",
-      "fma/02_0177.mp3",
-      "fma/02_0212.mp3",
-      "fma/02_0217.mp3",
-      "fma/02_0221.mp3",
-      "fma/02_0381.mp3",
-      "fma/02_0384.mp3",
-      "fma/02_0400.mp3",
-      "fma/02_0512.mp3",
-      "fma/02_0515.mp3",
-      "fma/03_0033.mp3",
-      "fma/03_0064.mp3",
-      "fma/03_0074.mp3",
-      "fma/03_0113.mp3",
-      "fma/03_0133.mp3",
-      "fma/03_0174.mp3",
-      "fma/03_0186.mp3",
-      "fma/03_0223.mp3",
-      "fma/03_0244.mp3",
-      "fma/03_0251.mp3",
-      "fma/03_0296.mp3",
-      "fma/03_0394.mp3",
-      "fma/03_0402.mp3",
-      "fma/03_0428.mp3",
-      "fma/03_0446.mp3",
-      "fma/04_0024.mp3",
-      "fma/04_0135.mp3",
-      "fma/04_0159.mp3",
-      "fma/04_0270.mp3",
-      "fma/04_0330.mp3",
-      "fma/04_0352.mp3",
-      "fma/04_0410.mp3",
-      "fma/04_0447.mp3",
-      "fma/04_0463.mp3",
-      "fma/04_0498.mp3",
-      "fma/04_0512.mp3",
-      "fma/04_0520.mp3",
-      "fma/05_0020.mp3",
-      "fma/05_0094.mp3",
-      "fma/05_0177.mp3",
-      "fma/05_0329.mp3",
-      "fma/05_0434.mp3",
-      "fma/05_0469.mp3",
-      "fma/05_0509.mp3",
-      "fma/06_0017.mp3",
-      "fma/06_0111.mp3",
-      "fma/06_0131.mp3",
-      "fma/06_0233.mp3",
-      "fma/06_0248.mp3",
-      "fma/06_0257.mp3",
-      "fma/06_0259.mp3",
-      "fma/06_0274.mp3",
-      "fma/06_0323.mp3",
-      "fma/06_0325.mp3",
-      "fma/06_0371.mp3",
-      "fma/06_0374.mp3",
-      "fma/06_0398.mp3",
-      "fma/06_0414.mp3",
-      "fma/06_0484.mp3",
-      "fma/06_0488.mp3",
-      "fma/07_0015.mp3",
-      "fma/07_0017.mp3",
-      "fma/07_0064.mp3",
-      "fma/07_0105.mp3",
-      "fma/07_0123.mp3",
-      "fma/07_0180.mp3",
-      "fma/07_0221.mp3",
-      "fma/07_0278.mp3",
-      "fma/07_0314.mp3",
-      "fma/07_0318.mp3",
-      "fma/07_0348.mp3",
-      "fma/07_0394.mp3",
-      "fma/07_0454.mp3",
-      "fma/07_0492.mp3"
+      "fma/000833.mp3",
+      "fma/004703.mp3",
+      "fma/004791.mp3",
+      "fma/005276.mp3",
+      "fma/006370.mp3",
+      "fma/009847.mp3",
+      "fma/010368.mp3",
+      "fma/013895.mp3",
+      "fma/014107.mp3",
+      "fma/015154.mp3",
+      "fma/015369.mp3",
+      "fma/016876.mp3",
+      "fma/018124.mp3",
+      "fma/018412.mp3",
+      "fma/019272.mp3",
+      "fma/020347.mp3",
+      "fma/020490.mp3",
+      "fma/020667.mp3",
+      "fma/022443.mp3",
+      "fma/025903.mp3",
+      "fma/029476.mp3",
+      "fma/033068.mp3",
+      "fma/034255.mp3",
+      "fma/035194.mp3",
+      "fma/035452.mp3",
+      "fma/037161.mp3",
+      "fma/042257.mp3",
+      "fma/043290.mp3",
+      "fma/045517.mp3",
+      "fma/047011.mp3",
+      "fma/047662.mp3",
+      "fma/047922.mp3",
+      "fma/048402.mp3",
+      "fma/049401.mp3",
+      "fma/050836.mp3",
+      "fma/050854.mp3",
+      "fma/052876.mp3",
+      "fma/052899.mp3",
+      "fma/056273.mp3",
+      "fma/056691.mp3",
+      "fma/057404.mp3",
+      "fma/058139.mp3",
+      "fma/058763.mp3",
+      "fma/058878.mp3",
+      "fma/059021.mp3",
+      "fma/061008.mp3",
+      "fma/062043.mp3",
+      "fma/069291.mp3",
+      "fma/069944.mp3",
+      "fma/070469.mp3",
+      "fma/071929.mp3",
+      "fma/072563.mp3",
+      "fma/073125.mp3",
+      "fma/073581.mp3",
+      "fma/074956.mp3",
+      "fma/076081.mp3",
+      "fma/076296.mp3",
+      "fma/076375.mp3",
+      "fma/076389.mp3",
+      "fma/087161.mp3",
+      "fma/087594.mp3",
+      "fma/087698.mp3",
+      "fma/094726.mp3",
+      "fma/096098.mp3",
+      "fma/097540.mp3",
+      "fma/097975.mp3",
+      "fma/108843.mp3",
+      "fma/113524.mp3",
+      "fma/113933.mp3",
+      "fma/115593.mp3",
+      "fma/115626.mp3",
+      "fma/116702.mp3",
+      "fma/118576.mp3",
+      "fma/121823.mp3",
+      "fma/123662.mp3",
+      "fma/123834.mp3",
+      "fma/125620.mp3",
+      "fma/125878.mp3",
+      "fma/126590.mp3",
+      "fma/127497.mp3",
+      "fma/129487.mp3",
+      "fma/130431.mp3",
+      "fma/130581.mp3",
+      "fma/130956.mp3",
+      "fma/132164.mp3",
+      "fma/132521.mp3",
+      "fma/134825.mp3",
+      "fma/137400.mp3",
+      "fma/138118.mp3",
+      "fma/139774.mp3",
+      "fma/142949.mp3",
+      "fma/143307.mp3",
+      "fma/143944.mp3",
+      "fma/144565.mp3",
+      "fma/146942.mp3",
+      "fma/149141.mp3",
+      "fma/149405.mp3",
+      "fma/151501.mp3",
+      "fma/153420.mp3",
+      "fma/154306.mp3"
     ],
     "feature": "chroma_cqt + Optimal Transposition Index (12 phép xoay)",
     "chroma_sr": 22050,
     "descriptor_frames": 64,
+    "descriptor_normalization": "trừ trung bình từng khung, chuẩn hoá L2 từng khung rồi toàn vector",
     "similarity": "cosine trên descriptor đã chuẩn hoá L2, lấy max qua 12 phép xoay",
-    "compared_against_exp03": true
+    "noise_probes": {
+      "colors": [
+        "trang",
+        "hong",
+        "nau"
+      ],
+      "seeds": 10
+    },
+    "runtime_protocol": {
+      "query": "30 giây đầu của file truy vấn (offset 0)",
+      "gallery": "toàn bộ chỉ mục cover (scripts/build_cover_index.py)",
+      "held_out": "bỏ mọi bản ghi CÙNG fingerprint với bài nguồn"
+    },
+    "compared_against_exp03": false
   },
   "metrics": {
-    "recall@1": 0.5935,
-    "recall@5": 0.6617,
-    "mrr": 0.6317,
-    "map": 0.6157,
-    "oti_accuracy": 0.9134,
-    "queries": 6098,
+    "recall@1": 0.6249,
+    "recall@5": 0.7344,
+    "mrr": 0.6779,
+    "map": 0.6642,
+    "oti_accuracy": 0.911,
+    "queries": 6059,
     "reference_windows": 200,
     "descriptor_dimension": 768,
     "threshold_sweep": [
       {
+        "threshold": 0.5,
+        "precision": 0.7917,
+        "recall": 0.5816,
+        "f1": 0.6706,
+        "accepted": 4451,
+        "false_match_rate": 0.4136,
+        "noise_match_rate": 0.1333
+      },
+      {
+        "threshold": 0.51,
+        "precision": 0.8043,
+        "recall": 0.578,
+        "f1": 0.6726,
+        "accepted": 4354,
+        "false_match_rate": 0.3796,
+        "noise_match_rate": 0.1
+      },
+      {
+        "threshold": 0.52,
+        "precision": 0.8108,
+        "recall": 0.5724,
+        "f1": 0.6711,
+        "accepted": 4277,
+        "false_match_rate": 0.3547,
+        "noise_match_rate": 0.1
+      },
+      {
+        "threshold": 0.53,
+        "precision": 0.8244,
+        "recall": 0.5681,
+        "f1": 0.6727,
+        "accepted": 4175,
+        "false_match_rate": 0.3205,
+        "noise_match_rate": 0.0667
+      },
+      {
+        "threshold": 0.54,
+        "precision": 0.8334,
+        "recall": 0.5646,
+        "f1": 0.6732,
+        "accepted": 4105,
+        "false_match_rate": 0.2916,
+        "noise_match_rate": 0.0667
+      },
+      {
+        "threshold": 0.55,
+        "precision": 0.8434,
+        "recall": 0.5592,
+        "f1": 0.6725,
+        "accepted": 4017,
+        "false_match_rate": 0.2665,
+        "noise_match_rate": 0.0333
+      },
+      {
+        "threshold": 0.56,
+        "precision": 0.8571,
+        "recall": 0.5534,
+        "f1": 0.6726,
+        "accepted": 3912,
+        "false_match_rate": 0.2342,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.57,
+        "precision": 0.8747,
+        "recall": 0.5483,
+        "f1": 0.674,
+        "accepted": 3798,
+        "false_match_rate": 0.201,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.58,
+        "precision": 0.8829,
+        "recall": 0.5438,
+        "f1": 0.6731,
+        "accepted": 3732,
+        "false_match_rate": 0.185,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.59,
+        "precision": 0.8913,
+        "recall": 0.5402,
+        "f1": 0.6727,
+        "accepted": 3672,
+        "false_match_rate": 0.1654,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.6,
+        "precision": 0.8988,
+        "recall": 0.5352,
+        "f1": 0.6709,
+        "accepted": 3608,
+        "false_match_rate": 0.1499,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.61,
+        "precision": 0.9076,
+        "recall": 0.53,
+        "f1": 0.6692,
+        "accepted": 3538,
+        "false_match_rate": 0.1329,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.62,
+        "precision": 0.9142,
+        "recall": 0.5243,
+        "f1": 0.6665,
+        "accepted": 3475,
+        "false_match_rate": 0.1225,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.63,
+        "precision": 0.9215,
+        "recall": 0.5209,
+        "f1": 0.6655,
+        "accepted": 3425,
+        "false_match_rate": 0.1094,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.64,
+        "precision": 0.9307,
+        "recall": 0.5166,
+        "f1": 0.6644,
+        "accepted": 3363,
+        "false_match_rate": 0.0932,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.65,
+        "precision": 0.936,
+        "recall": 0.5113,
+        "f1": 0.6613,
+        "accepted": 3310,
+        "false_match_rate": 0.0797,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.66,
+        "precision": 0.9399,
+        "recall": 0.5059,
+        "f1": 0.6577,
+        "accepted": 3261,
+        "false_match_rate": 0.0713,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.67,
+        "precision": 0.9417,
+        "recall": 0.5011,
+        "f1": 0.6541,
+        "accepted": 3224,
+        "false_match_rate": 0.0652,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.68,
+        "precision": 0.9476,
+        "recall": 0.4983,
+        "f1": 0.6531,
+        "accepted": 3186,
+        "false_match_rate": 0.0609,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.69,
+        "precision": 0.9496,
+        "recall": 0.4941,
+        "f1": 0.65,
+        "accepted": 3153,
+        "false_match_rate": 0.0568,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.7,
+        "precision": 0.9527,
+        "recall": 0.4882,
+        "f1": 0.6456,
+        "accepted": 3105,
+        "false_match_rate": 0.0523,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.71,
+        "precision": 0.957,
+        "recall": 0.4847,
+        "f1": 0.6435,
+        "accepted": 3069,
+        "false_match_rate": 0.0487,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.72,
+        "precision": 0.9621,
+        "recall": 0.4813,
+        "f1": 0.6416,
+        "accepted": 3031,
+        "false_match_rate": 0.0432,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.73,
+        "precision": 0.9651,
+        "recall": 0.4788,
+        "f1": 0.64,
+        "accepted": 3006,
+        "false_match_rate": 0.0385,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.74,
+        "precision": 0.9654,
+        "recall": 0.4738,
+        "f1": 0.6357,
+        "accepted": 2974,
+        "false_match_rate": 0.0356,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.75,
+        "precision": 0.972,
+        "recall": 0.4704,
+        "f1": 0.634,
+        "accepted": 2932,
+        "false_match_rate": 0.0287,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.76,
+        "precision": 0.9762,
+        "recall": 0.4672,
+        "f1": 0.632,
+        "accepted": 2900,
+        "false_match_rate": 0.0228,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.77,
+        "precision": 0.9791,
+        "recall": 0.4636,
+        "f1": 0.6293,
+        "accepted": 2869,
+        "false_match_rate": 0.0157,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.78,
+        "precision": 0.9796,
+        "recall": 0.4603,
+        "f1": 0.6263,
+        "accepted": 2847,
+        "false_match_rate": 0.0114,
+        "noise_match_rate": 0.0
+      },
+      {
+        "threshold": 0.79,
+        "precision": 0.9798,
+        "recall": 0.4568,
+        "f1": 0.6231,
+        "accepted": 2825,
+        "false_match_rate": 0.0064,
+        "noise_match_rate": 0.0
+      },
+      {
         "threshold": 0.8,
-        "precision": 0.6063,
-        "recall": 0.5922,
-        "f1": 0.5991,
-        "accepted": 5956,
-        "false_match_rate": 0.9524
+        "precision": 0.9804,
+        "recall": 0.4532,
+        "f1": 0.6199,
+        "accepted": 2801,
+        "false_match_rate": 0.0043,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.81,
-        "precision": 0.6114,
-        "recall": 0.5922,
-        "f1": 0.6016,
-        "accepted": 5906,
-        "false_match_rate": 0.9369
+        "precision": 0.983,
+        "recall": 0.4476,
+        "f1": 0.6151,
+        "accepted": 2759,
+        "false_match_rate": 0.0033,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.82,
-        "precision": 0.6191,
-        "recall": 0.5918,
-        "f1": 0.6052,
-        "accepted": 5829,
-        "false_match_rate": 0.9173
+        "precision": 0.9839,
+        "recall": 0.4431,
+        "f1": 0.6111,
+        "accepted": 2729,
+        "false_match_rate": 0.0031,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.83,
-        "precision": 0.6258,
-        "recall": 0.5907,
-        "f1": 0.6077,
-        "accepted": 5756,
-        "false_match_rate": 0.8926
+        "precision": 0.9851,
+        "recall": 0.4379,
+        "f1": 0.6063,
+        "accepted": 2693,
+        "false_match_rate": 0.0028,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.84,
-        "precision": 0.6343,
-        "recall": 0.589,
-        "f1": 0.6108,
-        "accepted": 5663,
-        "false_match_rate": 0.8647
+        "precision": 0.9857,
+        "recall": 0.4327,
+        "f1": 0.6014,
+        "accepted": 2660,
+        "false_match_rate": 0.0026,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.85,
-        "precision": 0.6451,
-        "recall": 0.5866,
-        "f1": 0.6144,
-        "accepted": 5545,
-        "false_match_rate": 0.8211
+        "precision": 0.9859,
+        "recall": 0.4268,
+        "f1": 0.5957,
+        "accepted": 2623,
+        "false_match_rate": 0.0023,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.86,
-        "precision": 0.6552,
-        "recall": 0.5853,
-        "f1": 0.6183,
-        "accepted": 5447,
-        "false_match_rate": 0.7811
+        "precision": 0.9865,
+        "recall": 0.4217,
+        "f1": 0.5908,
+        "accepted": 2590,
+        "false_match_rate": 0.002,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.87,
-        "precision": 0.6665,
-        "recall": 0.5838,
-        "f1": 0.6224,
-        "accepted": 5341,
-        "false_match_rate": 0.7396
+        "precision": 0.9882,
+        "recall": 0.4159,
+        "f1": 0.5854,
+        "accepted": 2550,
+        "false_match_rate": 0.0015,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.88,
-        "precision": 0.6853,
-        "recall": 0.581,
-        "f1": 0.6289,
-        "accepted": 5170,
-        "false_match_rate": 0.6856
+        "precision": 0.9884,
+        "recall": 0.4073,
+        "f1": 0.5769,
+        "accepted": 2497,
+        "false_match_rate": 0.0015,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.89,
-        "precision": 0.7028,
-        "recall": 0.5725,
-        "f1": 0.631,
-        "accepted": 4967,
-        "false_match_rate": 0.6228
+        "precision": 0.9922,
+        "recall": 0.3974,
+        "f1": 0.5675,
+        "accepted": 2427,
+        "false_match_rate": 0.0015,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.9,
-        "precision": 0.7276,
-        "recall": 0.5638,
-        "f1": 0.6353,
-        "accepted": 4725,
-        "false_match_rate": 0.5464
+        "precision": 0.992,
+        "recall": 0.387,
+        "f1": 0.5568,
+        "accepted": 2364,
+        "false_match_rate": 0.0015,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.91,
-        "precision": 0.7462,
-        "recall": 0.5521,
-        "f1": 0.6347,
-        "accepted": 4512,
-        "false_match_rate": 0.4861
+        "precision": 0.9922,
+        "recall": 0.3763,
+        "f1": 0.5457,
+        "accepted": 2298,
+        "false_match_rate": 0.0013,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.92,
-        "precision": 0.77,
-        "recall": 0.543,
-        "f1": 0.6369,
-        "accepted": 4300,
-        "false_match_rate": 0.4203
+        "precision": 0.9919,
+        "recall": 0.3643,
+        "f1": 0.5328,
+        "accepted": 2225,
+        "false_match_rate": 0.0013,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.93,
-        "precision": 0.8105,
-        "recall": 0.5274,
-        "f1": 0.639,
-        "accepted": 3968,
-        "false_match_rate": 0.3262
+        "precision": 0.9926,
+        "recall": 0.3522,
+        "f1": 0.5199,
+        "accepted": 2150,
+        "false_match_rate": 0.001,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.94,
-        "precision": 0.8607,
-        "recall": 0.5105,
-        "f1": 0.6409,
-        "accepted": 3617,
-        "false_match_rate": 0.2386
+        "precision": 0.9928,
+        "recall": 0.3393,
+        "f1": 0.5058,
+        "accepted": 2071,
+        "false_match_rate": 0.0008,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.95,
-        "precision": 0.9079,
-        "recall": 0.4946,
-        "f1": 0.6403,
-        "accepted": 3322,
-        "false_match_rate": 0.1515
+        "precision": 0.9934,
+        "recall": 0.3235,
+        "f1": 0.488,
+        "accepted": 1973,
+        "false_match_rate": 0.0008,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.96,
-        "precision": 0.9576,
-        "recall": 0.4705,
-        "f1": 0.631,
-        "accepted": 2996,
-        "false_match_rate": 0.0605
+        "precision": 0.9979,
+        "recall": 0.3068,
+        "f1": 0.4693,
+        "accepted": 1863,
+        "false_match_rate": 0.0007,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.97,
-        "precision": 0.9864,
-        "recall": 0.4405,
-        "f1": 0.609,
-        "accepted": 2723,
-        "false_match_rate": 0.0143
+        "precision": 0.9983,
+        "recall": 0.2898,
+        "f1": 0.4492,
+        "accepted": 1759,
+        "false_match_rate": 0.0005,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.98,
-        "precision": 0.9952,
-        "recall": 0.4069,
-        "f1": 0.5776,
-        "accepted": 2493,
-        "false_match_rate": 0.0016
+        "precision": 0.9982,
+        "recall": 0.2702,
+        "f1": 0.4253,
+        "accepted": 1640,
+        "false_match_rate": 0.0005,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 0.99,
-        "precision": 0.9979,
-        "recall": 0.3111,
-        "f1": 0.4743,
-        "accepted": 1901,
-        "false_match_rate": 0.0007
+        "precision": 0.9987,
+        "recall": 0.2462,
+        "f1": 0.3951,
+        "accepted": 1494,
+        "false_match_rate": 0.0003,
+        "noise_match_rate": 0.0
       },
       {
         "threshold": 1.0,
         "precision": 1.0,
-        "recall": 0.0458,
-        "f1": 0.0875,
-        "accepted": 279,
-        "false_match_rate": 0.0
+        "recall": 0.0489,
+        "f1": 0.0932,
+        "accepted": 296,
+        "false_match_rate": 0.0,
+        "noise_match_rate": 0.0
       }
     ],
+    "window_level_recommended_tau_cover": {
+      "threshold": 0.8,
+      "precision": 0.9804,
+      "recall": 0.4532,
+      "f1": 0.6199,
+      "accepted": 2801,
+      "false_match_rate": 0.0043,
+      "noise_match_rate": 0.0
+    },
+    "runtime_protocol": {
+      "gallery_recordings": 24375,
+      "queries": 1900,
+      "skipped_queries": 0,
+      "accuracy@1": 0.8311,
+      "threshold_sweep": [
+        {
+          "threshold": 0.5,
+          "precision": 0.8746,
+          "recall": 0.8295,
+          "f1": 0.8514,
+          "accepted": 1802,
+          "false_match_rate": 0.6763,
+          "noise_match_rate": 0.6667
+        },
+        {
+          "threshold": 0.51,
+          "precision": 0.8783,
+          "recall": 0.8284,
+          "f1": 0.8527,
+          "accepted": 1792,
+          "false_match_rate": 0.6453,
+          "noise_match_rate": 0.6333
+        },
+        {
+          "threshold": 0.52,
+          "precision": 0.8845,
+          "recall": 0.8263,
+          "f1": 0.8544,
+          "accepted": 1775,
+          "false_match_rate": 0.6063,
+          "noise_match_rate": 0.6
+        },
+        {
+          "threshold": 0.53,
+          "precision": 0.8879,
+          "recall": 0.8253,
+          "f1": 0.8554,
+          "accepted": 1766,
+          "false_match_rate": 0.5784,
+          "noise_match_rate": 0.5333
+        },
+        {
+          "threshold": 0.54,
+          "precision": 0.8903,
+          "recall": 0.8242,
+          "f1": 0.856,
+          "accepted": 1759,
+          "false_match_rate": 0.5521,
+          "noise_match_rate": 0.5333
+        },
+        {
+          "threshold": 0.55,
+          "precision": 0.893,
+          "recall": 0.8216,
+          "f1": 0.8558,
+          "accepted": 1748,
+          "false_match_rate": 0.5332,
+          "noise_match_rate": 0.5333
+        },
+        {
+          "threshold": 0.56,
+          "precision": 0.8991,
+          "recall": 0.8205,
+          "f1": 0.858,
+          "accepted": 1734,
+          "false_match_rate": 0.5116,
+          "noise_match_rate": 0.4667
+        },
+        {
+          "threshold": 0.57,
+          "precision": 0.9032,
+          "recall": 0.8205,
+          "f1": 0.8599,
+          "accepted": 1726,
+          "false_match_rate": 0.4895,
+          "noise_match_rate": 0.4
+        },
+        {
+          "threshold": 0.58,
+          "precision": 0.9109,
+          "recall": 0.8179,
+          "f1": 0.8619,
+          "accepted": 1706,
+          "false_match_rate": 0.4637,
+          "noise_match_rate": 0.4
+        },
+        {
+          "threshold": 0.59,
+          "precision": 0.9146,
+          "recall": 0.8174,
+          "f1": 0.8633,
+          "accepted": 1698,
+          "false_match_rate": 0.4468,
+          "noise_match_rate": 0.4
+        },
+        {
+          "threshold": 0.6,
+          "precision": 0.9199,
+          "recall": 0.8163,
+          "f1": 0.865,
+          "accepted": 1686,
+          "false_match_rate": 0.4205,
+          "noise_match_rate": 0.4
+        },
+        {
+          "threshold": 0.61,
+          "precision": 0.923,
+          "recall": 0.8137,
+          "f1": 0.8649,
+          "accepted": 1675,
+          "false_match_rate": 0.3921,
+          "noise_match_rate": 0.3667
+        },
+        {
+          "threshold": 0.62,
+          "precision": 0.9262,
+          "recall": 0.8126,
+          "f1": 0.8657,
+          "accepted": 1667,
+          "false_match_rate": 0.3684,
+          "noise_match_rate": 0.3667
+        },
+        {
+          "threshold": 0.63,
+          "precision": 0.9339,
+          "recall": 0.8105,
+          "f1": 0.8679,
+          "accepted": 1649,
+          "false_match_rate": 0.3484,
+          "noise_match_rate": 0.3333
+        },
+        {
+          "threshold": 0.64,
+          "precision": 0.9367,
+          "recall": 0.8095,
+          "f1": 0.8684,
+          "accepted": 1642,
+          "false_match_rate": 0.3084,
+          "noise_match_rate": 0.3
+        },
+        {
+          "threshold": 0.65,
+          "precision": 0.9436,
+          "recall": 0.8095,
+          "f1": 0.8714,
+          "accepted": 1630,
+          "false_match_rate": 0.2821,
+          "noise_match_rate": 0.2667
+        },
+        {
+          "threshold": 0.66,
+          "precision": 0.9475,
+          "recall": 0.8074,
+          "f1": 0.8718,
+          "accepted": 1619,
+          "false_match_rate": 0.2505,
+          "noise_match_rate": 0.2667
+        },
+        {
+          "threshold": 0.67,
+          "precision": 0.9516,
+          "recall": 0.8074,
+          "f1": 0.8736,
+          "accepted": 1612,
+          "false_match_rate": 0.2184,
+          "noise_match_rate": 0.2
+        },
+        {
+          "threshold": 0.68,
+          "precision": 0.9556,
+          "recall": 0.8047,
+          "f1": 0.8737,
+          "accepted": 1600,
+          "false_match_rate": 0.2021,
+          "noise_match_rate": 0.1333
+        },
+        {
+          "threshold": 0.69,
+          "precision": 0.9579,
+          "recall": 0.8032,
+          "f1": 0.8737,
+          "accepted": 1593,
+          "false_match_rate": 0.1863,
+          "noise_match_rate": 0.1
+        },
+        {
+          "threshold": 0.7,
+          "precision": 0.9596,
+          "recall": 0.8,
+          "f1": 0.8726,
+          "accepted": 1584,
+          "false_match_rate": 0.1742,
+          "noise_match_rate": 0.0667
+        },
+        {
+          "threshold": 0.71,
+          "precision": 0.9607,
+          "recall": 0.7968,
+          "f1": 0.8711,
+          "accepted": 1576,
+          "false_match_rate": 0.1589,
+          "noise_match_rate": 0.0667
+        },
+        {
+          "threshold": 0.72,
+          "precision": 0.963,
+          "recall": 0.7947,
+          "f1": 0.8708,
+          "accepted": 1568,
+          "false_match_rate": 0.1489,
+          "noise_match_rate": 0.0333
+        },
+        {
+          "threshold": 0.73,
+          "precision": 0.9659,
+          "recall": 0.7911,
+          "f1": 0.8698,
+          "accepted": 1556,
+          "false_match_rate": 0.1363,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.74,
+          "precision": 0.9708,
+          "recall": 0.7879,
+          "f1": 0.8698,
+          "accepted": 1542,
+          "false_match_rate": 0.1263,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.75,
+          "precision": 0.9733,
+          "recall": 0.7863,
+          "f1": 0.8699,
+          "accepted": 1535,
+          "false_match_rate": 0.1116,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.76,
+          "precision": 0.977,
+          "recall": 0.7837,
+          "f1": 0.8697,
+          "accepted": 1524,
+          "false_match_rate": 0.0953,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.77,
+          "precision": 0.9782,
+          "recall": 0.78,
+          "f1": 0.8679,
+          "accepted": 1515,
+          "false_match_rate": 0.0847,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.78,
+          "precision": 0.9814,
+          "recall": 0.7774,
+          "f1": 0.8675,
+          "accepted": 1505,
+          "false_match_rate": 0.0684,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.79,
+          "precision": 0.9826,
+          "recall": 0.7747,
+          "f1": 0.8664,
+          "accepted": 1498,
+          "false_match_rate": 0.0642,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.8,
+          "precision": 0.9846,
+          "recall": 0.7732,
+          "f1": 0.8662,
+          "accepted": 1492,
+          "false_match_rate": 0.0568,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.81,
+          "precision": 0.9858,
+          "recall": 0.7679,
+          "f1": 0.8633,
+          "accepted": 1480,
+          "false_match_rate": 0.0511,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.82,
+          "precision": 0.9891,
+          "recall": 0.7611,
+          "f1": 0.8602,
+          "accepted": 1462,
+          "false_match_rate": 0.0453,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.83,
+          "precision": 0.9904,
+          "recall": 0.7574,
+          "f1": 0.8583,
+          "accepted": 1453,
+          "false_match_rate": 0.0395,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.84,
+          "precision": 0.9903,
+          "recall": 0.7526,
+          "f1": 0.8553,
+          "accepted": 1444,
+          "false_match_rate": 0.0374,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.85,
+          "precision": 0.9908,
+          "recall": 0.7405,
+          "f1": 0.8476,
+          "accepted": 1420,
+          "false_match_rate": 0.0326,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.86,
+          "precision": 0.9921,
+          "recall": 0.7305,
+          "f1": 0.8415,
+          "accepted": 1399,
+          "false_match_rate": 0.0226,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.87,
+          "precision": 0.9935,
+          "recall": 0.72,
+          "f1": 0.8349,
+          "accepted": 1377,
+          "false_match_rate": 0.0189,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.88,
+          "precision": 0.9941,
+          "recall": 0.71,
+          "f1": 0.8284,
+          "accepted": 1357,
+          "false_match_rate": 0.0137,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.89,
+          "precision": 0.994,
+          "recall": 0.7021,
+          "f1": 0.8229,
+          "accepted": 1342,
+          "false_match_rate": 0.0105,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.9,
+          "precision": 0.9946,
+          "recall": 0.6837,
+          "f1": 0.8104,
+          "accepted": 1306,
+          "false_match_rate": 0.0037,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.91,
+          "precision": 0.996,
+          "recall": 0.6584,
+          "f1": 0.7928,
+          "accepted": 1256,
+          "false_match_rate": 0.0026,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.92,
+          "precision": 0.9967,
+          "recall": 0.6368,
+          "f1": 0.7771,
+          "accepted": 1214,
+          "false_match_rate": 0.0021,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.93,
+          "precision": 0.9974,
+          "recall": 0.6132,
+          "f1": 0.7595,
+          "accepted": 1168,
+          "false_match_rate": 0.0016,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.94,
+          "precision": 0.9982,
+          "recall": 0.5726,
+          "f1": 0.7278,
+          "accepted": 1090,
+          "false_match_rate": 0.0011,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.95,
+          "precision": 0.998,
+          "recall": 0.5347,
+          "f1": 0.6964,
+          "accepted": 1018,
+          "false_match_rate": 0.0011,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.96,
+          "precision": 0.9979,
+          "recall": 0.5042,
+          "f1": 0.6699,
+          "accepted": 960,
+          "false_match_rate": 0.0011,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.97,
+          "precision": 0.9977,
+          "recall": 0.4663,
+          "f1": 0.6356,
+          "accepted": 888,
+          "false_match_rate": 0.0011,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.98,
+          "precision": 0.9975,
+          "recall": 0.4179,
+          "f1": 0.589,
+          "accepted": 796,
+          "false_match_rate": 0.0011,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 0.99,
+          "precision": 0.9986,
+          "recall": 0.3795,
+          "f1": 0.55,
+          "accepted": 722,
+          "false_match_rate": 0.0005,
+          "noise_match_rate": 0.0
+        },
+        {
+          "threshold": 1.0,
+          "precision": 1.0,
+          "recall": 0.0626,
+          "f1": 0.1179,
+          "accepted": 119,
+          "false_match_rate": 0.0,
+          "noise_match_rate": 0.0
+        }
+      ],
+      "recommended_tau_cover": {
+        "threshold": 0.9,
+        "precision": 0.9946,
+        "recall": 0.6837,
+        "f1": 0.8104,
+        "accepted": 1306,
+        "false_match_rate": 0.0037,
+        "noise_match_rate": 0.0
+      },
+      "tau_cover_meets_fmr_target": true,
+      "score_distribution": {
+        "top1_correct": {
+          "count": 1579,
+          "mean": 0.9428,
+          "max": 1.0,
+          "p05": 0.7365
+        },
+        "top1_wrong": {
+          "count": 321,
+          "mean": 0.5817,
+          "max": 0.9925,
+          "p95": 0.8167
+        },
+        "held_out_best": {
+          "count": 1900,
+          "mean": 0.5745,
+          "max": 0.9925,
+          "p95": 0.8108
+        },
+        "noise_best": {
+          "count": 30,
+          "mean": 0.4762,
+          "max": 0.7278
+        }
+      },
+      "latency_ms": {
+        "query_mean": 202.2,
+        "query_p95": 231.5
+      },
+      "per_transformation": {
+        "audio_overlay": {
+          "n": 100,
+          "accuracy@1": 0.84,
+          "mean_top1_score": 0.9028
+        },
+        "crop_10s": {
+          "n": 100,
+          "accuracy@1": 0.02,
+          "mean_top1_score": 0.5929
+        },
+        "crop_15s": {
+          "n": 100,
+          "accuracy@1": 0.02,
+          "mean_top1_score": 0.5878
+        },
+        "eq_lowpass_4k": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9961
+        },
+        "gain_minus12db": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.998
+        },
+        "mp3_128k": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9977
+        },
+        "mp3_64k": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9966
+        },
+        "noise_snr10": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9879
+        },
+        "noise_snr20": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9942
+        },
+        "noise_snr5": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9808
+        },
+        "original_crop30s": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9986
+        },
+        "pitch_minus_1": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9224
+        },
+        "pitch_minus_2": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9103
+        },
+        "pitch_plus_1": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9219
+        },
+        "pitch_plus_2": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9206
+        },
+        "tempo_0_90": {
+          "n": 100,
+          "accuracy@1": 0.27,
+          "mean_top1_score": 0.5738
+        },
+        "tempo_0_95": {
+          "n": 100,
+          "accuracy@1": 0.64,
+          "mean_top1_score": 0.6212
+        },
+        "tempo_1_05": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9245
+        },
+        "tempo_1_10": {
+          "n": 100,
+          "accuracy@1": 1.0,
+          "mean_top1_score": 0.9269
+        }
+      }
+    },
     "recommended_tau_cover": {
-      "threshold": 0.97,
-      "precision": 0.9864,
-      "recall": 0.4405,
-      "f1": 0.609,
-      "accepted": 2723,
-      "false_match_rate": 0.0143
+      "threshold": 0.9,
+      "precision": 0.9946,
+      "recall": 0.6837,
+      "f1": 0.8104,
+      "accepted": 1306,
+      "false_match_rate": 0.0037,
+      "noise_match_rate": 0.0
     },
     "tau_cover_meets_fmr_target": true,
+    "recommended_tau_cover_source": "runtime_protocol",
     "score_distribution": {
       "top1_correct": {
-        "count": 3619,
-        "mean": 0.9768,
-        "p05": 0.9
+        "count": 3786,
+        "mean": 0.8598,
+        "p05": 0.4625
       },
       "top1_wrong": {
-        "count": 2479,
-        "mean": 0.8936,
-        "p95": 0.9602
+        "count": 2273,
+        "mean": 0.4804,
+        "p95": 0.7209
       },
       "held_out_best": {
-        "count": 6098,
-        "mean": 0.8978,
-        "p95": 0.9614,
-        "max": 1.0
+        "count": 6059,
+        "mean": 0.4786,
+        "p95": 0.7046,
+        "max": 0.9951
+      },
+      "noise_best": {
+        "count": 30,
+        "mean": 0.3543,
+        "max": 0.5521
       }
     },
     "latency_ms": {
-      "descriptor_reference_mean": 153.0,
-      "descriptor_query_mean": 149.5,
-      "search_mean": 0.38,
-      "search_p95": 0.495
+      "descriptor_reference_mean": 133.5,
+      "descriptor_query_mean": 126.1,
+      "search_mean": 0.392,
+      "search_p95": 0.531
     },
     "per_transformation": {
       "audio_overlay": {
-        "n": 346,
-        "accuracy@1": 0.5491,
-        "oti_accuracy": 0.8844,
-        "mean_top1_score": 0.953
+        "n": 343,
+        "accuracy@1": 0.586,
+        "oti_accuracy": 0.8571,
+        "mean_top1_score": 0.7349
       },
       "crop_10s": {
         "n": 100,
-        "accuracy@1": 0.28,
-        "oti_accuracy": 0.88,
-        "mean_top1_score": 0.8973
+        "accuracy@1": 0.24,
+        "oti_accuracy": 0.96,
+        "mean_top1_score": 0.516
       },
       "crop_15s": {
         "n": 100,
         "accuracy@1": 1.0,
         "oti_accuracy": 1.0,
-        "mean_top1_score": 0.9999
+        "mean_top1_score": 0.9997
       },
       "eq_lowpass_4k": {
-        "n": 346,
-        "accuracy@1": 0.6821,
-        "oti_accuracy": 0.9306,
-        "mean_top1_score": 0.9577
+        "n": 343,
+        "accuracy@1": 0.691,
+        "oti_accuracy": 0.9184,
+        "mean_top1_score": 0.7998
       },
       "gain_minus12db": {
-        "n": 346,
-        "accuracy@1": 0.6821,
-        "oti_accuracy": 0.9364,
-        "mean_top1_score": 0.9586
+        "n": 343,
+        "accuracy@1": 0.6968,
+        "oti_accuracy": 0.9184,
+        "mean_top1_score": 0.8014
       },
       "mp3_128k": {
-        "n": 346,
-        "accuracy@1": 0.6792,
-        "oti_accuracy": 0.9306,
-        "mean_top1_score": 0.9578
+        "n": 343,
+        "accuracy@1": 0.6939,
+        "oti_accuracy": 0.9184,
+        "mean_top1_score": 0.7987
       },
       "mp3_64k": {
-        "n": 346,
-        "accuracy@1": 0.685,
-        "oti_accuracy": 0.9306,
-        "mean_top1_score": 0.9577
+        "n": 343,
+        "accuracy@1": 0.6939,
+        "oti_accuracy": 0.9184,
+        "mean_top1_score": 0.7967
       },
       "noise_snr10": {
-        "n": 346,
-        "accuracy@1": 0.6647,
-        "oti_accuracy": 0.9306,
-        "mean_top1_score": 0.9617
+        "n": 343,
+        "accuracy@1": 0.688,
+        "oti_accuracy": 0.9155,
+        "mean_top1_score": 0.7909
       },
       "noise_snr20": {
-        "n": 346,
-        "accuracy@1": 0.6763,
-        "oti_accuracy": 0.9306,
-        "mean_top1_score": 0.9591
+        "n": 343,
+        "accuracy@1": 0.6968,
+        "oti_accuracy": 0.9184,
+        "mean_top1_score": 0.7967
       },
       "noise_snr5": {
-        "n": 346,
-        "accuracy@1": 0.6387,
-        "oti_accuracy": 0.9191,
-        "mean_top1_score": 0.9635
+        "n": 343,
+        "accuracy@1": 0.691,
+        "oti_accuracy": 0.9125,
+        "mean_top1_score": 0.7828
       },
       "original_crop30s": {
-        "n": 346,
-        "accuracy@1": 0.6821,
-        "oti_accuracy": 0.9364,
-        "mean_top1_score": 0.9589
+        "n": 343,
+        "accuracy@1": 0.6968,
+        "oti_accuracy": 0.9184,
+        "mean_top1_score": 0.8013
       },
       "pitch_minus_1": {
-        "n": 346,
-        "accuracy@1": 0.6561,
-        "oti_accuracy": 0.922,
-        "mean_top1_score": 0.949
+        "n": 343,
+        "accuracy@1": 0.6793,
+        "oti_accuracy": 0.9096,
+        "mean_top1_score": 0.744
       },
       "pitch_minus_2": {
-        "n": 346,
-        "accuracy@1": 0.659,
-        "oti_accuracy": 0.9191,
-        "mean_top1_score": 0.9468
+        "n": 343,
+        "accuracy@1": 0.6793,
+        "oti_accuracy": 0.9184,
+        "mean_top1_score": 0.7329
       },
       "pitch_plus_1": {
-        "n": 346,
-        "accuracy@1": 0.6647,
-        "oti_accuracy": 0.9133,
-        "mean_top1_score": 0.9489
+        "n": 343,
+        "accuracy@1": 0.6764,
+        "oti_accuracy": 0.9096,
+        "mean_top1_score": 0.7412
       },
       "pitch_plus_2": {
-        "n": 346,
-        "accuracy@1": 0.659,
-        "oti_accuracy": 0.9104,
-        "mean_top1_score": 0.9482
+        "n": 343,
+        "accuracy@1": 0.6793,
+        "oti_accuracy": 0.9125,
+        "mean_top1_score": 0.7365
       },
       "tempo_0_90": {
         "n": 400,
-        "accuracy@1": 0.25,
-        "oti_accuracy": 0.8425,
-        "mean_top1_score": 0.8952
+        "accuracy@1": 0.36,
+        "oti_accuracy": 0.89,
+        "mean_top1_score": 0.5067
       },
       "tempo_0_95": {
         "n": 400,
-        "accuracy@1": 0.44,
-        "oti_accuracy": 0.8875,
-        "mean_top1_score": 0.9032
+        "accuracy@1": 0.4525,
+        "oti_accuracy": 0.885,
+        "mean_top1_score": 0.541
       },
       "tempo_1_05": {
         "n": 300,
-        "accuracy@1": 0.5133,
-        "oti_accuracy": 0.92,
-        "mean_top1_score": 0.9098
+        "accuracy@1": 0.5667,
+        "oti_accuracy": 0.9167,
+        "mean_top1_score": 0.5674
       },
       "tempo_1_10": {
         "n": 300,
-        "accuracy@1": 0.31,
-        "oti_accuracy": 0.88,
-        "mean_top1_score": 0.902
+        "accuracy@1": 0.44,
+        "oti_accuracy": 0.92,
+        "mean_top1_score": 0.5213
       }
     }
   },
-  "notes": "KHÔNG phải thí nghiệm cover thật: repo chưa có bản thu cover nào (§8 yêu cầu subset SecondHandSongs, 100–200 composition × 2–5 version). Thí nghiệm này đo tính BẤT BIẾN VỚI DỊCH CAO ĐỘ và đổi tốc độ — cơ chế cốt lõi mà một hệ cover dựa vào, tức điều kiện CẦN chứ không phải điều kiện đủ. τCover đề xuất ở đây hiệu chỉnh trên reference là cửa sổ của 60 bản ghi nguồn. Chroma là đặc trưng thô: số ứng viên tăng lên thì dương tính giả tăng nhanh, nên trước khi nối tầng này vào cascade vẫn phải có một thí nghiệm unknown-detection riêng cho nó, tương tự EXP-06 của tầng MERT."
+  "notes": "KHÔNG phải thí nghiệm cover thật: repo chưa có bản thu cover nào (§8 yêu cầu subset SecondHandSongs, 100–200 composition × 2–5 version). Thí nghiệm này đo tính BẤT BIẾN VỚI DỊCH CAO ĐỘ và đổi tốc độ — cơ chế cốt lõi mà một hệ cover dựa vào, tức điều kiện CẦN chứ không phải điều kiện đủ. `recommended_tau_cover` lấy từ `runtime_protocol` khi đã có chỉ mục cover: truy vấn và reference cùng quy ước với server, và bài ngoài CSDL phải thắng cả chỉ mục chứ không chỉ vài chục bài nguồn. Ngưỡng cấp cửa sổ (reference = 100 bài nguồn) lạc quan hơn vì có ít ứng viên để nhận nhầm."
 }
