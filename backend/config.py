@@ -69,9 +69,13 @@ def _path(key: str, default: str) -> str:
 # --------------------------------------------------------------------------
 # Database
 # --------------------------------------------------------------------------
+# Không còn mật khẩu mặc định viết cứng trong mã nguồn. Thiếu biến này thì kết nối
+# thất bại ngay, main.py ghi lỗi rõ lúc khởi động và /health báo DEGRADED — thay vì
+# âm thầm thử một mật khẩu mặc định công khai. Không ném lỗi lúc import: pytest và
+# các script không cần CSDL vẫn phải import được backend.
 DATABASE_URL = _get(
     "DATABASE_URL",
-    "postgresql://postgres:postgrespassword@localhost:5432/music_rights_ai",
+    "postgresql://postgres@localhost:5432/music_rights_ai",
 )
 
 # --------------------------------------------------------------------------

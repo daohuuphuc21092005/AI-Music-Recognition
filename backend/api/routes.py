@@ -60,6 +60,28 @@ def api_error(code: str, message: str) -> HTTPException:
     )
 
 
+def parse_uuid(value, what: str = "Mã") -> str:
+    """
+    Kiểm dạng UUID TRƯỚC khi chạm CSDL: `/jobs/abc` từng làm PostgreSQL ném lỗi ép
+    kiểu và trả về một trang 500 trơn, không theo khuôn mã lỗi (§12).
+    """
+    try:
+        return str(uuid.UUID(str(value)))
+    except (ValueError, AttributeError, TypeError):
+        raise api_error("UNKNOWN_TRACK", f"{what} không phải UUID hợp lệ: {str(value)[:64]}") from None
+
+
+def safe_mark_failed(db, job_id: str, code: str, message: str) -> None:
+    """
+    Ghi FAILED mà không để chính việc ghi làm hỏng luồng xử lý lỗi: khi CSDL sập,
+    mark_failed cũng ném lỗi ngay trong khối except và job treo PROCESSING mãi.
+    """
+    try:
+        job_service.mark_failed(db, job_id, code, message)
+    except Exception as e:
+        logger.error("job=%s khong ghi duoc trang thai FAILED [%s]: %s", job_id, code, e)
+
+
 def save_upload(file: UploadFile) -> str:
     """Lưu file với tên do server sinh — không tin tên file của client."""
     os.makedirs(config.TEMP_UPLOAD_DIR, exist_ok=True)
@@ -108,11 +130,11 @@ def run_job(job_id: str, audio_path: str, filename: str, usage_context: dict,
         )
     except (AudioProcessingError, PipelineError) as e:
         logger.info("job=%s that bai [%s]: %s", job_id, e.code, e.message)
-        job_service.mark_failed(db, job_id, e.code, e.message)
+        safe_mark_failed(db, job_id, e.code, e.message)
     except Exception as e:
         logger.exception("job=%s loi khong luong truoc: %s", job_id, e)
-        job_service.mark_failed(db, job_id, "INTERNAL_ERROR",
-                                "Loi noi bo khi xu ly file. Xem log may chu.")
+        safe_mark_failed(db, job_id, "INTERNAL_ERROR",
+                         "Loi noi bo khi xu ly file. Xem log may chu.")
     finally:
         db.close()
         cleanup(audio_path)
@@ -120,7 +142,7 @@ def run_job(job_id: str, audio_path: str, filename: str, usage_context: dict,
 
 @router.post("/analyze", response_model=AnalyzeAccepted, status_code=202,
              tags=["Music Identification"])
-async def analyze(
+def analyze(
     background_tasks: BackgroundTasks,
     request: Request,
     file: UploadFile = File(..., description="File audio hoặc video cần phân tích"),
@@ -157,7 +179,7 @@ async def analyze(
 
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse, tags=["Jobs"])
 def get_job_status(job_id: str, db: Session = Depends(get_db)):
-    job = job_service.get_job(db, job_id)
+    job = job_service.get_job(db, parse_uuid(job_id, "job_id"))
     if not job:
         raise api_error("UNKNOWN_TRACK", f"Không tìm thấy job {job_id}")
     return JobStatusResponse(
@@ -174,7 +196,7 @@ def get_job_status(job_id: str, db: Session = Depends(get_db)):
 
 @router.get("/results/{job_id}", tags=["Jobs"])
 def get_job_result(job_id: str, db: Session = Depends(get_db)):
-    job = job_service.get_job(db, job_id)
+    job = job_service.get_job(db, parse_uuid(job_id, "job_id"))
     if not job:
         raise api_error("UNKNOWN_TRACK", f"Không tìm thấy job {job_id}")
 
@@ -191,7 +213,7 @@ def get_job_result(job_id: str, db: Session = Depends(get_db)):
 
 @router.get("/tracks/{recording_id}", tags=["Copyright & Licensing"])
 def get_track(recording_id: str, db: Session = Depends(get_db)):
-    result = get_full_music_rights(str(recording_id), db)
+    result = get_full_music_rights(parse_uuid(recording_id, "recording_id"), db)
     if result.get("status") == "NOT_FOUND":
         raise api_error("UNKNOWN_TRACK", result["message"])
     return result
@@ -199,9 +221,10 @@ def get_track(recording_id: str, db: Session = Depends(get_db)):
 
 @router.post("/feedback", response_model=FeedbackResponse, tags=["Feedback"])
 def submit_feedback(payload: FeedbackRequest, db: Session = Depends(get_db)):
-    recording_id = payload.recording_id
+    recording_id = (parse_uuid(payload.recording_id, "recording_id")
+                    if payload.recording_id else None)
     if payload.job_id:
-        job = job_service.get_job(db, payload.job_id)
+        job = job_service.get_job(db, parse_uuid(payload.job_id, "job_id"))
         if not job:
             raise api_error("UNKNOWN_TRACK", f"Không tìm thấy job {payload.job_id}")
         if not recording_id and job.result:
@@ -220,7 +243,7 @@ def submit_feedback(payload: FeedbackRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/search", tags=["Music Identification"])
-async def search_music(request: Request, file: UploadFile = File(...),
+def search_music(request: Request, file: UploadFile = File(...),
                        platform: Platform = Form(Platform.YOUTUBE),
                        commercial_use: bool = Form(False),
                        monetization: bool = Form(False),

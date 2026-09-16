@@ -69,22 +69,42 @@ def load_model():
     return _processor, _model
 
 
+class EmbeddingModelError(RuntimeError):
+    """Lỗi phía MÁY CHỦ: không nạp được hoặc không chạy được model MERT."""
+
+
+class EmbeddingAudioError(RuntimeError):
+    """Lỗi phía FILE: không giải mã được thành tín hiệu âm thanh dùng được."""
+
+
 def extract_mert_embedding(audio_path: str, target_sr: int = None,
                            max_duration: float = None):
     """
-    Trả vector 768 chiều đã chuẩn hoá L2 (mean pooling theo trục thời gian),
-    hoặc None nếu không xử lý được file.
+    Trả vector 768 chiều đã chuẩn hoá L2 (mean pooling theo trục thời gian).
+
+    Ném `EmbeddingAudioError` nếu file không giải mã được, `EmbeddingModelError`
+    nếu model không nạp/không chạy được. Bản cũ nuốt MỌI lỗi rồi trả None, nên
+    một lần tải model thất bại hay GPU hết bộ nhớ hiện ra với người dùng là
+    "file không có audio" — đổ lỗi sai chỗ và che mất sự cố thật trên máy chủ.
     """
     target_sr = target_sr or config.MERT_SAMPLE_RATE
     max_duration = max_duration or config.MERT_MAX_DURATION
 
     try:
         processor, model = load_model()
+    except Exception as e:
+        raise EmbeddingModelError(f"Không nạp được model {MODEL_NAME}: {type(e).__name__}") from e
 
+    try:
         audio_array, _ = librosa.load(
             audio_path, sr=target_sr, mono=True, duration=max_duration
         )
+    except Exception as e:
+        raise EmbeddingAudioError(f"Không giải mã được audio: {type(e).__name__}") from e
+    if audio_array is None or len(audio_array) == 0:
+        raise EmbeddingAudioError("File không chứa tín hiệu âm thanh.")
 
+    try:
         inputs = processor(
             audio_array, sampling_rate=target_sr, return_tensors="pt"
         ).to(get_device())
@@ -101,11 +121,9 @@ def extract_mert_embedding(audio_path: str, target_sr: int = None,
             norm_embedding = torch.nn.functional.normalize(track_embedding, p=2, dim=1)
 
             result_vector = norm_embedding.squeeze().cpu().numpy()
-
-        del inputs, outputs, embeddings, track_embedding, norm_embedding, audio_array
-        gc.collect()
-
-        return result_vector
     except Exception as e:
-        print(f"Lỗi extract MERT embedding: {e}")
-        return None
+        raise EmbeddingModelError(f"Suy luận MERT thất bại: {type(e).__name__}") from e
+
+    del inputs, outputs, embeddings, track_embedding, norm_embedding, audio_array
+    gc.collect()
+    return result_vector

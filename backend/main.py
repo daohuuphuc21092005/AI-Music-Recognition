@@ -15,7 +15,8 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend import config
@@ -67,6 +68,11 @@ async def lifespan(app: FastAPI):
 
     db_ok, db_msg = check_connection()
     logger.info("Database: %s", db_msg)
+    if not os.getenv("DATABASE_URL"):
+        logger.error(
+            "DATABASE_URL chua duoc dat (xem .env.example). Ma nguon KHONG con mat "
+            "khau mac dinh viet cung, nen may chu se o trang thai DEGRADED."
+        )
 
     if not fingerprint_service.is_available():
         logger.warning(
@@ -92,6 +98,21 @@ app = FastAPI(
 app.include_router(router)
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception(request: Request, exc: Exception):
+    """
+    Lưới an toàn cuối: lỗi không lường trước vẫn trả đúng khuôn của api_error
+    ({"detail": {"error_code", "message"}}); chi tiết chỉ nằm trong log máy chủ (§12).
+    Trước đây client nhận trang "Internal Server Error" trơn, không có mã lỗi.
+    """
+    logger.exception("Loi khong luong truoc tai %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": {"error_code": "INTERNAL_ERROR",
+                            "message": "Lỗi nội bộ máy chủ. Chi tiết đã được ghi vào log."}},
+    )
+
+
 @app.get("/health", tags=["Health Check"])
 def health_check():
     """Báo trạng thái từng thành phần — không che giấu thành phần đang hỏng."""
@@ -104,11 +125,14 @@ def health_check():
             "status": "READY" if vector_index else "UNAVAILABLE",
             "total_vectors": vector_index.ntotal if vector_index else 0,
             "total_recordings": vector_index.n_recordings if vector_index else 0,
-            "error": getattr(app.state, "index_error", None),
+            # Chỉ báo CÓ lỗi; nội dung lỗi chứa đường dẫn trên máy chủ nên để trong log
+            "error": "INDEX_LOAD_FAILED" if getattr(app.state, "index_error", None) else None,
         },
         "chromaprint": {
             "status": "AVAILABLE" if fingerprint_service.is_available() else "MISSING",
-            **fingerprint_service.backend_status(),
+            # Bỏ fpcalc_path: đường dẫn tuyệt đối chứa cả tên người dùng Windows
+            **{key: value for key, value in fingerprint_service.backend_status().items()
+               if key != "fpcalc_path"},
         },
         "ffmpeg": "AVAILABLE" if audio_service.ffmpeg_available() else "MISSING (chi audio)",
         "mert": {
@@ -118,7 +142,7 @@ def health_check():
         "rule_engine": {
             "status": "READY" if getattr(app.state, "rules_version", None) else "UNAVAILABLE",
             "version": getattr(app.state, "rules_version", None),
-            "error": getattr(app.state, "rules_error", None),
+            "error": "RULES_LOAD_FAILED" if getattr(app.state, "rules_error", None) else None,
         },
         "cover": {
             "status": "READY" if os.path.exists(config.COVER_INDEX_PATH) else "STANDBY",

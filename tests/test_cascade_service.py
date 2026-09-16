@@ -225,3 +225,67 @@ def test_cascade_cover_disabled_flag(monkeypatch):
     assert result["pipeline_stage"] == "STAGE_2_MERT_RETRIEVAL"
     assert result["match_type"] == "UNKNOWN"
     assert result["evidence"]["cover"] is None
+
+
+def test_file_hong_o_tang_1_tra_no_audio(monkeypatch):
+    """fpcalc không đọc được file -> NO_AUDIO, không để thoát ra thành INTERNAL_ERROR."""
+    from unittest.mock import MagicMock
+    from backend.services import cascade_service
+    from backend.services.fingerprint_service import AudioFingerprintError
+
+    def fpcalc_hong(db, path):
+        raise AudioFingerprintError(r"Không đọc được luồng audio: C:\Users\ai-do\temp\x.mp3")
+
+    monkeypatch.setattr(cascade_service, "search_fingerprint", fpcalc_hong)
+    with pytest.raises(PipelineError) as exc:
+        process_music_query("hong.mp3", db=None, vector_index=MagicMock(ntotal=1))
+    assert exc.value.code == "NO_AUDIO"
+    assert "C:\\" not in exc.value.message
+
+
+@pytest.mark.parametrize("error_name, expected_code", [
+    ("EmbeddingAudioError", "NO_AUDIO"),
+    ("EmbeddingModelError", "MODEL_FAILURE"),
+])
+def test_loi_mert_duoc_quy_dung_cho(monkeypatch, error_name, expected_code):
+    """Lỗi FILE và lỗi MÁY CHỦ phải ra hai mã khác nhau (§12) — bản cũ gộp cả hai thành NO_AUDIO."""
+    from unittest.mock import MagicMock
+    from backend.services import cascade_service, embedding_service
+
+    error_cls = getattr(embedding_service, error_name)
+
+    def mert_hong(path, **kw):
+        raise error_cls("loi gia lap")
+
+    monkeypatch.setattr(cascade_service, "search_fingerprint",
+                        lambda db, path: {"match_type": "NOT_FOUND", "fingerprint_score": 0.02})
+    monkeypatch.setattr(cascade_service, "extract_mert_embedding", mert_hong)
+    with pytest.raises(PipelineError) as exc:
+        process_music_query("x.mp3", db=None, vector_index=MagicMock(ntotal=1))
+    assert exc.value.code == expected_code
+
+
+def test_loi_tang_cover_khong_lo_noi_dung_ngoai_le(monkeypatch):
+    """Nội dung ngoại lệ tầng Cover (có thể chứa đường dẫn máy chủ) chỉ vào log."""
+    from unittest.mock import MagicMock
+    from backend.services import cascade_service
+
+    monkeypatch.setattr(config, "COVER_ENABLED", True)
+    monkeypatch.setattr(cascade_service, "search_fingerprint",
+                        lambda db, path: {"match_type": "NOT_FOUND", "fingerprint_score": 0.02})
+    monkeypatch.setattr(cascade_service, "extract_mert_embedding", lambda path, **kw: [0.1] * 768)
+    monkeypatch.setattr(
+        cascade_service, "search_recordings",
+        lambda idx, vec, top_k: ([{"recording_id": "rec_1", "similarity_score": 0.5}], {}),
+    )
+
+    def cover_hong(**kw):
+        raise FileNotFoundError(r"D:\music-rights-data\audio\bi-mat.npy")
+
+    monkeypatch.setattr(cascade_service.cover_service, "identify_cover", cover_hong)
+    index = MagicMock(ntotal=10, n_recordings=5, meta={"model_version": "v1"})
+    result = process_music_query("x.mp3", db=None, vector_index=index)
+
+    assert result["match_type"] == "UNKNOWN"
+    assert result["evidence"]["cover"]["error"] == "COVER_STAGE_FAILED"
+    assert "music-rights-data" not in str(result["evidence"])

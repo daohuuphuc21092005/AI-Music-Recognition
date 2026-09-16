@@ -48,6 +48,18 @@ Mọi logic nghiệp vụ phải được tổ chức trong các service độc 
 }
 ```
 
+**Khuôn lỗi thực tế trên dây**: FastAPI bọc trong `detail` → `{"detail": {"error_code": "...", "message": "..."}}`. Frontend (`apiError` trong `frontend/app.js`) và `tests/test_api.py` đọc đúng khuôn này — đổi khuôn thì phải sửa cả hai.
+
+### Cách backend giữ cam kết "không lộ thông tin nội bộ"
+- **Lưới an toàn toàn cục** (`backend/main.py::unhandled_exception`): mọi ngoại lệ không lường trước → HTTP 500 `INTERNAL_ERROR` cùng khuôn trên; chi tiết chỉ nằm trong log máy chủ.
+- **Kiểm UUID trước khi chạm CSDL** (`routes.parse_uuid`): `job_id` / `recording_id` sai dạng → 404 `UNKNOWN_TRACK`, không để PostgreSQL ném lỗi ép kiểu.
+- **Lỗi FILE và lỗi MÁY CHỦ phải ra hai mã khác nhau**: `embedding_service` ném `EmbeddingAudioError` (file không giải mã được → `NO_AUDIO`) hoặc `EmbeddingModelError` (không nạp/chạy được MERT → `MODEL_FAILURE`); không còn trả `None`. `fpcalc` không đọc được file (`AudioFingerprintError`) → `NO_AUDIO`.
+- **Không đưa nội dung ngoại lệ ra response**: stderr của FFmpeg và lỗi tầng Cover chỉ ghi log; evidence của Cover chỉ mang mã `COVER_STAGE_FAILED`.
+- **`/health` là endpoint công khai**: không trả `fpcalc_path` hay nội dung lỗi nạp index/rules — chỉ mã `INDEX_LOAD_FAILED` / `RULES_LOAD_FAILED`.
+- **Ghi FAILED không được làm hỏng luồng lỗi** (`routes.safe_mark_failed`): CSDL sập thì ghi log, không ném tiếp.
+- **Không có mật khẩu CSDL mặc định trong mã nguồn**: thiếu `DATABASE_URL` thì kết nối thất bại, log khởi động báo rõ và `/health` ra `DEGRADED`.
+- Endpoint gọi mã chặn (`/analyze`, `/search`) khai báo `def` chứ không `async def`, để FastAPI đẩy sang threadpool thay vì chặn event loop.
+
 ### Danh mục mã lỗi bắt buộc:
 - **`FILE_TOO_LARGE`**: Kích thước file vượt quá giới hạn cấu hình (ví dụ: > 100MB).
 - **`UNSUPPORTED_FORMAT`**: Định dạng file không nằm trong danh sách hỗ trợ.
@@ -58,6 +70,7 @@ Mọi logic nghiệp vụ phải được tổ chức trong các service độc 
 - **`TIMEOUT`**: Thời gian xử lý tác vụ vượt quá ngưỡng timeout quy định.
 - **`UNKNOWN_TRACK`**: Không tìm thấy bản ghi tương đồng nào trong cơ sở dữ liệu.
 - **`LOW_CONFIDENCE`**: Độ tương đồng hoặc chất lượng tín hiệu quá thấp để đưa ra quyết định an toàn.
+- **`INTERNAL_ERROR`**: Lỗi không lường trước (HTTP 500). Thông báo chung, chi tiết chỉ nằm trong log máy chủ.
 
 ---
 

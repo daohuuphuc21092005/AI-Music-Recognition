@@ -31,7 +31,7 @@ from sqlalchemy import text
 
 from backend import config
 from backend.database.session import SessionLocal
-from backend.services.embedding_service import extract_mert_embedding
+from backend.services.embedding_service import EmbeddingAudioError, extract_mert_embedding
 from backend.services.fingerprint_service import (
     _decode_array,
     extract_query_fingerprint,
@@ -86,8 +86,11 @@ def fingerprint_stage(query_path, reference):
 
 def mert_stage(query_path, vector_index):
     start = time.perf_counter()
-    vector = extract_mert_embedding(query_path)
-    if vector is None:
+    try:
+        vector = extract_mert_embedding(query_path)
+    except EmbeddingAudioError:
+        # File truy vấn không giải mã được: tính là không nhận diện được. Lỗi MODEL
+        # thì để nổi lên — lặng lẽ đếm nó thành "trượt" sẽ làm sai số liệu thí nghiệm.
         return {"recording_id": None, "score": 0.0, "accepted": False,
                 "latency_ms": (time.perf_counter() - start) * 1000}
 

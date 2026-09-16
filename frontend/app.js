@@ -64,6 +64,17 @@ function escapeHtml(value) {
   }[ch]));
 }
 
+// Chỉ nhận liên kết http(s). Một giá trị kiểu "javascript:..." trong dữ liệu nguồn
+// sẽ chạy mã khi người dùng bấm vào nếu đưa thẳng vào href.
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value));
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 function show(value, { yes = 'Có', no = 'Không', empty = '—' } = {}) {
   if (value === null || value === undefined || value === '') return empty;
   if (value === true) return yes;
@@ -305,19 +316,22 @@ async function pollJob() {
 
 async function loadResult() {
   stopPolling();
-  const response = await fetch(`${API}/results/${state.jobId}`);
-  if (!response.ok) {
+  try {
+    const response = await fetch(`${API}/results/${state.jobId}`);
+    if (!response.ok) throw new Error(await apiError(response));
+    state.result = await response.json();
+    markAllStagesDone(state.result);
+    renderResult(state.result);
+    renderEvidence(state.result);
+    showScreen('result');
+  } catch (err) {
+    // Lỗi mạng, JSON hỏng hay lỗi khi dựng màn hình: trước đây không được bắt nên
+    // màn Processing đứng yên mãi, người dùng không biết chuyện gì xảy ra.
     const box = $('#upload-error');
-    box.textContent = await apiError(response);
+    box.textContent = err.message || 'Không tải được kết quả phân tích.';
     box.hidden = false;
     showScreen('upload');
-    return;
   }
-  state.result = await response.json();
-  markAllStagesDone(state.result);
-  renderResult(state.result);
-  renderEvidence(state.result);
-  showScreen('result');
 }
 
 /* ─────────────────────────── Màn 3: Result ─────────────────────────── */
@@ -347,6 +361,11 @@ function renderResult(result) {
   ]);
 
   dl($('#rights-list'), [
+    // Quyền SUY ĐOÁN từ âm thanh và quyền TRA CỨU phải trình bày khác hẳn nhau
+    // (§2.4) — backend đã có cờ `predicted` nhưng màn hình trước đây không hiện.
+    ['Nguồn gốc giấy phép', rights.predicted
+      ? 'SUY ĐOÁN bởi mô hình từ âm thanh — không phải tra cứu, cần người kiểm tra'
+      : (rights.rights_found ? 'Tra cứu từ cơ sở dữ liệu quyền' : null)],
     ['Giấy phép', rights.license],
     ['Trạng thái bản quyền', rights.copyright_status],
     ['Bắt buộc ghi nguồn', rights.attribution_required],
@@ -462,9 +481,10 @@ function renderEvidence(result) {
   dl($('#ev-source'), [
     ['Nguồn metadata quyền', rightsRecord.source],
     ['Đường dẫn nguồn', null, {
-      html: rightsRecord.source_url
-        ? `<a href="${rightsRecord.source_url}" target="_blank" rel="noopener">${rightsRecord.source_url}</a>`
-        : '—',
+      // source_url đến từ dữ liệu nguồn ngoài: thoát ký tự và chỉ nhận http(s)
+      html: safeHttpUrl(rightsRecord.source_url)
+        ? `<a href="${escapeHtml(rightsRecord.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(rightsRecord.source_url)}</a>`
+        : escapeHtml(rightsRecord.source_url || '—'),
     }],
     ['Ngày xác minh', rightsRecord.verified_at],
     ['Phạm vi quyền', rightsRecord.rights_scope],

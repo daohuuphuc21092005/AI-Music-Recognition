@@ -14,18 +14,26 @@ Ba điểm khác bản cũ:
   3. Luôn kèm `evidence` + `identity_confidence` tách bạch, không trả một con
      số "độ tin cậy" duy nhất (§2).
 """
+import logging
 import time
 
 from sqlalchemy.orm import Session
 
 from backend import config
-from backend.services.embedding_service import extract_mert_embedding
+from backend.services.embedding_service import (
+    EmbeddingAudioError,
+    EmbeddingModelError,
+    extract_mert_embedding,
+)
 from backend.services.fingerprint_service import (
+    AudioFingerprintError,
     FingerprintBackendUnavailable,
     search_fingerprint,
 )
 from backend.services import cover_service, license_classifier_service
 from backend.services.retrieval_service import search_recordings
+
+logger = logging.getLogger("music_rights_ai")
 
 
 class PipelineError(RuntimeError):
@@ -89,6 +97,14 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
             "reason_code": "FPCALC_MISSING",
             "message": str(e),
         }
+    except AudioFingerprintError as e:
+        # File qua được kiểm tra đuôi nhưng không giải mã được: trước đây lỗi này
+        # thoát ra thành INTERNAL_ERROR, che mất nguyên nhân thật là file hỏng.
+        logger.info("fpcalc khong doc duoc %s: %s", audio_path, e)
+        raise PipelineError(
+            "NO_AUDIO",
+            "Không đọc được luồng âm thanh của file (file hỏng hoặc không chứa audio).",
+        ) from e
     timings["fingerprint_ms"] = round((time.perf_counter() - t0) * 1000, 2)
 
     if fp_result.get("match_type") == "EXACT_MATCH":
@@ -123,14 +139,20 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
 
     report("EMBEDDING")
     t1 = time.perf_counter()
-    query_vector = extract_mert_embedding(
-        mert_audio_path,
-        target_sr=config.MERT_SAMPLE_RATE,
-        max_duration=config.MERT_MAX_DURATION,
-    )
+    try:
+        query_vector = extract_mert_embedding(
+            mert_audio_path,
+            target_sr=config.MERT_SAMPLE_RATE,
+            max_duration=config.MERT_MAX_DURATION,
+        )
+    except EmbeddingAudioError as e:
+        raise PipelineError("NO_AUDIO", "Không trích xuất được tín hiệu âm thanh từ file.") from e
+    except EmbeddingModelError as e:
+        # Lỗi phía MÁY CHỦ (nạp/chạy model), không phải lỗi của file người dùng —
+        # trước đây cũng hiện ra là NO_AUDIO, tức đổ lỗi sai chỗ.
+        logger.exception("MERT loi: %s", e)
+        raise PipelineError("MODEL_FAILURE", "Model MERT không chạy được trên máy chủ.") from e
     timings["embedding_ms"] = round((time.perf_counter() - t1) * 1000, 2)
-    if query_vector is None:
-        raise PipelineError("NO_AUDIO", "Không trích xuất được embedding từ file audio.")
 
     report("VECTOR_SEARCH")
     t2 = time.perf_counter()
@@ -207,7 +229,10 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
                         },
                     }
             except Exception as e:
-                cover_evidence = {"error": str(e), "threshold": config.COVER_THRESHOLD}
+                # Nội dung lỗi có thể chứa đường dẫn trên máy chủ -> chỉ vào log
+                logger.exception("Tang Cover loi: %s", e)
+                cover_evidence = {"error": "COVER_STAGE_FAILED",
+                                  "threshold": config.COVER_THRESHOLD}
 
         # KHÔNG ép thành NEAR_MATCH (§2): thiếu bằng chứng thì trả UNKNOWN.
         #

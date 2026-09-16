@@ -13,12 +13,15 @@ Hai điều đã kiểm chứng trên môi trường thật và định hình th
 Nhờ vậy hệ thống chạy được cả khi máy không có FFmpeg — chỉ mất khả năng xử lý
 video, và điều đó được báo rõ bằng mã lỗi thay vì hỏng âm thầm.
 """
+import logging
 import os
 import shutil
 import subprocess
 from functools import lru_cache
 
 from backend import config
+
+logger = logging.getLogger("music_rights_ai")
 
 VIDEO_EXTENSIONS = (".mp4", ".mkv", ".mov", ".webm", ".avi", ".flv", ".wmv", ".m4v")
 
@@ -97,9 +100,11 @@ def extract_and_normalize_audio(input_file_path: str, output_dir: str = None) ->
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     if proc.returncode != 0 or not os.path.exists(output_wav_path):
+        # stderr của FFmpeg chứa đường dẫn tuyệt đối trên máy chủ -> chỉ ghi log
         detail = proc.stderr.decode("utf-8", errors="replace").strip()[-300:]
+        logger.warning("FFmpeg that bai (%s): %s", input_file_path, detail)
         raise AudioProcessingError(
-            "NO_AUDIO", f"FFmpeg không tách được luồng âm thanh. {detail}"
+            "NO_AUDIO", "FFmpeg không tách được luồng âm thanh từ file video."
         )
     return output_wav_path
 

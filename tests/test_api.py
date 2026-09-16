@@ -119,3 +119,41 @@ def test_feedback_endpoint(client):
 def test_feedback_tu_choi_verdict_la(client):
     response = client.post("/api/v1/feedback", json={"verdict": "Maybe"})
     assert response.status_code == 422  # pydantic chặn từ đầu
+
+
+def test_health_khong_lo_duong_dan_may_chu(client):
+    """/health là endpoint công khai: không được chứa đường dẫn tuyệt đối hay nội dung ngoại lệ."""
+    body = client.get("/health").json()
+    text = str(body)
+    assert "fpcalc_path" not in text
+    assert ":\\\\" not in text and ":/" not in text.replace("://", "")
+    for component in ("faiss", "rule_engine"):
+        assert body["components"][component].get("error") in (
+            None, "INDEX_LOAD_FAILED", "RULES_LOAD_FAILED")
+
+
+@requires_db
+@pytest.mark.parametrize("path", ["/api/v1/jobs/abc", "/api/v1/results/abc"])
+def test_job_id_sai_dang_tra_ma_loi_chuan(client, path):
+    """Trước đây chuỗi không phải UUID chạm thẳng PostgreSQL và ra trang 500 trơn."""
+    response = client.get(path)
+    assert response.status_code == 404
+    detail = response.json()["detail"]
+    assert detail["error_code"] == "UNKNOWN_TRACK"
+    assert "Traceback" not in str(detail)
+
+
+def test_loi_khong_luong_truoc_van_dung_khuon_ma_loi(monkeypatch):
+    """Lưới an toàn toàn cục: ngoại lệ bất kỳ -> 500 kèm {error_code, message}, không traceback."""
+    from backend.api import routes
+
+    def no_tung(*args, **kwargs):
+        raise RuntimeError(r"bi mat noi bo C:\Users\ai-do\secret")
+
+    monkeypatch.setattr(routes, "get_full_music_rights", no_tung)
+    with TestClient(app, raise_server_exceptions=False) as local_client:
+        response = local_client.get("/api/v1/tracks/00000000-0000-0000-0000-000000000000")
+    assert response.status_code == 500
+    detail = response.json()["detail"]
+    assert detail["error_code"] == "INTERNAL_ERROR"
+    assert "bi mat" not in str(detail)
