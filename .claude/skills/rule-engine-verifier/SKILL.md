@@ -58,6 +58,8 @@ Khi thêm hoặc chỉnh sửa bất kỳ rule nào trong `configs/rules_v1.yaml
    - Output phải chứa danh sách cụ thể các mã luật được kích hoạt trong trường `rules_triggered`.
 4. **Quy tắc Tin cậy Dữ liệu quyền**:
    - Kết luận LOW / CONDITIONAL / HIGH chỉ được trả ra khi `rights_confidence` đạt `rights_gate.min_rights_confidence`; dưới ngưỡng phải là `UNKNOWN`, kết luận tạm giữ ở `evidence.provisional_decision`.
+   - Khi kiểm thử cổng, dùng đủ bốn loại nguồn: nguồn thật (1.00, qua) · SIMULATED có `verified_at` (0.70, qua — ca kiểm thử Audio Library / Creator Music) · SIMULATED **không** `verified_at` (0.40, **chặn** — nhạc Việt dataset_G, nhãn Jamendo suy đoán) · PREDICTED (≤ 0.40, chặn). SIMULATED không xác minh từng dừng đúng 0.50 và lọt cổng cho tới khi có khoản phạt `simulated_unverified`.
+   - Loại giấy phép ngoài 5 nhóm (vd. `COVER_MECHANICAL_LICENSE`) phải ra `UNKNOWN` với câu lý do **nêu đích danh** loại giấy phép.
    - Mọi con số độ tin cậy phải truy ngược được: `evidence.rights_confidence_breakdown.formula` và `evidence.decision_confidence_formula`.
 
 ### Bước 2: Viết & Chạy Unit Tests cho Rule Engine

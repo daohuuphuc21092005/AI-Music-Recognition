@@ -141,6 +141,36 @@ def test_nguong_cong_quyen_tach_duoc_predicted_va_simulated():
     # thì không — nếu không cổng sẽ chặn nhầm cả Audio Library / Creator Music.
     assert 1.0 - penalties["predicted_source"] < min_rights
     assert 1.0 - penalties["simulated_source"] >= min_rights
+    # Mô phỏng VÀ chưa từng xác minh (nhạc Việt dataset_G, nhãn Jamendo suy từ cờ
+    # tải về) phải bị chặn. Trước khi có simulated_unverified, tổ hợp này dừng
+    # đúng 0.50 và lọt qua cổng vốn chỉ chặn khi < 0.50.
+    assert (1.0 - penalties["simulated_source"] - penalties["unverified"]
+            - penalties["simulated_unverified"]) < min_rights
+
+
+def test_du_lieu_mo_phong_chua_xac_minh_bi_cong_chan():
+    simulated = {**rights_for_license_type("CC_BY"),
+                 "source": "SIMULATED (dataset_G_vietnam_100k_api: dữ liệu tổng hợp)",
+                 "verified_at": None}
+    decision = evaluate_rights_and_risk(
+        simulated, {"match_type": "EXACT_MATCH", "identity_confidence": 0.99}, COMMERCIAL)
+
+    assert decision["risk_level"] == "UNKNOWN"
+    assert decision["evidence"]["provisional_decision"]["risk_level"] == "CONDITIONAL"
+    codes = {p["code"] for p in decision["evidence"]["rights_confidence_breakdown"]["penalties"]}
+    assert "simulated_unverified" in codes
+
+
+def test_loai_giay_phep_chua_ho_tro_duoc_neu_dich_danh():
+    rights = {**rights_for_license_type("CC_BY"),
+              "license_type": "COVER_MECHANICAL_LICENSE",
+              "source": "FMA (giấy phép do nguồn công bố)",
+              "verified_at": "2026-09-01T00:00:00"}
+    decision = evaluate_rights_and_risk(
+        rights, {"match_type": "EXACT_MATCH", "identity_confidence": 0.99}, COMMERCIAL)
+
+    assert decision["risk_level"] == "UNKNOWN"
+    assert "COVER_MECHANICAL_LICENSE" in decision["decision_reason"]
 
 
 def test_quyen_that_du_tin_cay_khong_bi_cong_chan():

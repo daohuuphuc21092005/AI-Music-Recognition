@@ -35,6 +35,59 @@ JAMENDO_UNVERIFIED_SOURCE = (
     "SIMULATED (MTG-Jamendo: loại giấy phép suy từ cờ audiodownload_allowed, "
     "chưa đối chiếu giấy phép thật)"
 )
+VIETNAM_SIMULATED_SOURCE = (
+    "SIMULATED (dataset_G_vietnam_100k_api: tên bài, ID Spotify và cờ quyền là "
+    "dữ liệu tổng hợp, chưa đối chiếu nguồn thật)"
+)
+
+# Chỉ nguồn TỰ CÔNG BỐ giấy phép (FMA) mới được coi là metadata đã xác minh. Trước
+# đây cả 158.117 dòng đều metadata_verified=True, kể cả 100.000 bài tên dạng
+# "Tác phẩm Nhạc Việt #000001" với ID Spotify giả.
+VERIFIED_METADATA_SOURCES = frozenset({"FMA"})
+
+# Bản thu chỉ có thể đã hết bảo hộ khi đủ lâu kể từ khi phát hành. 70 năm là mốc
+# thận trọng; dữ liệu tổng hợp từng gắn PD cho cả bản thu phát hành năm 2025.
+RECORDING_PD_MIN_AGE_YEARS = 70
+
+
+def metadata_is_verified(source_dataset) -> bool:
+    return str(source_dataset) in VERIFIED_METADATA_SOURCES
+
+
+def recording_pd_plausible(release_year, now_year: int = None) -> bool:
+    """
+    Bản thu có thể đã HẾT THỜI HẠN bảo hộ chưa, xét theo năm phát hành.
+
+    Chỉ dùng cho PD do hết hạn. KHÔNG dùng cho CC0: đó là tuyên bố từ bỏ quyền của
+    chính chủ sở hữu, bản thu mới phát hành vẫn có thể PD hợp pháp.
+    """
+    try:
+        year = int(float(release_year))
+    except (TypeError, ValueError):
+        return False
+    return year <= (now_year or datetime.now().year) - RECORDING_PD_MIN_AGE_YEARS
+
+
+def creator_music_flags(license_type, revenue_share_required) -> tuple:
+    """
+    (license_purchased, revenue_share_agreed) — với CREATOR_MUSIC hai cờ LOẠI TRỪ
+    nhau. Bản cũ bật cả hai cho mọi dòng, nên Rule Engine luôn dừng ở nhánh "đã
+    mua" và nhánh chia doanh thu không bao giờ được thử.
+
+    Đọc cờ qua chuỗi chứ không qua bool(): bool(NaN) là True, và chính NaN của cột
+    trống từng biến "không chia doanh thu" thành "có chia doanh thu".
+    """
+    share = str(revenue_share_required).strip().lower() in ("true", "1")
+    if license_type != "CREATOR_MUSIC":
+        return False, share
+    return (not share), share
+
+
+def spotify_rights_source(label) -> str:
+    text = "" if label is None else str(label).strip()
+    if not text or text.lower() == "nan":
+        text = "không rõ hãng phát hành"
+    return f"Spotify API / {text}"
 
 
 def to_uuid(val: str, namespace_prefix: str = "amr_default") -> str:
@@ -147,9 +200,10 @@ def process_and_merge():
                 "title": title,
                 "composer": composer,
                 "year": year,
-                "public_domain_status": "verified" if is_pd else "no",
-                "source": "MusicBrainz / Vietnam Heritage Archive",
-                "verified_at": "2026-09-14T00:00:00",
+                # Dữ liệu tổng hợp chỉ KHẲNG ĐỊNH là PD, chưa ai xác minh -> "possible"
+                "public_domain_status": "possible" if is_pd else "no",
+                "source": VIETNAM_SIMULATED_SOURCE,
+                "verified_at": "",
             })
 
             # Lưu recording
@@ -164,18 +218,19 @@ def process_and_merge():
                 "source_dataset": str(row.get("source_dataset", "dataset_G_vietnam_100k_api")),
                 "source_track_id": str(row.get("source_track_id", "")),
                 "audio_path": str(row.get("audio_path", "")),
-                "metadata_verified": bool(row.get("metadata_verified", True)),
+                "metadata_verified": metadata_is_verified(
+                    row.get("source_dataset", "dataset_G_vietnam_100k_api")),
             })
 
             # Bổ sung 4 cột Rule Engine vào rights
             policy_action = "MONETIZE_CLAIM" if lic_type in ("COMMERCIAL", "CONTENT_ID") else "NONE"
-            lic_purchased = bool(lic_type == "CREATOR_MUSIC")
-            rev_share = bool(lic_type == "CREATOR_MUSIC" or r_info.get("revenue_share_required", False))
+            lic_purchased, rev_share = creator_music_flags(
+                lic_type, r_info.get("revenue_share_required", False))
 
             # Tách bạch quyền tác phẩm PD và quyền bản thu PD (§2 core invariants)
             if is_pd:
                 digest = hashlib.sha256(f"pd_rec:{rid}".encode("utf-8")).hexdigest()
-                rec_pd = (int(digest[:8], 16) % 100 < 60)
+                rec_pd = (int(digest[:8], 16) % 100 < 60) and recording_pd_plausible(year)
                 copyright_status = "PUBLIC_DOMAIN" if rec_pd else "PROTECTED"
                 comm_allowed = rec_pd
                 monetize_allowed = rec_pd
@@ -204,9 +259,11 @@ def process_and_merge():
                 "platform": str(r_info.get("platform", "ALL")),
                 "valid_from": str(r_info.get("valid_from", "2020-01-01")),
                 "valid_until": str(r_info.get("valid_until", "2035-12-31")),
-                "source": str(r_info.get("source", "Spotify API / Content ID")),
+                # Nguồn gốc ghi "Spotify API / Content ID (BH Media, Sony Music)" và
+                # một verified_at — cả hai đều không có thật với dữ liệu tổng hợp.
+                "source": VIETNAM_SIMULATED_SOURCE,
                 "source_url": str(r_info.get("source_url", "")),
-                "verified_at": str(r_info.get("verified_at", "2026-09-14T00:00:00")),
+                "verified_at": "",
             })
             count_vn += 1
 
@@ -248,7 +305,7 @@ def process_and_merge():
                 "year": year,
                 "public_domain_status": "no",
                 "source": "MTG-Jamendo Dataset / Creative Commons",
-                "verified_at": "2026-09-14T00:00:00",
+                "verified_at": "",
             })
 
             all_recordings.append({
@@ -262,7 +319,7 @@ def process_and_merge():
                 "source_dataset": "MTG-Jamendo",
                 "source_track_id": jid,
                 "audio_path": audio_url,
-                "metadata_verified": True,
+                "metadata_verified": metadata_is_verified("MTG-Jamendo"),
             })
 
             lic_type = "CC_BY" if dl_allowed else "CC_BY_NC"
@@ -359,7 +416,7 @@ def process_and_merge():
                 "source_dataset": "Spotify Web API",
                 "source_track_id": str(row.get("primary_spotify_track_id", isrc)),
                 "audio_path": spotify_url,
-                "metadata_verified": True,
+                "metadata_verified": metadata_is_verified("Spotify Web API"),
             })
 
             r_sp = rights_by_rec.get(raw_rec_id, {})
@@ -383,7 +440,7 @@ def process_and_merge():
                 "platform": "ALL",
                 "valid_from": rel_date if len(rel_date) >= 10 else f"{year}-01-01",
                 "valid_until": "2035-12-31",
-                "source": f"Spotify API / {label}",
+                "source": spotify_rights_source(label),
                 "source_url": spotify_url,
                 "verified_at": "2026-09-15T00:00:00",
             })

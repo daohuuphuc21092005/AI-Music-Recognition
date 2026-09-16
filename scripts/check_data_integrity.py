@@ -9,6 +9,8 @@ tái diễn trong im lặng:
   - khoá ngoại giữa các file CSV master
   - fingerprint trùng lặp (cảnh báo, không chặn)
   - độ phủ license_type so với 5 nhóm của Rule Engine (cảnh báo)
+  - nhãn trung thực: metadata_verified không đi với nguồn quyền mô phỏng/suy đoán,
+    bản thu PD phải đủ cũ, và hai cờ Creator Music không được bật cùng lúc
 
 Dùng:  python scripts/check_data_integrity.py
 Mã thoát khác 0 nếu có mục FAIL.
@@ -18,10 +20,12 @@ import json
 import os
 import sys
 from collections import Counter
+from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import config
+from scripts.process_all_datasets import RECORDING_PD_MIN_AGE_YEARS
 
 csv.field_size_limit(10 ** 9)
 
@@ -225,6 +229,62 @@ def main() -> int:
     else:
         record(WARN, "Cột recording_public_domain",
                "chưa có -> chạy scripts/enrich_rights_metadata.py")
+
+    # --- Nhãn trung thực: dữ liệu mô phỏng không được trình bày như dữ liệu thật ---
+    def is_true(value) -> bool:
+        return str(value).strip().lower() in ("true", "1")
+
+    def untrusted(source) -> bool:
+        return str(source).strip().upper().startswith(("SIMULATED", "PREDICTED"))
+
+    rec_by_id = {r["recording_id"]: r for r in recordings}
+    source_by_rec = {r["recording_id"]: r.get("source", "") for r in rights}
+
+    claimed = [rid for rid, rec in rec_by_id.items()
+               if is_true(rec.get("metadata_verified")) and untrusted(source_by_rec.get(rid, ""))]
+    if claimed:
+        by_dataset = Counter(rec_by_id[rid]["source_dataset"] for rid in claimed)
+        record(FAIL, "metadata_verified không đi với nguồn mô phỏng",
+               f"{len(claimed)} bản ghi ghi đã xác minh nhưng nguồn quyền là "
+               f"SIMULATED/PREDICTED: {dict(by_dataset)}")
+    else:
+        record(PASS, "metadata_verified không đi với nguồn mô phỏng", "không có")
+
+    # Chỉ áp cho PD do HẾT THỜI HẠN bảo hộ. CC0 là tuyên bố từ bỏ quyền của chính
+    # chủ sở hữu nên bản thu năm 2015 vẫn có thể PD hợp pháp — lần chạy đầu của mục
+    # này đã báo nhầm đúng 117 bài CC0 thật của FMA.
+    cutoff = datetime.now().year - RECORDING_PD_MIN_AGE_YEARS
+    too_recent = Counter()
+    latest = 0
+    for r in rights:
+        if not is_true(r.get("recording_public_domain")) or r.get("license_type") == "CC0":
+            continue
+        rec = rec_by_id.get(r["recording_id"], {})
+        try:
+            year = int(float(rec.get("release_year", "")))
+        except ValueError:
+            continue
+        if year > cutoff:
+            too_recent[(rec.get("source_dataset", "?"), r.get("license_type"))] += 1
+            latest = max(latest, year)
+    if too_recent:
+        record(FAIL, "Bản thu PD (hết hạn bảo hộ) phải đủ cũ",
+               f"{sum(too_recent.values())} bản thu PD phát hành sau {cutoff} "
+               f"(muộn nhất {latest}): {dict(too_recent)}")
+    else:
+        record(PASS, "Bản thu PD (hết hạn bảo hộ) phải đủ cũ",
+               f"không có bản thu PD nào phát hành sau {cutoff} (không tính CC0)")
+
+    both_flags = sum(1 for r in rights
+                     if r.get("license_type") == "CREATOR_MUSIC"
+                     and is_true(r.get("license_purchased"))
+                     and is_true(r.get("revenue_share_agreed")))
+    if both_flags:
+        record(FAIL, "Cờ Creator Music loại trừ nhau",
+               f"{both_flags} dòng bật cả license_purchased lẫn revenue_share_agreed "
+               f"-> nhánh chia doanh thu không bao giờ được Rule Engine xét")
+    else:
+        record(PASS, "Cờ Creator Music loại trừ nhau", "không có dòng mâu thuẫn")
 
     return report()
 

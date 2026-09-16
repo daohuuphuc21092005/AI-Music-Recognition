@@ -181,6 +181,11 @@ def rights_confidence_breakdown(rights: dict, rules: dict = None) -> dict:
     verified_at = rights.get("verified_at")
     if not verified_at:
         penalize("unverified", "thiếu verified_at")
+        if source.upper().startswith("SIMULATED"):
+            # Mô phỏng VÀ chưa từng đối chiếu nguồn nào: thiếu khoản này thì điểm
+            # dừng đúng 0.50 và lọt qua cổng (cổng chỉ chặn khi < 0.50).
+            penalize("simulated_unverified",
+                     "metadata mô phỏng chưa từng đối chiếu với nguồn thật")
     else:
         try:
             verified = datetime.fromisoformat(str(verified_at)[:19])
@@ -364,6 +369,12 @@ def evaluate_rights_and_risk(rights_data: dict, match_info: dict,
             rights_conf, rights_reasons, group_order=group["order"]))
 
     outcome = rules["uncategorized"]
+    license_type = rights_data.get("license_type")
+    # Nêu đích danh loại giấy phép: "không thuộc 5 nhóm" chung chung thì người đọc
+    # không phân biệt được thiếu dữ liệu với loại chưa được hỗ trợ (vd.
+    # COVER_MECHANICAL_LICENSE — 10.032 dòng rơi vào nhánh này).
+    outcome = {**outcome,
+               "reason": f"{outcome['reason']} Loại giấy phép gặp: {license_type}."}
     return decision(outcome, outcome["category"], "uncategorized",
                     rights_conf, rights_reasons,
-                    extra_evidence={"license_type": rights_data.get("license_type")})
+                    extra_evidence={"license_type": license_type})

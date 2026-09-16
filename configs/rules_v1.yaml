@@ -300,6 +300,12 @@ rights_confidence:
     # được dùng như một kết luận về quyền.
     predicted_source: 0.60
     unverified: 0.20                # thiếu verified_at
+    # Cộng thêm khi metadata vừa MÔ PHỎNG vừa CHƯA TỪNG xác minh. Không có khoản
+    # này thì 1.00 − 0.30 − 0.20 = 0.50 — đúng bằng ngưỡng cổng, mà cổng chỉ chặn
+    # khi < 0.50, nên dữ liệu tổng hợp chưa đối chiếu nguồn nào (100.000 bản ghi
+    # nhạc Việt dataset_G, nhãn Jamendo suy từ cờ tải về) vẫn cho ra LOW/HIGH chắc
+    # nịch. Chủ dự án chốt 2026-09-16: loại dữ liệu này phải về UNKNOWN.
+    simulated_unverified: 0.10
     stale_verification_days: 365    # verified_at quá cũ
     stale_penalty: 0.10
     license_expired: 0.30
@@ -312,10 +318,10 @@ rights_confidence:
 # 0.50 tách đúng hai loại nguồn theo bảng phạt phía trên:
 #   PREDICTED, kể cả đã xác minh     : 1.00 − 0.60        = 0.40 -> CHẶN
 #   SIMULATED đã xác minh            : 1.00 − 0.30        = 0.70 -> qua
-#   SIMULATED chưa xác minh          : 1.00 − 0.30 − 0.20 = 0.50 -> qua (sát ngưỡng)
+#   SIMULATED chưa xác minh          : 1.00 − 0.30 − 0.20 − 0.10 = 0.40 -> CHẶN
 #   Nguồn thật, giấy phép hết hạn    : 1.00 − 0.30        = 0.70 -> qua
 # Đổi bảng phạt thì PHẢI xem lại con số này (tests/test_license_classifier.py
-# kiểm tra đúng hai dòng đầu).
+# kiểm tra ba dòng đầu).
 rights_gate:
   min_rights_confidence: 0.50
   low_rights_confidence:

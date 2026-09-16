@@ -103,7 +103,11 @@ Rule Engine chịu trách nhiệm xác định trạng thái bản quyền và m
 - **Kết quả**: `category: UNCATEGORIZED`, `risk_level: UNKNOWN`, `condition: HUMAN_REVIEW_REQUIRED`.
 - Kết luận tạm **không bị bỏ đi**: nằm ở `evidence.provisional_decision` (`category`, `risk_level`, `condition`, `rule_id`, `matched_conditions`, `reason`), kèm `min_rights_confidence` và `rights_shortfall`.
 - **Lý do**: giấy phép do license classifier suy đoán từ âm thanh (nguồn `PREDICTED`) vẫn đi qua đúng nhánh và có thể ra `HIGH` — đó là kết luận từ kết quả nghi ngờ mà §2.3/§2.5 cấm.
-- `rights_confidence = base − các khoản phạt` trong `rights_confidence.penalties`. Ngưỡng 0.50 tách được: `PREDICTED` (≤ 0.40, bị chặn) / `SIMULATED` đã xác minh (0.70, qua) / `SIMULATED` chưa xác minh (0.50, qua sát ngưỡng). **Đổi bảng phạt thì phải xem lại ngưỡng** — `tests/test_license_classifier.py` kiểm tra đúng ràng buộc này.
+- `rights_confidence = base − các khoản phạt` trong `rights_confidence.penalties`. Ngưỡng 0.50 tách được: `PREDICTED` (≤ 0.40, bị chặn) / `SIMULATED` đã xác minh (0.70, qua) / `SIMULATED` chưa xác minh (1.00 − 0.30 − 0.20 − 0.10 `simulated_unverified` = **0.40, bị chặn**). **Đổi bảng phạt thì phải xem lại ngưỡng** — `tests/test_license_classifier.py` kiểm tra đúng ba ràng buộc này.
+- Vì sao có `simulated_unverified` (2026-09-16): thiếu khoản này thì SIMULATED chưa xác minh dừng đúng 0.50, mà cổng chỉ chặn khi `< 0.50`, nên dữ liệu tổng hợp chưa đối chiếu nguồn nào vẫn ra LOW/HIGH chắc nịch. Nhóm bị ảnh hưởng: 100.000 bản ghi nhạc Việt `dataset_G_vietnam_100k_api` (tên bài dạng "Tác phẩm Nhạc Việt #000001", ID Spotify giả) và nhãn giấy phép Jamendo suy từ cờ tải về. YouTube Audio Library / Creator Music là metadata mô phỏng **có** `verified_at` nên vẫn 0.70 — đúng vai trò ca kiểm thử cho Rule Engine theo đề cương.
+
+### Nhánh ngoại lệ `uncategorized`
+- Loại giấy phép không thuộc 5 nhóm (vd. `COVER_MECHANICAL_LICENSE`, 10.032 dòng) → `UNKNOWN` + `HUMAN_REVIEW_REQUIRED`, `rule_id = uncategorized`. Câu lý do **nêu đích danh** loại giấy phép gặp phải, để phân biệt "chưa được hỗ trợ" với "thiếu dữ liệu".
 
 ---
 
