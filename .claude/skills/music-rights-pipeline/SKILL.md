@@ -67,6 +67,8 @@ Skill này hướng dẫn quy trình chuẩn hóa để xây dựng, kiểm th�
 
 ### Bước 3: Trích xuất Vector MERT (Deep Music Embedding)
 1. Tải model `m-a-p/MERT-v1-95M` với tham số `torch_dtype=torch.float32` (hoặc `float16` trên GPU).
+   - Thiết bị do `embedding_service.get_device()` quyết định: tự dò CUDA, ép bằng biến môi trường `DEVICE=cpu|cuda`. Đo trên GTX 1650 4 GB: **~1 s/bài trên GPU so với ~4 s/bài trên 6 luồng CPU** (phần giải mã audio vẫn nằm ở CPU nên đó là trần tốc độ).
+   - Dựng embedding cho corpus lớn: gọi `python scripts/build_embeddings.py --all --limit 400 --no-rebuild` LẶP LẠI trong một vòng lặp ngoài (mã thoát `10` = còn việc, `0` = đã ghi CSV xong). Tiến trình MERT phình ~3 MB mỗi file, nên phải thoát hẳn sau mỗi lượt để hệ điều hành thu hồi bộ nhớ.
 2. Kiểm tra sampling rate đầu vào: bắt buộc **24,000 Hz**.
 3. Áp dụng chiến lược Pooling:
    - **P1 (Mean Pooling)**: Lấy trung bình embedding qua các hidden frames.
@@ -101,3 +103,6 @@ Skill này hướng dẫn quy trình chuẩn hóa để xây dựng, kiểm th�
 | Tầng 1 trả `EXACT_MATCH` cho bài không có audio | Fingerprint không sinh từ audio thật lọt vào bảng (gộp dữ liệu chỉ có metadata) | `python scripts/check_data_integrity.py` — mục "Fingerprint là đầu ra thật của fpcalc" phải PASS |
 | Badge HIGH/CONDITIONAL từ giấy phép do model đoán | Thiếu cổng độ tin cậy dữ liệu quyền | `rights_gate` trong `configs/rules_v1.yaml` hạ về UNKNOWN; kết luận tạm ở `evidence.rule_engine.provisional_decision` |
 | Mở rộng corpus xong nhưng ngưỡng không còn đúng | τFP / τMERT / τCover phụ thuộc quy mô reference | Chạy lại EXP-01 / EXP-06 / EXP-07 rồi cập nhật `.env`, `backend/config.py` và `min_identity_confidence_by_match_type` trong `rules_v1.yaml` cùng lúc |
+| `CUDA error: an illegal memory access` giữa lượt dựng embedding | GPU Max-Q trục trặc nhất thời dưới tải dài (cùng file đó chạy lại bình thường) | Lỗi CUDA làm hỏng context cả tiến trình, bắt ngoại lệ rồi chạy tiếp là vô ích: `build_embeddings.py` ghi file lỗi vào checkpoint rồi thoát mã `10` để vòng lặp ngoài mở tiến trình mới. Cuối đợt dựng lại các bài đó với `DEVICE=cpu` |
+| Tác vụ nền bị dừng với lý do thiếu RAM | Cơ chế bảo vệ của Claude Code cắt MỌI tác vụ nền khi RAM trống xuống thấp, không phân biệt to nhỏ | Chạy đúng MỘT việc nặng một lúc; việc dài nhiều giờ thì `Start-Process ... -WindowStyle Hidden` để tách khỏi phiên. Tiến độ luôn nằm trong checkpoint nên chạy lại là tiếp tục |
+| `pip install torch==<ver>` báo "Requirement already satisfied" dù đang là bản CPU | Biến thể `+cpu` và `+cu130` cùng số hiệu phiên bản, pip coi là đã có | Chỉ đích danh biến thể: `pip install --index-url https://download.pytorch.org/whl/cu130 --force-reinstall --no-deps "torch==<ver>+cu130"` |
