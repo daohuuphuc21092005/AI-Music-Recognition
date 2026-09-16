@@ -153,12 +153,25 @@ def write_env(updates: dict) -> None:
         with open(ENV_PATH, encoding="utf-8") as f:
             lines = f.read().splitlines()
 
+    # Bỏ luôn các dòng gán TRÙNG cho cùng một khoá, không chỉ sửa dòng đầu tiên.
+    # Bản cũ sửa dòng đầu rồi `pop` khỏi danh sách, nên bản sao phía dưới còn
+    # nguyên — mà trình đọc .env lấy lần gán CUỐI. Hậu quả có thật: .env chứa cả
+    # FP_THRESHOLD=0.3 (vừa hiệu chỉnh) lẫn FP_THRESHOLD=0.15 (cũ) và runtime chạy
+    # 0.15 suốt, trong khi script vẫn báo "đã ghi" — sai một cách im lặng.
     remaining = dict(updates)
-    for index, line in enumerate(lines):
+    seen, cleaned = set(), []
+    for line in lines:
         match = re.match(r"\s*#?\s*([A-Z_]+)\s*=", line)
         key = match.group(1) if match else None
-        if key in remaining:
-            lines[index] = f"{key}={remaining.pop(key)}"
+        if key in updates:
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(f"{key}={updates[key]}")
+            remaining.pop(key, None)
+        else:
+            cleaned.append(line)
+    lines = cleaned
 
     if remaining:
         lines.append("")
