@@ -7,6 +7,7 @@ cả /health lẫn pytest đều phải trả giá — và nếu tải model l�
 dụng sập ngay từ khâu import.
 """
 import gc
+import os
 import sys
 
 # Xử lý tương thích môi trường: nếu torchvision bị lỗi nhị phân C++ (ví dụ: operator torchvision::nms does not exist),
@@ -27,10 +28,32 @@ MODEL_NAME = config.MERT_MODEL
 
 _processor = None
 _model = None
+_device = None
 
 
 def is_loaded() -> bool:
     return _model is not None
+
+
+def get_device() -> str:
+    """
+    Thiết bị chạy MERT: tự dò (có GPU CUDA thì dùng), ép bằng biến môi trường
+    DEVICE=cpu|cuda.
+
+    Vì sao cần: dựng embedding cho 24.375 bài trên 6 luồng CPU mất ~4 s/bài, tức
+    khoảng 24 giờ. Cùng model trên GPU chỉ còn phần giải mã audio là đáng kể —
+    và phần đó vẫn nằm ở CPU, nên đừng kỳ vọng nhanh hơn ~0,3 s/bài.
+    """
+    global _device
+    if _device is None:
+        choice = os.environ.get("DEVICE", "auto").strip().lower()
+        if choice not in ("cpu", "cuda"):
+            choice = "cuda" if torch.cuda.is_available() else "cpu"
+        elif choice == "cuda" and not torch.cuda.is_available():
+            print("⚠️  DEVICE=cuda nhưng torch không thấy GPU nào -> dùng CPU")
+            choice = "cpu"
+        _device = choice
+    return _device
 
 
 def load_model():
@@ -42,6 +65,7 @@ def load_model():
         )
         _model = AutoModel.from_pretrained(MODEL_NAME, trust_remote_code=True)
         _model.eval()
+        _model.to(get_device())
     return _processor, _model
 
 
@@ -61,7 +85,9 @@ def extract_mert_embedding(audio_path: str, target_sr: int = None,
             audio_path, sr=target_sr, mono=True, duration=max_duration
         )
 
-        inputs = processor(audio_array, sampling_rate=target_sr, return_tensors="pt")
+        inputs = processor(
+            audio_array, sampling_rate=target_sr, return_tensors="pt"
+        ).to(get_device())
 
         # inference_mode: không lưu gradient/trạng thái trung gian -> tiết kiệm RAM
         with torch.inference_mode():
@@ -74,7 +100,7 @@ def extract_mert_embedding(audio_path: str, target_sr: int = None,
             # Chuẩn hoá L2 để inner product = cosine similarity
             norm_embedding = torch.nn.functional.normalize(track_embedding, p=2, dim=1)
 
-            result_vector = norm_embedding.squeeze().numpy()
+            result_vector = norm_embedding.squeeze().cpu().numpy()
 
         del inputs, outputs, embeddings, track_embedding, norm_embedding, audio_array
         gc.collect()

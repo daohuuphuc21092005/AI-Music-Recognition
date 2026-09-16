@@ -42,7 +42,7 @@ import numpy as np
 import torch
 
 from backend import config
-from backend.services.embedding_service import load_model
+from backend.services.embedding_service import get_device, load_model
 from experiments.common import Checkpoint
 
 csv.field_size_limit(10 ** 9)
@@ -66,12 +66,12 @@ def segment_embeddings(audio_path: str):
         if len(chunk) < sr:            # bỏ đoạn ngắn hơn 1 giây
             break
 
-        inputs = processor(chunk, sampling_rate=sr, return_tensors="pt")
+        inputs = processor(chunk, sampling_rate=sr, return_tensors="pt").to(get_device())
         with torch.inference_mode():
             hidden = model(**inputs).last_hidden_state
             pooled = torch.mean(hidden, dim=1)
             normalized = torch.nn.functional.normalize(pooled, p=2, dim=1)
-            vector = normalized.squeeze().numpy()
+            vector = normalized.squeeze().cpu().numpy()
 
         results.append((round(start, 2), round(end, 2), vector))
         start += HOP_S
