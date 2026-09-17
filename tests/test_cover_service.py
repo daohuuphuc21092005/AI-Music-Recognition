@@ -236,8 +236,20 @@ def test_dong_nhip_1_trung_khit_cach_dung_reference(progression_reference):
     from backend.services.cover_service import query_descriptors
 
     rows, factors = query_descriptors(progression(1.0), CHROMA_SR, 30.0, (0.9, 1.0, 1.1))
-    assert factors == [0.9, 1.0, 1.1]
-    assert np.array_equal(rows[1], progression_reference)
+    # Audio đúng 30 s: nhịp 0.9 (cắt 33,3 s) và 1.0 cho cùng một đoạn -> một dòng
+    assert factors == [1.0, 1.1]
+    assert np.array_equal(rows[0], progression_reference)
+
+
+def test_he_so_gan_cho_dong_trung_la_do_dai_gan_nhat_khong_phai_dong_dau():
+    """Bản gốc 30 s không được báo là "khớp khi coi là chậm 0.90×"."""
+    from backend.services.cover_service import query_descriptors
+
+    factors = (0.9, 0.95, 1.0, 1.05, 1.1)
+    assert query_descriptors(progression(1.0), CHROMA_SR, 30.0, factors)[1] == [1.0, 1.05, 1.1]
+    # File 27,25 s (tempo 1.10 của tập kiểm thử) — mọi hệ số cùng một đoạn
+    fast = progression(1.1)[: int(27.25 * CHROMA_SR)]
+    assert query_descriptors(fast, CHROMA_SR, 30.0, factors)[1] == [1.1]
 
 
 def test_ban_cham_chi_khop_khi_cat_dung_do_dai(progression_reference):
@@ -267,11 +279,12 @@ def test_audio_ngan_hon_moi_do_dai_cat_chi_tinh_mot_lan():
     audio = chord(duration=5.0)
     cover_service.build_descriptor = counting
     try:
-        rows, _ = cover_service.query_descriptors(audio, CHROMA_SR, 30.0, (0.9, 1.0, 1.1))
+        rows, factors = cover_service.query_descriptors(audio, CHROMA_SR, 30.0, (0.9, 1.0, 1.1))
     finally:
         cover_service.build_descriptor = original
     assert len(calls) == 1
-    assert np.array_equal(rows[0], rows[2])
+    assert len(rows) == 1
+    assert factors == [None]  # 5 giây: không ứng với hệ số nhịp độ nào
 
 
 def test_search_nhieu_dong_lay_dong_diem_cao_nhat_cho_tung_ung_vien():

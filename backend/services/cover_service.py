@@ -36,6 +36,9 @@ BINS_PER_OCTAVE = 36
 # tốc độ) vẫn so sánh được với nhau.
 DESCRIPTOR_FRAMES = 64
 N_CHROMA = 12
+# Độ lệch tối đa giữa độ dài thật của đoạn cắt và độ dài ứng với một hệ số nhịp độ
+# để còn gắn hệ số đó vào kết quả (vd. file 27,25 s vẫn ứng với nhịp 1.10 = 27,27 s).
+SPAN_TOLERANCE_S = 0.5
 
 
 class CoverIndex:
@@ -158,19 +161,27 @@ def query_spans(base_duration: float = 30.0, tempo_factors: tuple = None) -> lis
 def query_descriptors(audio: np.ndarray, sr: int = CHROMA_SR, base_duration: float = 30.0,
                       tempo_factors: tuple = None) -> tuple:
     """
-    (ma trận (n, D) descriptor, danh sách hệ số nhịp độ ứng với từng dòng).
+    (ma trận (n, D) descriptor, hệ số nhịp độ của từng dòng).
 
     Mỗi dòng tính từ đúng đoạn audio bị cắt (không cắt khung chroma) để dòng nhịp
-    1.0 trùng khít với cách dựng reference. Độ dài cắt vượt quá audio thì nhiều
-    dòng giống hệt nhau — chỉ tính một lần.
+    1.0 trùng khít với cách dựng reference.
+
+    Audio ngắn hơn độ dài cắt thì nhiều hệ số cho CÙNG một đoạn — chỉ giữ một dòng,
+    gắn hệ số có độ dài cắt gần độ dài thật nhất (lệch quá SPAN_TOLERANCE_S thì
+    None: không suy ra được nhịp độ). Giữ mọi dòng trùng thì dòng đầu (0.90) luôn
+    thắng khi hoà điểm, và evidence ghi "khớp khi coi là chậm 0.90×" cho cả bản gốc.
     """
-    rows, factors, by_length = [], [], {}
+    spans_of = {}
     for factor, seconds in query_spans(base_duration, tempo_factors):
         length = min(len(audio), int(round(seconds * sr)))
-        if length not in by_length:
-            by_length[length] = build_descriptor(audio[:length], sr)
-        rows.append(by_length[length])
-        factors.append(factor)
+        spans_of.setdefault(length, []).append((factor, seconds))
+
+    rows, factors = [], []
+    for length, spans in spans_of.items():
+        rows.append(build_descriptor(audio[:length], sr))
+        actual = length / sr
+        factor, seconds = min(spans, key=lambda span: abs(span[1] - actual))
+        factors.append(factor if abs(seconds - actual) <= SPAN_TOLERANCE_S else None)
     return np.stack(rows), factors
 
 
