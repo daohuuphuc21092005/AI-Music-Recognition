@@ -4,11 +4,14 @@
 Vì sao cần bước riêng này: EXP-01, EXP-06 và EXP-07 **đo ra** ngưỡng, còn EXP-04
 và EXP-08 lại **tiêu thụ** ngưỡng qua `backend/config.py`. Chạy một lượt duy nhất
 nghĩa là hai thí nghiệm quan trọng nhất vẫn dùng con số cũ — đúng điều §4 cấm
-("không tự chọn threshold trước khi có dữ liệu"). Quy trình đúng là hai lượt:
+("không tự chọn threshold trước khi có dữ liệu"). `scripts/run_all_experiments.py`
+gọi script này GIỮA pha hiệu chỉnh và pha tiêu thụ, rồi hỏi lại backend.config
+trong một tiến trình mới và đối chiếu với identity_gate của configs/rules_v1.yaml.
+Chạy tay thì:
 
-    python scripts/run_all_experiments.py                    # lượt 1: đo
     python scripts/apply_calibrated_thresholds.py --write    # ghi vào .env
-    python scripts/run_all_experiments.py --only exp04,exp05,exp08   # lượt 2
+    # sửa min_identity_confidence_by_match_type trong configs/rules_v1.yaml
+    python scripts/run_all_experiments.py --only exp02,exp04,exp05,exp08,license
 
 Ngưỡng lấy từ đâu:
   * τFP    <- EXP-01. F1 cao nhất TRONG SỐ các ngưỡng giữ tỉ lệ nhận nhầm ≤ 0.005:
@@ -225,7 +228,9 @@ def main() -> int:
 
     write_env(updates)
     print(f"\n💾 Đã ghi {len(updates)} ngưỡng vào {ENV_PATH}")
-    print("Bước tiếp: python scripts/run_all_experiments.py --only exp04,exp05,exp08")
+    print("Bước tiếp: đồng bộ min_identity_confidence_by_match_type trong "
+          "configs/rules_v1.yaml, rồi")
+    print("  python scripts/run_all_experiments.py --only exp02,exp04,exp05,exp08,license")
     return 0
 
 

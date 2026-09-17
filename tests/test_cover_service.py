@@ -163,3 +163,29 @@ def test_chuan_hoa_lai_descriptor_da_luu_bang_tinh_tu_audio():
     chroma = _resample_time(extract_chroma(chord(3.0), CHROMA_SR))
     per_frame = chroma / np.linalg.norm(chroma, axis=0, keepdims=True)
     assert np.allclose(normalize_frames(per_frame), normalize_frames(chroma), atol=1e-5)
+
+
+def test_loai_tru_cot_khong_bao_gio_tra_ve_ban_ghi_bi_loai(monkeypatch):
+    """Held-out của tầng Cover: bản ghi bị loại không được xuất hiện ở bất kỳ vị trí nào."""
+    from backend.services import cover_service
+
+    rng = np.random.default_rng(3)
+    dim = N_CHROMA * DESCRIPTOR_FRAMES
+    matrix = rng.standard_normal((30, dim)).astype("float32")
+    matrix /= np.linalg.norm(matrix, axis=1, keepdims=True)
+    id_map = [f"rec_{i}" for i in range(30)]
+    query = matrix[4].copy()  # truy vấn trùng hệt rec_4
+
+    monkeypatch.setattr(cover_service, "descriptor_from_file", lambda *a, **k: query)
+    index = cover_service.CoverIndex(matrix=matrix, id_map=id_map)
+
+    base = cover_service.identify_cover("x.wav", cover_index=index, top_k=5)
+    assert base["top_candidate"]["recording_id"] == "rec_4"
+
+    excluded = frozenset({"rec_4", "rec_7"})
+    held = cover_service.identify_cover("x.wav", cover_index=index, top_k=30,
+                                        exclude_recording_ids=excluded)
+    returned = {c["recording_id"] for c in held["candidates"]}
+    assert not returned & excluded
+    assert len(returned) == 28
+    assert held["top_candidate"]["recording_id"] != "rec_4"

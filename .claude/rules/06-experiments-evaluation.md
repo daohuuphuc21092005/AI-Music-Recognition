@@ -73,8 +73,8 @@ Mỗi thí nghiệm phải ghi nhận vào file cấu hình (CSV/JSON, không b�
   - So sánh thực nghiệm giữa P1 (Mean Pooling) vs P2 (Mean + Std Pooling).
   - Đánh giá sự đánh đổi giữa kích thước vector (768 vs 1536) và độ chính xác retrieval.
 - **`EXP-04` — Hybrid Cascade (Thí nghiệm cốt lõi của đồ án)**:
-  - So sánh 3 kiến trúc: Fingerprint đơn lẻ vs MERT đơn lẻ vs Mô hình lai Cascade (`Fingerprint → MERT`).
-  - Chứng minh mô hình Cascade đạt tốc độ cao của Fingerprint trên clean audio và độ bền vững của MERT trên modified audio.
+  - So sánh 5 hệ trên CÙNG bộ truy vấn: Fingerprint đơn lẻ, MERT đơn lẻ, Cover (chroma/OTI) đơn lẻ, Cascade `Fingerprint → MERT`, và Cascade production `Fingerprint → MERT → Cover` (khoá `cascade` trong kết quả, đúng thứ tự dừng sớm của `cascade_service`).
+  - Chứng minh mô hình Cascade đạt tốc độ cao của Fingerprint trên clean audio, độ bền vững của MERT trên modified audio, và phần Cover cứu thêm được (`transformations_rescued_by_cover`).
 - **`EXP-05` — Robustness Analysis**:
   - Đo lường độ suy giảm hiệu năng (Performance Degradation) của từng module trước từng loại biến đổi (Noise, Pitch, Tempo, Codec).
 - **`EXP-06` — Unknown Track Detection (Từ chối nhận diện)**:
@@ -84,12 +84,19 @@ Mỗi thí nghiệm phải ghi nhận vào file cấu hình (CSV/JSON, không b�
   - Đánh giá khả năng nhận diện các bản cover / biến thể giai điệu so với bản thu gốc.
   - Chấm ở **hai giao thức**, và `recommended_tau_cover` luôn lấy từ giao thức thứ hai:
     1. *Cấp cửa sổ* — cửa sổ 15s, reference chỉ là các bài nguồn của tập truy vấn. Dùng để so với MERT của EXP-03 trên CÙNG bộ cửa sổ (đo điểm mù dịch cao độ).
-    2. *Điều kiện server* (`metrics.runtime_protocol`) — 30 giây đầu của file truy vấn, tìm trên TOÀN BỘ chỉ mục cover (`scripts/build_cover_index.py`, mọi bản ghi có audio thật). Bài ngoài CSDL phải thắng cả chỉ mục, và loại trừ mọi bản ghi CÙNG fingerprint với bài nguồn.
+    2. *Điều kiện server* (`metrics.runtime_protocol`) — 30 giây đầu của file truy vấn, tìm trên TOÀN BỘ chỉ mục cover (`scripts/build_cover_index.py`, mọi bản ghi có audio thật). Bài ngoài CSDL phải thắng cả chỉ mục; held-out loại bản trùng fingerprint, bản gần trùng và (với `audio_overlay`) bài bị trộn chồng (`HeldOutProtocol`).
   - Ngưỡng chọn theo ràng buộc trước, F1 sau: không nhận mẫu nhiễu nào → FMR ≤ 0.005 → F1 cao nhất; không đạt 0.005 mới nới về trần 5% của §16. Siết hơn §16 vì Cover là tầng CUỐI của cascade, nhận nhầm ở đây ra thẳng kết luận về quyền.
   - **Quy mô reference đổi thì phải chạy lại**: cùng bộ truy vấn, τ = 0.70 cho FMR 4,9% trên 100 bài nguồn nhưng 17,4% trên chỉ mục 24.375 bài.
 - **`EXP-08` — End-to-End System Evaluation**:
   - Đánh giá toàn diện toàn bộ chu trình từ âm thanh thô đến quyết định bản quyền cuối cùng.
+  - Điều kiện `held_out` dùng `exclude_recording_ids` + `experiments.common.HeldOutProtocol` (bản trùng, bản gần trùng, bài bị trộn chồng) trên đúng đường chạy production. Script dừng hẳn nếu có truy vấn held-out trả về id đã bị loại. Bản cũ (`HeldOutSession` lọc SQL theo chuỗi) vừa crash với bộ đệm fingerprint vừa không che được tầng Cover.
   - Đo lường: Macro-F1 trên 5 nhóm bản quyền, Confusion Matrix, tỷ lệ Unknown Detection Rate, tổng độ trễ End-to-End.
+
+### Thứ tự chạy và giao thức held-out chung
+- `scripts/run_all_experiments.py`: hiệu chỉnh (01, 06, 03, 07) → ghi ngưỡng → kiểm ngưỡng runtime khớp `identity_gate` của `rules_v1.yaml` → tiêu thụ (02, 04, 05, 08, sweep license).
+- EXP-02 tính theo khối (`CHUNK_ROWS`), không dựng ma trận N×N (8,9 GiB ở 48.750 vector); phân vị cặp khác bản ghi lấy từ histogram (sai số 1e-4). `tests/test_exp02_chunked.py` đối chiếu với cách tính N×N.
+- EXP-05 từ chối ghép khi EXP-01 và EXP-04 không cùng bộ truy vấn (từng lệch 0/1.900 mà bảng vẫn in).
+- Held-out của EXP-01 / EXP-07 (điều kiện server) / EXP-08 dùng `HeldOutProtocol`; EXP-01 ghi thêm `false_positive_rate_exact_only` theo giao thức cũ để thấy phần chênh.
 
 ### Thí nghiệm mở rộng (ngoài 8 thí nghiệm bắt buộc)
 

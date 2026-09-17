@@ -103,3 +103,29 @@ def test_do_dai_khong_hop_le_thi_dung_tau_fp():
     assert min_score_for_duration(0) == config.FP_THRESHOLD
     assert min_score_for_duration(None) == config.FP_THRESHOLD
     assert min_score_for_duration(-5) == config.FP_THRESHOLD
+
+
+def test_loai_tru_ban_ghi_o_tang_chromaprint(monkeypatch):
+    """Bản ghi bị loại không được thắng, kể cả khi nó trùng hệt truy vấn."""
+    import numpy as np
+
+    from backend.services import fingerprint_service
+
+    query = np.arange(200, dtype=np.uint32)
+    references = [("goc", query.copy(), 30.0),
+                  ("khac", np.arange(1000, 1200, dtype=np.uint32), 30.0)]
+    monkeypatch.setattr(fingerprint_service, "extract_query_fingerprint",
+                        lambda path: (30.0, "fp"))
+    monkeypatch.setattr(fingerprint_service, "_decode_array", lambda fp: query)
+    monkeypatch.setattr(fingerprint_service, "_reference_fingerprints",
+                        lambda db: (references, 0))
+
+    production = fingerprint_service.search_fingerprint(None, "q.wav")
+    assert production["match_type"] == "EXACT_MATCH"
+    assert production["recording_id"] == "goc"
+
+    held = fingerprint_service.search_fingerprint(
+        None, "q.wav", exclude_recording_ids=frozenset({"goc"}))
+    assert held["recording_id"] != "goc"
+    assert held.get("best_candidate_below_threshold") != "goc"
+    assert held["candidates_compared"] == 1

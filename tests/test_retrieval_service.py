@@ -61,3 +61,47 @@ def test_index_da_nap_khop_ban_do_id(vector_index):
     assert vector_index.ntotal == len(vector_index.recording_ids)
     assert vector_index.n_recordings > 0
     assert vector_index.meta.get("dimension") == 768
+
+
+def test_loai_tru_cho_ket_qua_y_het_index_da_loc():
+    """
+    exclude_recording_ids phải tương đương TUYỆT ĐỐI với việc tìm trên một index
+    không chứa các bản ghi đó — đây là điều kiện để held-out của EXP-08 đo đúng
+    mà không phải dựng lại FAISS cho từng bài nguồn.
+    """
+    rng = np.random.default_rng(7)
+    n_recordings, per_recording, dim = 120, 2, 32
+    matrix = rng.standard_normal((n_recordings * per_recording, dim)).astype("float32")
+    matrix /= np.linalg.norm(matrix, axis=1, keepdims=True)
+    recording_ids = [f"rec_{i // per_recording}" for i in range(len(matrix))]
+    full = VectorIndex(index=build_faiss_index(matrix), recording_ids=recording_ids,
+                       segments=list(range(len(matrix))))
+
+    for trial in range(20):
+        query = matrix[trial * 7 % len(matrix)] + 0.05 * rng.standard_normal(dim).astype("float32")
+        query /= np.linalg.norm(query)
+        # Loại đúng những bài GẦN NHẤT — trường hợp dễ rò nhất
+        nearest, _ = search_recordings(full, query, top_k=8, oversample=1)
+        excluded = frozenset(c["recording_id"] for c in nearest[: 1 + trial % 6])
+
+        keep = [i for i, rec in enumerate(recording_ids) if rec not in excluded]
+        filtered = VectorIndex(index=build_faiss_index(matrix[keep]),
+                               recording_ids=[recording_ids[i] for i in keep],
+                               segments=keep)
+
+        for top_k, oversample in ((5, 20), (3, 1)):
+            got, _ = search_recordings(full, query, top_k=top_k, oversample=oversample,
+                                       exclude_recording_ids=excluded)
+            want, _ = search_recordings(filtered, query, top_k=top_k, oversample=oversample)
+            assert [c["recording_id"] for c in got] == [c["recording_id"] for c in want]
+            assert [round(c["similarity_score"], 5) for c in got] == \
+                [round(c["similarity_score"], 5) for c in want]
+            assert not excluded & {c["recording_id"] for c in got}
+
+
+def test_loai_tru_het_thi_tra_rong():
+    index, matrix = make_index(n=4, dim=16)
+    vector_index = VectorIndex(index=index, recording_ids=["a", "a", "b", "b"])
+    got, _ = search_recordings(vector_index, matrix[0], top_k=5,
+                               exclude_recording_ids=frozenset({"a", "b"}))
+    assert got == []

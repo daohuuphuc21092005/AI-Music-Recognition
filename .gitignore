@@ -25,6 +25,7 @@ data/processed/mert_faiss_ALL.index
 # Checkpoint của thí nghiệm dài: chỉ là trạng thái để chạy tiếp sau khi bị ngắt,
 # tự xoá khi thí nghiệm lưu kết quả xong. Có thể lên tới vài chục MB.
 experiments/results/.checkpoints/
+experiments/results/.cache/
 
 # Bản sao lưu của .env: chính .env đã được ignore ngay dòng đầu, nhưng bản sao
 # thì KHÔNG, và chúng chứa nguyên POSTGRES_PASSWORD. Commit một lần là mật khẩu

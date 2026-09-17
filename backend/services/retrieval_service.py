@@ -99,24 +99,44 @@ def search_top_k(index, query_vector: np.ndarray, top_k: int = 5):
 
 
 def search_recordings(vector_index: VectorIndex, query_vector: np.ndarray,
-                      top_k: int = 5, oversample: int = 20):
+                      top_k: int = 5, oversample: int = 20,
+                      exclude_recording_ids: frozenset = None):
     """
     Trả Top-K RECORDING khác nhau, điểm của mỗi recording = similarity cao nhất
     trong các segment của nó.
 
     `oversample`: lấy dư segment từ FAISS để sau khi gộp vẫn đủ K recording.
+
+    `exclude_recording_ids`: cho kết quả Y HỆT việc tìm trên một index không chứa
+    các bản ghi đó (giao thức held-out), mà không phải dựng lại FAISS — bản cũ của
+    EXP-08 dựng lại index cho từng bài nguồn, tốn ~14 GiB ở 48.750 vector. Cách làm:
+    dò thêm đúng bằng số vector bị loại (E), bỏ chúng đi, rồi chỉ giữ `n_probe`
+    vector đầu còn lại. Top (n_probe + E) của index đầy đủ chứa nhiều nhất E vector
+    bị loại, nên phần còn lại chắc chắn chứa trọn top n_probe của index đã lọc.
     """
     if vector_index is None or vector_index.index is None or query_vector is None:
         return [], []
 
-    n_probe = min(vector_index.ntotal, max(top_k * oversample, 50))
-    scores, indices = search_top_k(vector_index.index, query_vector, top_k=n_probe)
+    excluded = exclude_recording_ids or frozenset()
+    n_excluded = (sum(1 for rec in vector_index.recording_ids if rec in excluded)
+                  if excluded else 0)
+    n_probe = min(vector_index.ntotal - n_excluded, max(top_k * oversample, 50))
+    if n_probe <= 0:
+        return [], {"segments_probed": 0, "segments_returned": 0}
+    scores, indices = search_top_k(vector_index.index, query_vector,
+                                   top_k=n_probe + n_excluded)
 
     best = {}
+    kept = 0
     for score, idx in zip(scores, indices):
         if idx < 0 or idx >= len(vector_index.recording_ids):
             continue
         rec_id = vector_index.recording_ids[idx]
+        if rec_id in excluded:
+            continue
+        kept += 1
+        if kept > n_probe:
+            break
         segment = vector_index.segments[idx] if idx < len(vector_index.segments) else None
         entry = best.get(rec_id)
         if entry is None:

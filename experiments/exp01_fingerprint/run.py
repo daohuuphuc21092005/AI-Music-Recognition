@@ -7,10 +7,13 @@ và đo Precision / Recall / F1 / False Positive Rate / Latency.
 Hai lượt đo:
   1. Lượt CHÍNH: reference đầy đủ. Truy vấn đúng khi bản ghi trả về trùng bản
      ghi nguồn VÀ điểm >= τFP.
-  2. Lượt HELD-OUT: loại toàn bộ fingerprint của bản ghi nguồn khỏi reference,
-     tức là giả lập "bài này không có trong CSDL". Mọi lần hệ thống vẫn nhận
-     một bản ghi nào đó đều là DƯƠNG TÍNH GIẢ. Đây là cách đo FPR trung thực
-     mà không cần thêm audio ngoài tập.
+  2. Lượt HELD-OUT: loại bản ghi nguồn khỏi reference, tức là giả lập "bài này
+     không có trong CSDL". Mọi lần hệ thống vẫn nhận một bản ghi nào đó đều là
+     DƯƠNG TÍNH GIẢ. Loại theo `experiments.common.HeldOutProtocol`: bản trùng
+     fingerprint, bản gần trùng, và với audio_overlay cả bài bị trộn chồng — thiếu
+     những thứ đó thì nhận ĐÚNG âm thanh còn trong CSDL cũng bị đếm là nhận nhầm.
+     Kết quả ghi cả `held_out_score_exact_only` (chỉ loại bản trùng hệt, giao
+     thức cũ) để thấy rõ phần chênh.
 
 Ngoài ra script quét τFP để đề xuất ngưỡng dựa trên số liệu thay vì phỏng đoán.
 
@@ -42,7 +45,7 @@ from backend.services.fingerprint_service import (
     extract_query_fingerprint,
     match_decoded,
 )
-from experiments.common import Checkpoint, print_table, save_result
+from experiments.common import Checkpoint, HeldOutProtocol, print_table, save_result
 
 EXPERIMENT_ID = "exp01_fingerprint_baseline"
 MANIFEST = os.path.join(config.BASE_DIR, "data", "test_queries", "manifest.csv")
@@ -103,6 +106,7 @@ def main() -> int:
     ambiguous = sum(1 for members in equivalence.values() if len(members) > 1)
     print(f"Reference: {len(reference)} fingerprint | Truy vấn: {len(queries)}")
     print(f"Bản ghi có fingerprint trùng với bản ghi khác: {ambiguous}/{len(equivalence)}")
+    held_out = HeldOutProtocol(queries)
 
     # Checkpoint: mỗi truy vấn phải dò qua TOÀN BỘ reference, nên chi phí tăng
     # theo tích số truy vấn × quy mô reference — hàng giờ ở quy mô hàng chục nghìn
@@ -112,6 +116,8 @@ def main() -> int:
         "reference_fingerprints": len(reference),
         "fp_max_align_offset": config.FP_MAX_ALIGN_OFFSET,
         "threshold_sweep": list(THRESHOLD_SWEEP),
+        "held_out_protocol": "exact+near_duplicates+overlay",
+        "near_duplicate_min_score": held_out.min_score,
     })
     reference_ids = np.array([rec_id for rec_id, _ in reference])
 
@@ -140,8 +146,11 @@ def main() -> int:
         true_class = equivalence.get(query["source_recording_id"],
                                      {query["source_recording_id"]})
 
-        # Lượt held-out: loại CẢ LỚP tương đương khỏi reference, trên cùng bộ điểm
+        # Lượt held-out trên cùng bộ điểm. Bản "exact_only" là giao thức cũ, giữ
+        # lại để thấy phần nhận nhầm nào thực ra là âm thanh vẫn còn trong CSDL.
         outside = ~np.isin(reference_ids, list(true_class))
+        held_score_exact = float(scores[outside].max()) if outside.any() else 0.0
+        outside = ~np.isin(reference_ids, list(held_out.exclusions(query)))
         held_score = float(scores[outside].max()) if outside.any() else 0.0
 
         checkpoint.add(query["path"], {
@@ -151,6 +160,7 @@ def main() -> int:
             "predicted": predicted,
             "score": round(float(score), 4),
             "held_out_score": round(float(held_score), 4),
+            "held_out_score_exact_only": round(float(held_score_exact), 4),
             "correct_recording": predicted in true_class,
             "exact_recording": predicted == query["source_recording_id"],
             "latency_ms": round(latency_ms, 1),
@@ -167,6 +177,8 @@ def main() -> int:
         accepted = [r for r in results if r["score"] >= tau]
         correct = [r for r in accepted if r["correct_recording"]]
         false_accept = [r for r in results if r["held_out_score"] >= tau]
+        false_accept_exact = [r for r in results
+                              if r.get("held_out_score_exact_only", r["held_out_score"]) >= tau]
 
         precision = len(correct) / len(accepted) if accepted else 0.0
         recall = len(correct) / len(results)
@@ -178,6 +190,7 @@ def main() -> int:
             "recall": round(recall, 4),
             "f1": round(f1, 4),
             "false_positive_rate": round(len(false_accept) / len(results), 4),
+            "false_positive_rate_exact_only": round(len(false_accept_exact) / len(results), 4),
             "accepted": len(accepted),
         })
 
@@ -254,22 +267,28 @@ def main() -> int:
             "reference_fingerprints": len(reference),
             "threshold_sweep": THRESHOLD_SWEEP,
             "current_tau_fp": config.FP_THRESHOLD,
-            "fpr_protocol": ("held-out: loại CẢ LỚP tương đương (mọi bản ghi có "
-                             "fingerprint y hệt) khỏi reference"),
+            "fpr_protocol": ("held-out: loại bản trùng fingerprint, bản gần trùng "
+                             "và (với audio_overlay) bài bị trộn chồng khỏi reference; "
+                             "false_positive_rate_exact_only = chỉ loại bản trùng hệt"),
+            "held_out_exclusions": held_out.describe(),
             "ground_truth": ("lớp tương đương fingerprint — gộp các bản thu trùng "
                              "nhau có thật trong corpus nguồn"),
             "matcher": "vectorized Chromaprint bit-error (khớp acoustid tham chiếu)",
         },
         metrics=metrics,
         notes=(
-            "Chạy trên corpus FMA thật: 1.000 fingerprint, mỗi bản ghi một giá "
-            "trị duy nhất, nên ground truth là một-một (bản trước có 2.650 dòng "
-            "mà chỉ 2.016 giá trị). Kết quả tách đôi rất rõ: nhóm biến đổi giữ "
-            "nguyên trục thời gian và cao độ (crop, MP3, EQ, gain, nhiễu) đạt "
-            "58-60/60; toàn bộ nhóm pitch shift và time stretch đạt 0/60 với "
-            "điểm ~0.005-0.046 — đây là giới hạn bản chất của fingerprinting và "
-            "chính là lý do tồn tại của tầng MERT. Matcher dò TOÀN BỘ offset "
-            "(FP_MAX_ALIGN_OFFSET=0)."
+            f"Reference {len(reference)} fingerprint; {len(results)} truy vấn từ "
+            f"{len({r['source_recording_id'] for r in results})} bài nguồn x "
+            f"{len(by_transformation)} phép biến đổi. Ở τFP = {config.FP_THRESHOLD}, "
+            "biến đổi KHÔNG khớp nổi truy vấn nào: "
+            + (", ".join(name for name, rows in sorted(by_transformation.items())
+                         if not any(r["correct_recording"]
+                                    and r["score"] >= config.FP_THRESHOLD for r in rows))
+               or "không có")
+            + ". Matcher dò "
+            + ("TOÀN BỘ offset" if not config.FP_MAX_ALIGN_OFFSET
+               else f"offset ±{config.FP_MAX_ALIGN_OFFSET} item")
+            + f" (FP_MAX_ALIGN_OFFSET={config.FP_MAX_ALIGN_OFFSET})."
         ),
         extra={"raw_results": results},
     )

@@ -16,7 +16,7 @@ Skill này hướng dẫn quy trình khoa học để thực hiện, đo lườn
 | **EXP-01** | Fingerprint Baseline | Đánh giá Chromaprint trên clean và slightly distorted audio | Precision, Recall, F1, FPR, Latency/track |
 | **EXP-02** | MERT Deep Retrieval | Đo lường độ chính xác tìm kiếm vector ngữ nghĩa của MERT | Recall@1, Recall@5, Recall@10, MRR, mAP |
 | **EXP-03** | Pooling Strategy | So sánh P1 (Mean) vs P2 (Mean+Std) vs P3 (Attention) | Retrieval accuracy vs Vector Dimension trade-off |
-| **EXP-04** | Hybrid Cascade | So sánh Fingerprint vs MERT vs Cascade (`FP → MERT`) | Macro-F1, Overall Latency, Resource Consumption |
+| **EXP-04** | Hybrid Cascade | So sánh 5 hệ: Chromaprint / MERT / Cover / Cascade `FP → MERT` / Cascade production `FP → MERT → Cover` | Precision, Recall, F1, nhận sai, latency theo từng hệ và từng phép biến đổi |
 | **EXP-05** | Robustness Analysis | Đánh giá độ bền trước 7 loại biến đổi trên Robustness Set | Per-transformation degradation rate |
 | **EXP-06** | Unknown Track Detection | Đánh giá khả năng từ chối nhận diện nhạc không có trong DB | False Match Rate (FMR), Reject Accuracy |
 | **EXP-07** | Cover Identification | Đánh giá nhận diện biến thể cover (nếu có module Cover) | Top-K Cover Recall, Alignment Score |
@@ -29,6 +29,14 @@ Skill này hướng dẫn quy trình khoa học để thực hiện, đo lườn
 ### Quy tắc Data Splitting Bắt buộc
 - **Split theo `recording_id`**: Tuyệt đối không chia dữ liệu theo segment. Mọi segment của cùng một bản thu phải nằm trọn vẹn trong tập Train HOẶC tập Test.
 - **Cover Identification**: Phải chia theo `composition_id`. Các phiên bản cover của cùng một bài hát không được phân tán ở cả hai tập.
+
+### Giao thức held-out ("bài không có trong CSDL")
+- Dùng `experiments.common.HeldOutProtocol`, không tự viết lại. Nó loại khỏi reference: (1) bản trùng fingerprint y hệt, (2) bản gần trùng — điểm Chromaprint nguyên clip ≥ `NEAR_DUPLICATE_MIN_SCORE` (0.10, đo trên 100 bài nguồn: ba cặp 0.158–0.267 đều cùng nghệ sĩ/album, cặp kế tiếp chỉ 0.077 và không liên quan), (3) với `audio_overlay` là bài bị trộn chồng. Thiếu (3) thì nhận ra bài trộn chồng — nhận ĐÚNG — bị đếm là nhận nhầm: ở EXP-01 τFP 0.30, 2/4 "nhận nhầm" held-out là trường hợp này.
+- Chạy pipeline thật với held-out qua tham số `exclude_recording_ids` của `cascade_service.process_music_query` (đi xuyên Chromaprint, FAISS, chỉ mục Cover). Không bọc Session, không dựng lại FAISS. `tests/test_cascade_service.py::test_held_out_khong_ro_qua_tang_nao` chứng minh không rò.
+- EXP-06 KHÔNG dùng lớp gần trùng: nó giữ lại từng bản ghi trong 24.375 bài, dò láng giềng fingerprint cho cả kho là ~27 giờ.
+
+### Thứ tự chạy
+`python scripts/run_all_experiments.py` tự đi qua: hiệu chỉnh (01, 06, 03, 07) → `apply_calibrated_thresholds.py --write` → hỏi lại `backend.config` trong tiến trình mới và so với `identity_gate` của `configs/rules_v1.yaml` (lệch thì dừng) → tiêu thụ (02, 04, 05, 08, sweep license). EXP-05 từ chối chạy khi EXP-01 và EXP-04 không cùng bộ truy vấn. Máy RAM hạn chế: chạy tách bằng `Start-Process`, mỗi lúc một việc nặng.
 
 ### Quy trình Ghi nhận Experiment Log
 Mỗi lần chạy thí nghiệm, bắt buộc lưu lại file kết quả JSON với cấu trúc:

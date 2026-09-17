@@ -42,14 +42,49 @@ def load(name: str):
         return json.load(f)
 
 
+def query_set(result: dict) -> set:
+    return {(r["source_recording_id"], r["transformation"])
+            for r in result.get("raw_results") or []}
+
+
+def consistency_problems(exp01: dict, exp04: dict) -> list:
+    """
+    EXP-05 ghép số liệu của HAI lượt chạy khác nhau vào một bảng, nên chỉ hợp lệ
+    khi hai lượt dùng cùng bộ truy vấn. Từng có lúc hai file kết quả không chung
+    một truy vấn nào (0/1.900) mà bảng vẫn in ra bình thường.
+
+    τFP được phép khác: EXP-01 chạy TRƯỚC khi ghi ngưỡng đã hiệu chỉnh, EXP-04 chạy
+    SAU. Mọi con số "đúng/sai" của bảng này lấy từ EXP-04 nên dùng đúng τ hiện hành.
+    """
+    problems = []
+    q01, q04 = query_set(exp01), query_set(exp04)
+    if not q04:
+        problems.append("EXP-04 không lưu raw_results nên không đối chiếu được bộ truy vấn")
+    elif q01 != q04:
+        problems.append(
+            f"bộ truy vấn khác nhau: EXP-01 {len(q01)}, EXP-04 {len(q04)}, "
+            f"chung {len(q01 & q04)}")
+    return problems
+
+
 def main() -> int:
     exp01 = load("exp01_fingerprint_baseline")
     exp04 = load("exp04_hybrid_cascade")
     if not exp01 or not exp04:
         return 1
+    problems = consistency_problems(exp01, exp04)
+    if problems:
+        print("❌ Không ghép được EXP-01 với EXP-04: " + "; ".join(problems)
+              + ". Chạy lại cả hai trên cùng manifest và cùng ngưỡng.")
+        return 1
+    tau01 = exp01.get("parameters", {}).get("current_tau_fp")
+    if tau01 != exp04["parameters"].get("tau_fp"):
+        print(f"ℹ️  EXP-01 chạy với τFP {tau01}, EXP-04 với {exp04['parameters'].get('tau_fp')}"
+              " — số đúng/sai trong bảng lấy từ EXP-04.")
 
     fp_detail = exp01["metrics"]["per_transformation"]
     hybrid = exp04["metrics"]["per_transformation"]
+    has_cover = all("cover_correct" in v for v in hybrid.values())
 
     rows, family_metrics = [], {}
     for family, names in FAMILIES.items():
@@ -61,6 +96,9 @@ def main() -> int:
         fp_ok = sum(hybrid[t]["fingerprint_correct"] for t in present)
         mert_ok = sum(hybrid[t]["mert_correct"] for t in present)
         cascade_ok = sum(hybrid[t]["cascade_correct"] for t in present)
+        cover_ok = sum(hybrid[t].get("cover_correct", 0) for t in present)
+        no_cover_ok = sum(hybrid[t].get("cascade_no_cover_correct", cascade_ok)
+                          for t in present) if has_cover else cascade_ok
         fp_score = sum(hybrid[t]["fingerprint_mean_score"] * hybrid[t]["n"]
                        for t in present) / n
         mert_score = sum(hybrid[t]["mert_mean_score"] * hybrid[t]["n"]
@@ -70,6 +108,7 @@ def main() -> int:
             family, n,
             f"{fp_ok}/{n} ({fp_ok / n * 100:.0f}%)",
             f"{mert_ok}/{n} ({mert_ok / n * 100:.0f}%)",
+            *([f"{cover_ok}/{n} ({cover_ok / n * 100:.0f}%)"] if has_cover else []),
             f"{cascade_ok}/{n} ({cascade_ok / n * 100:.0f}%)",
             round(fp_score, 3), round(mert_score, 3),
         ])
@@ -78,6 +117,8 @@ def main() -> int:
             "fingerprint_accuracy": round(fp_ok / n, 4),
             "mert_accuracy": round(mert_ok / n, 4),
             "cascade_accuracy": round(cascade_ok / n, 4),
+            **({"cover_accuracy": round(cover_ok / n, 4),
+                "cascade_no_cover_accuracy": round(no_cover_ok / n, 4)} if has_cover else {}),
             "fingerprint_mean_score": round(fp_score, 4),
             "mert_mean_score": round(mert_score, 4),
             "transformations": present,
@@ -86,8 +127,8 @@ def main() -> int:
     print_table(
         "EXP-05 — Độ bền theo nhóm phép biến đổi",
         rows,
-        ["Nhóm biến đổi", "N", "Chromaprint", "MERT", "Cascade",
-         "Điểm FP TB", "Điểm MERT TB"],
+        ["Nhóm biến đổi", "N", "Chromaprint", "MERT", *(["Cover"] if has_cover else []),
+         "Cascade", "Điểm FP TB", "Điểm MERT TB"],
     )
 
     # Nhóm nào là điểm mù của từng tầng?
@@ -110,6 +151,8 @@ def main() -> int:
     fp_blind = blind("fingerprint_accuracy")
     mert_blind = blind("mert_accuracy")
     both_blind = [f for f in fp_blind if f in mert_blind]
+    cover_blind = blind("cover_accuracy") if has_cover else []
+    all_blind = [f for f in both_blind if f in cover_blind] if has_cover else both_blind
 
     def fmt(names, key):
         if not names:
@@ -121,8 +164,18 @@ def main() -> int:
     print(f"  Chromaprint : {fmt(fp_blind, 'fingerprint_accuracy')}")
     print(f"  MERT        : {fmt(mert_blind, 'mert_accuracy')}")
     print(f"  Cả hai tầng : {fmt(both_blind, 'cascade_accuracy')}")
+    if has_cover:
+        print(f"  Cover       : {fmt(cover_blind, 'cover_accuracy')}")
+        print(f"  Cả ba tầng  : {fmt(all_blind, 'cascade_accuracy')}")
+        rescued = [f for f in both_blind
+                   if family_metrics[f]["cascade_accuracy"]
+                   > family_metrics[f]["cascade_no_cover_accuracy"]]
+        for f in rescued:
+            m = family_metrics[f]
+            print(f"  -> {f}: Chromaprint và MERT cùng bó tay, tầng Cover đưa cascade từ "
+                  f"{m['cascade_no_cover_accuracy']:.2%} lên {m['cascade_accuracy']:.2%}")
 
-    if both_blind:
+    if both_blind and not has_cover:
         names = ", ".join(both_blind)
         worst = ", ".join(f"{family_metrics[f]['cascade_accuracy']:.2%}" for f in both_blind)
         print("")
@@ -154,6 +207,8 @@ def main() -> int:
             "families": {k: v for k, v in FAMILIES.items()},
             "tau_fp": exp04["parameters"]["tau_fp"],
             "tau_mert": exp04["parameters"]["tau_mert"],
+            "tau_cover": exp04["parameters"].get("tau_cover"),
+            "queries_shared_by_exp01_and_exp04": len(query_set(exp01)),
             "blind_spot_max_accuracy": BLIND_SPOT_MAX_ACCURACY,
         },
         metrics={
@@ -166,14 +221,18 @@ def main() -> int:
             "fingerprint_blind_spots": fp_blind,
             "mert_blind_spots": mert_blind,
             "both_blind_spots": both_blind,
+            "cover_blind_spots": cover_blind,
+            "all_tiers_blind_spots": all_blind,
+            "has_cover_stage": has_cover,
             # Kèm số thật, vì danh sách tên không cho biết "mù" tới mức nào.
             "blind_spot_accuracy": {
                 f: {
                     "fingerprint": family_metrics[f]["fingerprint_accuracy"],
                     "mert": family_metrics[f]["mert_accuracy"],
                     "cascade": family_metrics[f]["cascade_accuracy"],
+                    **({"cover": family_metrics[f]["cover_accuracy"]} if has_cover else {}),
                 }
-                for f in sorted(set(fp_blind) | set(mert_blind))
+                for f in sorted(set(fp_blind) | set(mert_blind) | set(cover_blind))
             },
             "per_transformation_fingerprint": fp_detail,
             "per_transformation_hybrid": hybrid,

@@ -161,11 +161,19 @@ def resolve_targets(args):
 
     from backend.database.session import engine
 
+    # --license: chỉ lấy bản ghi mang giấy phép đó. Cần cho EXP-08 — tập mẫu ngẫu
+    # nhiên gần như không có bài CC0 (117/24.375), nên lớp rủi ro LOW có 0 mẫu và
+    # macro-F1 bị méo.
+    license_filter = getattr(args, "license", None)
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT recording_id, audio_path FROM recordings
+            SELECT recording_id, audio_path FROM recordings r
             WHERE audio_path IS NOT NULL AND audio_path NOT LIKE 'simulated/%'
-        """)).fetchall()
+              AND (CAST(:license AS TEXT) IS NULL OR EXISTS (
+                  SELECT 1 FROM rights ri
+                  WHERE ri.recording_id = r.recording_id AND ri.license_type = :license))
+            ORDER BY recording_id
+        """), {"license": license_filter}).fetchall()
 
     targets, missing = [], 0
     for rec_id, audio_path in rows:
@@ -195,6 +203,8 @@ def main() -> int:
                         help="Chỉ lấy ngẫu nhiên N bản ghi nguồn (seed cố định). "
                              "Corpus vài nghìn bài x 18 biến đổi là hàng chục nghìn "
                              "file, không cần và không nên.")
+    parser.add_argument("--license", metavar="LICENSE_TYPE",
+                        help="Chỉ lấy bản ghi mang giấy phép này (vd. CC0)")
     parser.add_argument("--seed", type=int, default=42,
                         help="Seed cho --sample, để lặp lại được tập truy vấn")
     args = parser.parse_args()
@@ -220,8 +230,7 @@ def main() -> int:
     overlays = {}
     if len(targets) > 1:
         for index, (path, _) in enumerate(targets):
-            other_path = targets[(index + 1) % len(targets)][0]
-            overlays[path] = other_path
+            overlays[path] = targets[(index + 1) % len(targets)]
 
     rows = []
     if args.append and os.path.exists(MANIFEST):
@@ -239,6 +248,7 @@ def main() -> int:
         "sample_rate": SR,
         "mp3": can_mp3,
         "append": bool(args.append),
+        "license": args.license,
     })
 
     for path, rec_id in targets:
@@ -254,10 +264,11 @@ def main() -> int:
             print(f"⏭️  {os.path.basename(path)}: quá ngắn, bỏ qua")
             continue
 
-        overlay = None
+        overlay, overlay_rec_id = None, ""
         if path in overlays:
             # Cắt file chồng âm từ CÙNG mốc, nhưng nó có thể ngắn hơn -> tự lùi
-            overlay, _ = load_crop(overlays[path], crop_start)
+            overlay_path, overlay_rec_id = overlays[path]
+            overlay, _ = load_crop(overlay_path, crop_start)
 
         variants = build_variants(audio, overlay)
         stem = os.path.splitext(os.path.basename(path))[0]
@@ -276,6 +287,10 @@ def main() -> int:
                 "tempo_factor": TEMPO_FACTORS.get(name, 1.0),
                 "pitch_steps": PITCH_STEPS.get(name, 0),
                 "bitrate_kbps": "",
+                # Bài bị trộn chồng CŨNG nằm trong CSDL: held-out phải loại cả nó,
+                # nếu không thì nhận ra nó (là nhận đúng) bị đếm thành nhận nhầm.
+                "overlay_source_recording_id": (
+                    overlay_rec_id if name == "audio_overlay" else ""),
                 "expected_match_type": "EXACT_MATCH" if name in (
                     "original_crop30s", "crop_15s", "crop_10s", "noise_snr20",
                     "gain_minus12db") else "NEAR_MATCH",
@@ -299,6 +314,7 @@ def main() -> int:
                     "tempo_factor": 1.0,
                     "pitch_steps": 0,
                     "bitrate_kbps": achieved,
+                    "overlay_source_recording_id": "",
                     "expected_match_type": "EXACT_MATCH",
                 })
 
@@ -310,7 +326,7 @@ def main() -> int:
 
     fieldnames = ["query_id", "source_recording_id", "source_file", "transformation",
                   "path", "duration_s", "crop_start_s", "tempo_factor", "pitch_steps",
-                  "bitrate_kbps", "expected_match_type"]
+                  "bitrate_kbps", "overlay_source_recording_id", "expected_match_type"]
     with open(MANIFEST, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

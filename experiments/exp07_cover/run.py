@@ -28,7 +28,6 @@ Chạy trước:
     python scripts/build_cover_index.py      # cho phần chấm theo điều kiện server
     python experiments/exp03_pooling/run.py  # tuỳ chọn: cột so sánh MERT
 """
-import csv
 import json
 import os
 import sys
@@ -49,6 +48,7 @@ from backend.services.cover_service import (
     transpositions,
 )
 from experiments.common import (
+    HeldOutProtocol,
     OVERLAP_MIN,
     QUERY_HOP_S,
     REF_HOP_S,
@@ -188,19 +188,6 @@ def describe(values: list, percentile: int = None) -> dict:
     return out
 
 
-def same_audio_groups() -> dict:
-    """recording_id -> tập recording_id có CÙNG fingerprint (FMA có bài trùng audio)."""
-    path = os.path.join(config.DATA_DIR, "fingerprints_master.csv")
-    if not os.path.exists(path):
-        return {}
-    csv.field_size_limit(10 ** 9)
-    by_fingerprint = {}
-    with open(path, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            by_fingerprint.setdefault(row["fingerprint"], set()).add(row["recording_id"])
-    return {rec: ids for ids in by_fingerprint.values() for rec in ids}
-
-
 def runtime_protocol(manifest: list):
     """
     Chấm τCover đúng điều kiện server: 30 giây đầu của file truy vấn, tìm trên
@@ -220,7 +207,8 @@ def runtime_protocol(manifest: list):
     columns_of = {}
     for column, rec in enumerate(id_map):
         columns_of.setdefault(rec, []).append(column)
-    groups = same_audio_groups()
+    # Held-out loại bản trùng, bản gần trùng và bài bị trộn chồng (audio_overlay)
+    protocol = HeldOutProtocol(manifest)
 
     print(f"\nChấm theo điều kiện server: {len(manifest)} truy vấn x chỉ mục "
           f"{len(columns_of)} bài...")
@@ -228,11 +216,12 @@ def runtime_protocol(manifest: list):
     skipped = 0
     for row in manifest:
         source = row["source_recording_id"]
-        same_audio = groups.get(source, {source})
-        excluded = [c for rec in same_audio for c in columns_of.get(rec, [])]
+        same_audio = protocol.exact_class(source)
+        source_columns = [c for rec in same_audio for c in columns_of.get(rec, [])]
+        excluded = [c for rec in protocol.exclusions(row) for c in columns_of.get(rec, [])]
         path = row["path"] if os.path.isabs(row["path"]) else os.path.join(config.BASE_DIR, row["path"])
         # Bài nguồn không nằm trong chỉ mục thì không có đáp án đúng để chấm
-        if not excluded or not os.path.exists(path):
+        if not source_columns or not os.path.exists(path):
             skipped += 1
             continue
         try:
@@ -267,6 +256,7 @@ def runtime_protocol(manifest: list):
     sweep = threshold_sweep(top1_records, held_out, noise_scores)
     best_row, safe = pick_threshold(sweep)
     return {
+        "held_out_exclusions": protocol.describe(),
         "gallery_recordings": len(columns_of),
         "queries": len(top1_records),
         "skipped_queries": skipped,
@@ -629,7 +619,9 @@ def main() -> int:
             "runtime_protocol": {
                 "query": f"{RUNTIME_DURATION_S:g} giây đầu của file truy vấn (offset 0)",
                 "gallery": "toàn bộ chỉ mục cover (scripts/build_cover_index.py)",
-                "held_out": "bỏ mọi bản ghi CÙNG fingerprint với bài nguồn",
+                "held_out": ("bỏ bản trùng fingerprint, bản gần trùng và (với "
+                             "audio_overlay) bài bị trộn chồng — xem "
+                             "metrics.runtime_protocol.held_out_exclusions"),
             },
             "compared_against_exp03": bool(mert),
         },

@@ -289,3 +289,48 @@ def test_loi_tang_cover_khong_lo_noi_dung_ngoai_le(monkeypatch):
     assert result["match_type"] == "UNKNOWN"
     assert result["evidence"]["cover"]["error"] == "COVER_STAGE_FAILED"
     assert "music-rights-data" not in str(result["evidence"])
+
+
+@requires_db
+def test_held_out_khong_ro_qua_tang_nao(db_session, vector_index):
+    """
+    Bằng chứng lỗ rò EXP-08 đã bịt: cùng một truy vấn, không loại thì tìm ra bài
+    nguồn; loại bài nguồn (và các bản trùng fingerprint) thì KHÔNG tầng nào —
+    Chromaprint, MERT hay Cover — được trả về id đã loại.
+    """
+    import csv
+    import os
+
+    from sqlalchemy import text
+
+    manifest = os.path.join(config.BASE_DIR, "data", "test_queries", "manifest.csv")
+    if not os.path.exists(manifest):
+        pytest.skip("Chưa có tập truy vấn (scripts/augment_audio.py --from-db)")
+    with open(manifest, newline="", encoding="utf-8") as f:
+        row = next((r for r in csv.DictReader(f)
+                    if r["transformation"] == "original_crop30s"
+                    and os.path.exists(os.path.join(config.BASE_DIR, r["path"]))), None)
+    if row is None:
+        pytest.skip("Không có file truy vấn original_crop30s nào trên đĩa")
+    query_path = os.path.join(config.BASE_DIR, row["path"])
+    source = row["source_recording_id"]
+
+    same = {str(r[0]) for r in db_session.execute(text(
+        "SELECT recording_id FROM fingerprints WHERE fingerprint = "
+        "(SELECT fingerprint FROM fingerprints WHERE recording_id = :rec LIMIT 1)"),
+        {"rec": source}).fetchall()} | {source}
+
+    base = process_music_query(query_path, db_session, vector_index, top_k=5)
+    assert base["recording_id"] in same, "Không loại gì thì phải tìm ra bài nguồn"
+
+    held = process_music_query(query_path, db_session, vector_index, top_k=5,
+                               exclude_recording_ids=same)
+    evidence = held["evidence"]
+    returned = {held.get("recording_id"),
+                (evidence.get("fingerprint") or {}).get("recording_id"),
+                (evidence.get("fingerprint") or {}).get("best_candidate_below_threshold")}
+    returned |= {c["recording_id"] for c in held.get("candidates") or []}
+    returned |= {c["recording_id"] for c in (evidence.get("cover") or {}).get("candidates") or []}
+    assert not (returned - {None}) & same
+    # Giữ lại bài có audio thật trong CSDL thì tầng 1 không được nhận ra nó nữa
+    assert held["pipeline_stage"] != "STAGE_1_CHROMAPRINT" or held["recording_id"] not in same

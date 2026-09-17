@@ -412,6 +412,187 @@ def protocol_params(reference_windows: int, query_windows: int) -> dict:
 
 
 # --------------------------------------------------------------------------
+# Giao thức held-out: bài nguồn phải VẮNG MẶT THẬT khỏi reference
+# --------------------------------------------------------------------------
+NEIGHBOUR_CACHE = os.path.join(RESULTS_DIR, ".cache", "fingerprint_neighbours.json")
+# Chỉ lưu láng giềng có điểm từ mức này trở lên. Hai bài không liên quan cho điểm
+# Chromaprint (nguyên clip với nguyên clip) cỡ 0.005–0.05.
+NEIGHBOUR_FLOOR = 0.05
+# Đo trên 100 bài nguồn x 24.375 fingerprint (2026-09-16): ba cặp 0.267 / 0.186 /
+# 0.158 đều CÙNG nghệ sĩ và cùng album hoặc cùng bài (bản 12" và 7" của "Digg It!");
+# cặp cao nhất tiếp theo chỉ 0.077 và là bài không liên quan. 0.10 nằm giữa khoảng
+# trống đó. Quy mô reference đổi thì dò lại (đệm tự mất hiệu lực theo chữ ký bảng).
+NEAR_DUPLICATE_MIN_SCORE = 0.10
+
+
+def _fingerprint_rows() -> list:
+    from sqlalchemy import text
+
+    from backend.database.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        rows = db.execute(text("SELECT recording_id, fingerprint FROM fingerprints")).fetchall()
+    finally:
+        db.close()
+    return [(str(rec_id), str(fingerprint)) for rec_id, fingerprint in rows]
+
+
+def fingerprint_neighbours(source_ids, rows: list = None) -> dict:
+    """
+    {source_id: [[recording_id, điểm], ...]}: các bản ghi KHÁC có điểm Chromaprint
+    so nguyên clip với nguyên clip ≥ NEIGHBOUR_FLOOR, giảm dần.
+
+    Mỗi bài nguồn phải dò toàn bộ bảng fingerprints (~4 giây ở 24.375 bản ghi), nên
+    kết quả được lưu đệm theo chữ ký nội dung của bảng; chỉ bài chưa có mới phải tính.
+    """
+    import hashlib
+
+    from backend.services.fingerprint_service import _decode_array, match_decoded
+
+    rows = rows if rows is not None else _fingerprint_rows()
+    digest = hashlib.md5()
+    for rec_id, fingerprint in sorted(rows):
+        digest.update(f"{rec_id}:{fingerprint}\n".encode("utf-8"))
+    signature = {"fingerprints": len(rows), "digest": digest.hexdigest(),
+                 "floor": NEIGHBOUR_FLOOR}
+
+    cache = {}
+    if os.path.exists(NEIGHBOUR_CACHE):
+        try:
+            with open(NEIGHBOUR_CACHE, encoding="utf-8") as f:
+                stored = json.load(f)
+            if stored.get("signature") == signature:
+                cache = stored.get("neighbours", {})
+        except (OSError, ValueError):
+            cache = {}
+
+    def flush():
+        os.makedirs(os.path.dirname(NEIGHBOUR_CACHE), exist_ok=True)
+        tmp = NEIGHBOUR_CACHE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"signature": signature, "neighbours": cache}, f)
+        os.replace(tmp, NEIGHBOUR_CACHE)
+
+    sources = list(dict.fromkeys(str(s) for s in source_ids))
+    missing = [s for s in sources if s not in cache]
+    if missing:
+        decoded = []
+        for rec_id, fingerprint in rows:
+            try:
+                decoded.append((rec_id, _decode_array(fingerprint)))
+            except Exception:
+                continue
+        vector_of = dict(decoded)
+        print(f"Dò láng giềng fingerprint cho {len(missing)} bài nguồn "
+              f"x {len(decoded)} bản ghi...")
+        for position, source in enumerate(missing, start=1):
+            query = vector_of.get(source)
+            found = []
+            if query is not None:
+                for rec_id, vector in decoded:
+                    if rec_id == source:
+                        continue
+                    score = match_decoded(query, vector)
+                    if score >= NEIGHBOUR_FLOOR:
+                        found.append([rec_id, round(float(score), 4)])
+            cache[source] = sorted(found, key=lambda item: -item[1])
+            if position % 10 == 0 or position == len(missing):
+                flush()
+                print(f"  {position}/{len(missing)}")
+    return {s: cache.get(s, []) for s in sources}
+
+
+def overlay_partners(manifest: list) -> dict:
+    """
+    {source_recording_id: recording_id của bài bị TRỘN CHỒNG trong truy vấn audio_overlay}.
+
+    Bài trộn chồng cũng nằm trong reference, nên khi chỉ giữ lại bài nguồn mà hệ
+    thống nhận ra bài trộn chồng thì đó là nhận ĐÚNG, không phải nhận nhầm. Trên
+    EXP-01 ở τFP 0.30, 2 trong 4 "nhận nhầm" held-out là đúng trường hợp này
+    (điểm 0.93 và 0.90).
+
+    Dòng sinh sau có cột `overlay_source_recording_id`. Dòng cũ thì suy ra theo quy
+    tắc của scripts/augment_audio.py: nguồn thứ i trộn nguồn thứ i+1 (vòng tròn)
+    theo thứ tự xuất hiện, CHỈ xét các nguồn chưa có cột tường minh — nhờ vậy manifest
+    ghi nối (`--append`) vẫn suy đúng phần cũ. Quy tắc này lệch nếu lượt sinh cũ từng
+    BỎ QUA một nguồn quá ngắn, vì bài bị bỏ qua vẫn được đem trộn cho nguồn trước nó.
+    """
+    overlay_rows = [row for row in manifest if row.get("transformation") == "audio_overlay"]
+    explicit = {row["source_recording_id"]: row["overlay_source_recording_id"]
+                for row in overlay_rows if row.get("overlay_source_recording_id")}
+    legacy = list(dict.fromkeys(row["source_recording_id"] for row in overlay_rows
+                                if row["source_recording_id"] not in explicit))
+    derived = ({source: legacy[(i + 1) % len(legacy)] for i, source in enumerate(legacy)}
+               if len(legacy) >= 2 else {})
+    return {**derived, **explicit}
+
+
+class HeldOutProtocol:
+    """
+    Tập bản ghi phải loại khỏi reference để một truy vấn thật sự là "bài ngoài CSDL".
+
+    Ba lớp, lớp nào cũng đã gặp trong dữ liệu thật:
+      1. Fingerprint y hệt: corpus có bản thu bị nhập trùng dưới nhiều recording_id.
+      2. Gần trùng: điểm Chromaprint nguyên clip ≥ `min_score`. Ví dụ
+         "Digg It! (12\" FunkMixx)" và "Digg It! (7\" FunkEdit)" cùng nghệ sĩ: điểm
+         nguyên clip 0.158, còn đoạn cắt 10–15 giây khớp tới 0.35 > τFP.
+      3. Truy vấn audio_overlay: bài bị trộn chồng, kèm cả lớp 1–2 của nó.
+
+    Không loại đủ thì held-out đếm cả những lần hệ thống nhận ĐÚNG âm thanh đang có
+    trong CSDL là "nhận nhầm", và False Match Rate bị thổi phồng.
+    """
+
+    def __init__(self, manifest: list, min_score: float = NEAR_DUPLICATE_MIN_SCORE,
+                 rows: list = None):
+        rows = rows if rows is not None else _fingerprint_rows()
+        by_fingerprint = {}
+        for rec_id, fingerprint in rows:
+            by_fingerprint.setdefault(fingerprint, set()).add(rec_id)
+        self.exact = {rec: members for members in by_fingerprint.values() for rec in members}
+        self.overlay = overlay_partners(manifest)
+        self.min_score = min_score
+        self.sources = list(dict.fromkeys(row["source_recording_id"] for row in manifest))
+        self.neighbours = fingerprint_neighbours(
+            list(dict.fromkeys(self.sources + list(self.overlay.values()))), rows)
+
+    def exact_class(self, rec_id) -> set:
+        rec_id = str(rec_id)
+        return set(self.exact.get(rec_id, {rec_id}))
+
+    def same_audio(self, rec_id) -> set:
+        members = self.exact_class(rec_id)
+        for other, score in self.neighbours.get(str(rec_id), []):
+            if score >= self.min_score:
+                members |= self.exact_class(other)
+        return members
+
+    def exclusions(self, row: dict) -> set:
+        source = row["source_recording_id"]
+        excluded = self.same_audio(source)
+        partner = self.overlay.get(source)
+        if row.get("transformation") == "audio_overlay" and partner:
+            excluded |= self.same_audio(partner)
+        return excluded
+
+    def describe(self) -> dict:
+        """Ghi vào `parameters` của kết quả: người đọc phải biết đã loại những gì."""
+        near = {source: [[rec, score] for rec, score in self.neighbours.get(source, [])
+                         if score >= self.min_score]
+                for source in self.sources}
+        return {
+            "near_duplicate_min_score": self.min_score,
+            "neighbour_floor": NEIGHBOUR_FLOOR,
+            "sources": len(self.sources),
+            "sources_with_exact_duplicates": sum(
+                1 for s in self.sources if len(self.exact_class(s)) > 1),
+            "sources_with_near_duplicates": sum(1 for s in self.sources if near[s]),
+            "near_duplicates": {s: pairs for s, pairs in near.items() if pairs},
+            "overlay_pairs": len(self.overlay),
+        }
+
+
+# --------------------------------------------------------------------------
 # In bảng kết quả
 # --------------------------------------------------------------------------
 def print_table(title: str, rows: list, headers: list) -> None:

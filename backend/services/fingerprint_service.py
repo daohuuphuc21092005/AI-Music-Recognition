@@ -313,12 +313,17 @@ def _reference_fingerprints(db: Session) -> tuple:
     return _reference_cache["rows"], _reference_cache["undecodable"]
 
 
-def search_fingerprint(db: Session, audio_path: str) -> dict:
+def search_fingerprint(db: Session, audio_path: str,
+                       exclude_recording_ids: frozenset = None) -> dict:
     """
     Quét tuyến tính mọi fingerprint tham chiếu (đã giải nén sẵn, cache theo tiến trình).
 
     Trả EXACT_MATCH khi điểm cao nhất >= FP_THRESHOLD, ngược lại NO_MATCH kèm
     điểm tốt nhất để tầng 2 (MERT) tiếp quản.
+
+    `exclude_recording_ids`: bỏ qua các bản ghi này như thể chúng không có trong
+    CSDL (giao thức held-out của thí nghiệm). Lọc trên danh sách đã giải nén chứ
+    không đụng câu SQL, nên bộ đệm reference dùng chung vẫn đúng. None = production.
     """
     query_duration, query_fp = extract_query_fingerprint(audio_path)
     query_vec = _decode_array(query_fp)
@@ -329,7 +334,10 @@ def search_fingerprint(db: Session, audio_path: str) -> dict:
     best_match_id, best_score = None, 0.0
     compared, skipped_by_duration = 0, 0
 
+    excluded = exclude_recording_ids or ()
     for rec_id, db_vec, db_duration in references:
+        if rec_id in excluded:
+            continue
         # Lọc theo độ dài (mặc định TẮT: window = 0) — bật lên sẽ nhanh hơn
         # nhiều nhưng có thể ảnh hưởng recall với truy vấn bị cắt (crop).
         if window > 0 and db_duration and query_duration:

@@ -11,15 +11,18 @@ chỉ là một dòng sai trong bảng retrieval — nó kéo theo cả một b�
 và có thể lật hẳn mức rủi ro.
 
 Thiết kế:
-  - Truy vấn : 36 file biến đổi trong `data/test_queries/`.
+  - Truy vấn : các file biến đổi trong `data/test_queries/manifest.csv`
+                (`--sources N` để chỉ lấy N bài nguồn đầu tiên).
   - Hai điều kiện cho MỖI truy vấn:
       * `known`    : reference đầy đủ. Nhãn đúng = quyết định của Rule Engine khi
                      ĐỊNH DANH HOÀN HẢO (oracle: rights của đúng bản ghi nguồn,
                      identity_confidence = 1.0).
-      * `held_out` : loại CẢ LỚP TƯƠNG ĐƯƠNG fingerprint của bản ghi nguồn khỏi
-                     bảng fingerprints VÀ khỏi FAISS index (giao thức của EXP-06).
-                     Nhãn đúng = UNKNOWN — hệ thống buộc phải từ chối.
-    Việc loại bỏ được thực hiện bằng cách LỌC ở tầng đọc, KHÔNG xoá gì trong CSDL.
+      * `held_out` : bài nguồn VẮNG MẶT khỏi cả ba tầng (fingerprint, FAISS, chỉ mục
+                     Cover), kèm bản trùng/gần trùng và bài bị trộn chồng
+                     (`experiments.common.HeldOutProtocol`). Nhãn đúng = UNKNOWN.
+    Việc loại bỏ đi qua tham số `exclude_recording_ids` của
+    `cascade_service.process_music_query` — đúng đường chạy production, không
+    sửa CSDL, không dựng lại index.
   - Mỗi kết quả nhận diện được đem chấm với nhiều `usage_context` khác nhau
     (nền tảng / mục đích thương mại / bật kiếm tiền), vì cùng một bản ghi có thể
     ra mức rủi ro khác nhau tuỳ ngữ cảnh sử dụng.
@@ -31,16 +34,17 @@ Chạy trước:
     python scripts/augment_audio.py --from-db
     python init_db.py
 """
+import argparse
 import csv
+import hashlib
 import os
 import sys
 import time
-from collections import defaultdict
+from collections import Counter
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
-from sqlalchemy import text
 
 from backend import config
 from backend.database.session import SessionLocal
@@ -50,9 +54,9 @@ from backend.services.decision_service import (
     evaluate_rights_and_risk,
     load_rules,
 )
-from backend.services.retrieval_service import VectorIndex, build_faiss_index, load_index
+from backend.services.retrieval_service import load_index
 from backend.services.rights_service import get_full_music_rights
-from experiments.common import Checkpoint, print_table, save_result
+from experiments.common import Checkpoint, HeldOutProtocol, print_table, save_result
 
 EXPERIMENT_ID = "exp08_end_to_end"
 MANIFEST = os.path.join(config.BASE_DIR, "data", "test_queries", "manifest.csv")
@@ -62,73 +66,6 @@ USAGE_CONTEXTS = {
     "noncommercial": {"platform": "youtube", "commercial_use": False, "monetization": False},
     "commercial": {"platform": "youtube", "commercial_use": True, "monetization": True},
 }
-
-
-# --------------------------------------------------------------------------
-# Giữ lại (held-out) mà không đụng vào dữ liệu
-# --------------------------------------------------------------------------
-class _FilteredRows:
-    """Kết quả truy vấn đã lọc, chỉ cần đủ giao diện mà search_fingerprint dùng."""
-
-    def __init__(self, rows):
-        self._rows = rows
-
-    def fetchall(self):
-        return self._rows
-
-
-class HeldOutSession:
-    """
-    Bọc quanh Session thật: mọi câu lệnh đi qua bình thường, RIÊNG câu đọc bảng
-    `fingerprints` thì lọc bỏ các recording bị giữ lại. Không DELETE, không
-    transaction treo — CSDL của người dùng giữ nguyên.
-    """
-
-    def __init__(self, db, excluded: set):
-        self._db = db
-        self._excluded = {str(x) for x in excluded}
-
-    def execute(self, statement, *args, **kwargs):
-        result = self._db.execute(statement, *args, **kwargs)
-        if "from fingerprints" in str(statement).lower():
-            return _FilteredRows([row for row in result.fetchall()
-                                  if str(row[0]) not in self._excluded])
-        return result
-
-    def __getattr__(self, name):
-        return getattr(self._db, name)
-
-
-def filtered_index(vector_index: VectorIndex, excluded: set) -> VectorIndex:
-    """Dựng lại FAISS index sau khi bỏ mọi vector của các recording bị giữ lại."""
-    excluded = {str(x) for x in excluded}
-    keep = [i for i, rec in enumerate(vector_index.recording_ids)
-            if str(rec) not in excluded]
-    if not keep:
-        raise RuntimeError("Loại hết vector khỏi index — không còn gì để tìm kiếm.")
-
-    matrix = vector_index.index.reconstruct_n(0, vector_index.ntotal).astype("float32")
-    segments = vector_index.segments
-    return VectorIndex(
-        index=build_faiss_index(matrix[keep]),
-        recording_ids=[vector_index.recording_ids[i] for i in keep],
-        segments=[segments[i] for i in keep] if segments else [],
-        meta=dict(vector_index.meta),
-    )
-
-
-def fingerprint_equivalence(db) -> dict:
-    """recording_id -> tập recording_id có fingerprint y hệt (xem EXP-01)."""
-    rows = db.execute(text("SELECT recording_id, fingerprint FROM fingerprints")).fetchall()
-    classes = defaultdict(set)
-    for rec_id, fingerprint in rows:
-        classes[str(fingerprint)].add(str(rec_id))
-
-    equivalence = {}
-    for members in classes.values():
-        for rec_id in members:
-            equivalence[rec_id] = members
-    return equivalence
 
 
 # --------------------------------------------------------------------------
@@ -204,29 +141,69 @@ def percentiles(values):
 
 
 # --------------------------------------------------------------------------
+def select_queries(queries: list, sources: int = None, per_license: int = None,
+                   license_of=None) -> list:
+    """
+    Chọn bài nguồn theo thứ tự manifest (tất định, không ngẫu nhiên):
+      - `per_license`: tối đa N bài cho MỖI loại giấy phép. Mẫu ngẫu nhiên gần như
+        không có CC0 (117/24.375 bài) — nhánh duy nhất ra LOW — nên chọn phân tầng
+        mới cho lớp đó có mẫu mà không phải chạy cả manifest.
+      - `sources`: N bài đầu tiên.
+    """
+    order = list(dict.fromkeys(q["source_recording_id"] for q in queries))
+    if per_license:
+        taken, keep = Counter(), set()
+        for source in order:
+            license_type = license_of(source)
+            if taken[license_type] < per_license:
+                taken[license_type] += 1
+                keep.add(source)
+    elif sources:
+        keep = set(order[:sources])
+    else:
+        return queries
+    return [q for q in queries if q["source_recording_id"] in keep]
+
+
+def source_license(db, recording_id: str):
+    rights = (get_full_music_rights(recording_id, db) or {}).get("rights_and_licensing") or {}
+    return rights.get("license_type") or "KHÔNG CÓ"
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sources", type=int, default=None,
+                        help="Chỉ chạy N bài nguồn đầu tiên của manifest")
+    parser.add_argument("--per-license", type=int, default=None,
+                        help="Tối đa N bài nguồn cho mỗi loại giấy phép")
+    args = parser.parse_args()
+
     if not os.path.exists(MANIFEST):
         print(f"Chưa có tập truy vấn: {MANIFEST}\n"
               f"   Chạy: python scripts/augment_audio.py --from-db")
         return 1
 
     with open(MANIFEST, newline="", encoding="utf-8") as f:
-        queries = list(csv.DictReader(f))
+        manifest = list(csv.DictReader(f))
 
     db = SessionLocal()
     full_index = load_index(config.FAISS_INDEX_PATH, config.FAISS_ID_MAP_PATH)
 
     try:
-        equivalence = fingerprint_equivalence(db)
+        queries = select_queries(manifest, args.sources, args.per_license,
+                                 license_of=lambda rec: source_license(db, rec))
+        # Dựng trên CẢ manifest để cặp bài trộn chồng không phụ thuộc --sources
+        held_out = HeldOutProtocol(manifest)
 
         print(f"Reference: {full_index.ntotal} vector / "
               f"{full_index.n_recordings} bản ghi có embedding")
         print(f"Truy vấn: {len(queries)} file x 2 điều kiện x "
               f"{len(USAGE_CONTEXTS)} ngữ cảnh sử dụng")
-        print(f"τFP = {config.FP_THRESHOLD} | τMERT = {config.MERT_THRESHOLD}\n")
+        print(f"τFP = {config.FP_THRESHOLD} | τMERT = {config.MERT_THRESHOLD} | "
+              f"τCover = {config.COVER_THRESHOLD} (bật: {config.COVER_ENABLED})\n")
 
-        # Cache: oracle rights + index đã lọc, tra theo bản ghi nguồn
-        rights_cache, index_cache = {}, {}
+        # Cache oracle rights theo bản ghi nguồn
+        rights_cache = {}
 
         # Checkpoint theo FILE truy vấn: mỗi file sinh ra 2 điều kiện x N ngữ
         # cảnh, và cả nhóm đó được ghi cùng lúc nên không bao giờ lưu nửa vời.
@@ -239,8 +216,15 @@ def main() -> int:
         checkpoint = Checkpoint(EXPERIMENT_ID, {
             "tau_fp": config.FP_THRESHOLD,
             "tau_mert": config.MERT_THRESHOLD,
+            "tau_cover": config.COVER_THRESHOLD,
+            "cover_enabled": config.COVER_ENABLED,
             "top_k": config.TOP_K,
             "queries": len(queries),
+            # Cùng số truy vấn nhưng khác bài nguồn thì checkpoint cũ trộn vào bảng
+            "query_set": hashlib.md5("|".join(sorted(q["path"] for q in queries))
+                                     .encode("utf-8")).hexdigest(),
+            "held_out_protocol": "exclude_recording_ids+near_duplicates+overlay",
+            "near_duplicate_min_score": held_out.min_score,
             "usage_contexts": sorted(USAGE_CONTEXTS),
             "reference_vectors": full_index.ntotal,
             "identity_gate": gate.get("min_identity_confidence_by_match_type"),
@@ -258,24 +242,19 @@ def main() -> int:
             batch = []
 
             true_rec = query["source_recording_id"]
-            klass = equivalence.get(true_rec, {true_rec})
+            klass = held_out.exact_class(true_rec)
+            excluded = held_out.exclusions(query)
 
             if true_rec not in rights_cache:
                 rights_cache[true_rec] = get_full_music_rights(true_rec, db)
             true_rights = rights_cache[true_rec]
 
             for condition in ("known", "held_out"):
-                if condition == "known":
-                    session, index = db, full_index
-                else:
-                    if true_rec not in index_cache:
-                        index_cache[true_rec] = filtered_index(full_index, klass)
-                    session, index = HeldOutSession(db, klass), index_cache[true_rec]
-
                 start = time.perf_counter()
                 cascade = process_music_query(
-                    audio_path=path, db=session, vector_index=index,
+                    audio_path=path, db=db, vector_index=full_index,
                     top_k=config.TOP_K,
+                    exclude_recording_ids=excluded if condition == "held_out" else None,
                 )
                 identify_ms = (time.perf_counter() - start) * 1000
 
@@ -309,11 +288,18 @@ def main() -> int:
                         "same_equivalence_class_but_other_id": bool(
                             predicted_rec and str(predicted_rec) in klass
                             and str(predicted_rec) != true_rec),
+                        # Chỉ có nghĩa ở held_out: phải luôn False, nếu True là lỗ rò
+                        "predicted_excluded_recording": bool(
+                            condition == "held_out" and predicted_rec
+                            and str(predicted_rec) in excluded),
+                        "excluded_recordings": len(excluded) if condition == "held_out" else 0,
                         "match_type": cascade.get("match_type"),
                         "pipeline_stage": cascade.get("pipeline_stage"),
                         "identity_confidence": round(
                             float(cascade.get("identity_confidence") or 0.0), 4),
                         "true_risk": truth,
+                        "true_license": ((true_rights or {}).get("rights_and_licensing")
+                                         or {}).get("license_type"),
                         "predicted_risk": decision["risk_level"],
                         "predicted_category": decision["category"],
                         "rule_id": decision["evidence"]["rule_id"],
@@ -370,6 +356,12 @@ def main() -> int:
     known = [r for r in records if r["condition"] == "known"]
     unknown_detected = sum(1 for r in held if r["match_type"] == "UNKNOWN")
     false_match = sum(1 for r in held if r["predicted_recording_id"])
+
+    leaks = sum(1 for r in held if r.get("predicted_excluded_recording"))
+    if leaks:
+        raise RuntimeError(
+            f"Lỗ rò held-out: {leaks} truy vấn trả về đúng bản ghi đã bị loại. "
+            f"Kết quả không dùng được.")
 
     identification = {
         "known_identified_correctly": round(
@@ -442,6 +434,12 @@ def main() -> int:
           f"(False Match Rate {identification['false_match_rate_on_held_out'] * 100:.2f}%, "
           f"ngưỡng §16 là ≤5%)")
 
+    # Đọc từ bản ghi đã lưu chứ không từ rights_cache: chạy tiếp từ checkpoint thì
+    # cache chỉ chứa những bài của lượt này.
+    source_licenses = list({
+        r["true_recording_id"]: r.get("true_license") or "KHÔNG CÓ" for r in known
+    }.values())
+
     target = 0.80
     verdict = "ĐẠT" if overall["macro_f1"] >= target else "CHƯA ĐẠT"
     print(f"Ngưỡng nghiệm thu §16 (Macro-F1 ≥ {target}): {verdict} "
@@ -481,14 +479,18 @@ def main() -> int:
             "protocol": "full pipeline: cascade -> rights -> Rule Engine; nhãn đúng "
                         "sinh bằng oracle identity (điều kiện known) và UNKNOWN "
                         "(điều kiện held_out)",
-            "held_out_protocol": ("loại cả lớp tương đương fingerprint khỏi bảng "
-                                  "fingerprints và khỏi FAISS index, bằng cách LỌC "
-                                  "ở tầng đọc — không sửa dữ liệu. Phải loại CẢ LỚP: "
-                                  "corpus có bản thu trùng nhau, bỏ sót một bản là "
-                                  "bài vẫn còn trong reference và điều kiện held-out "
-                                  "thành vô nghĩa"),
+            "held_out_protocol": ("exclude_recording_ids của cascade_service: bài "
+                                  "nguồn vắng mặt khỏi CẢ BA tầng (fingerprint, FAISS, "
+                                  "chỉ mục Cover), kèm bản trùng fingerprint, bản gần "
+                                  "trùng và bài bị trộn chồng. Không sửa dữ liệu, "
+                                  "không dựng lại index."),
+            "held_out_exclusions": held_out.describe(),
+            "sources_selected": args.sources,
+            "per_license_selected": args.per_license,
             "tau_fp": config.FP_THRESHOLD,
             "tau_mert": config.MERT_THRESHOLD,
+            "tau_cover": config.COVER_THRESHOLD,
+            "cover_enabled": config.COVER_ENABLED,
             "top_k": config.TOP_K,
             "usage_contexts": USAGE_CONTEXTS,
             "queries": len(queries),
@@ -500,14 +502,14 @@ def main() -> int:
         },
         metrics=metrics,
         notes=(
-            "PHẠM VI: 60 bản ghi nguồn có audio thật, toàn bộ mang giấy phép "
-            "Creative Commons do FMA công bố. Vì vậy nhãn đúng KHÔNG phủ đủ 4 lớp "
-            "rủi ro: nhánh PUBLIC_DOMAIN của Rule Engine hiện không có bản ghi thật "
-            "nào (FMA-small không có track Public Domain Mark; 9 track CC0 đi vào "
-            "nhánh CREATIVE_COMMONS). Macro-F1 ở đây vì thế KHÔNG phải bằng chứng cho "
-            "toàn bộ Rule Engine — độ phủ 4 lớp của tầng quyết định do "
-            "tests/test_decision_rules.py bảo đảm. Cái mà EXP-08 đo được và không thí "
-            "nghiệm nào khác đo được là: sai sót nhận diện lan sang mức rủi ro ra sao. "
+            f"PHẠM VI: {len({r['true_recording_id'] for r in records})} bản ghi nguồn "
+            f"có audio thật; nhãn đúng (điều kiện known) theo lớp: "
+            f"{dict(Counter(r['true_risk'] for r in known))}; giấy phép của bài nguồn: "
+            f"{dict(Counter(source_licenses))}. Lớp nào support = 0 thì Macro-F1 ở đây "
+            "KHÔNG phải bằng chứng cho nhánh đó của Rule Engine — độ phủ đủ các lớp "
+            "của tầng quyết định do tests/test_decision_rules.py bảo đảm. Cái mà EXP-08 "
+            "đo được và không thí nghiệm nào khác đo được là: sai sót nhận diện lan "
+            "sang mức rủi ro ra sao. "
             "Trường 'resolved_to_other_id_in_same_fingerprint_class' đếm số lần hệ "
             "thống trả về một ID khác trong cùng lớp tương đương. Con số này KHÔNG "
             "phải lỗi — corpus FMA có bản thu trùng nhau thật — nhưng vẫn là rủi ro "

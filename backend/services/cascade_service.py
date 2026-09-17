@@ -47,13 +47,22 @@ class PipelineError(RuntimeError):
 
 def process_music_query(audio_path: str, db: Session, vector_index=None,
                         top_k: int = None, mert_audio_path: str = None,
-                        on_stage=None, cover_index=None) -> dict:
+                        on_stage=None, cover_index=None,
+                        exclude_recording_ids=None) -> dict:
     """
     audio_path      : file dùng cho Chromaprint & Cover (nên là file gốc)
     mert_audio_path : file WAV 24kHz đã chuẩn hoá cho MERT (mặc định = audio_path)
     on_stage        : callback(tên_bước) — để client theo dõi tiến trình THẬT (§13)
     cover_index     : CoverIndex đã tải sẵn (nếu None sẽ lazy-load theo cấu hình)
+    exclude_recording_ids : CHỈ dành cho thí nghiệm. Cả ba tầng coi các bản ghi này
+                      như không có trong CSDL, để đo "bài ngoài CSDL" trên đúng
+                      đường chạy production. None (mặc định) = production.
     """
+    excluded = (frozenset(str(rec) for rec in exclude_recording_ids)
+                if exclude_recording_ids else None)
+    # Chỉ truyền tham số khi thật sự loại trừ: đường production gọi các tầng
+    # đúng như trước, và các test giả lập hàm tìm kiếm không phải đổi chữ ký.
+    exclude_kw = {"exclude_recording_ids": excluded} if excluded else {}
     top_k = top_k or config.TOP_K
     mert_audio_path = mert_audio_path or audio_path
     report = on_stage or (lambda _stage: None)
@@ -86,7 +95,7 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
                            "tham chiếu để so.",
             }
         else:
-            fp_result = search_fingerprint(db, audio_path)
+            fp_result = search_fingerprint(db, audio_path, **exclude_kw)
     except FingerprintBackendUnavailable as e:
         # Không có fpcalc: ghi nhận rõ ràng rồi đi tiếp bằng MERT, KHÔNG im lặng.
         fingerprint_available = False
@@ -156,7 +165,8 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
 
     report("VECTOR_SEARCH")
     t2 = time.perf_counter()
-    candidates, search_stats = search_recordings(vector_index, query_vector, top_k=top_k)
+    candidates, search_stats = search_recordings(vector_index, query_vector, top_k=top_k,
+                                                 **exclude_kw)
     timings["vector_search_ms"] = round((time.perf_counter() - t2) * 1000, 2)
 
     embedding_evidence = {
@@ -185,6 +195,7 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
                     cover_index=cover_index,
                     candidate_recordings=candidates,
                     top_k=top_k,
+                    **exclude_kw,
                 )
                 timings["cover_ms"] = round((time.perf_counter() - t_cover) * 1000, 2)
                 cover_index_used = (cover_index if cover_index is not None

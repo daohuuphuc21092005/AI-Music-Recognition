@@ -169,12 +169,12 @@ def cover_similarity(query_descriptor: np.ndarray,
 
 
 def search(query_descriptor: np.ndarray, reference_matrix: np.ndarray,
-           top_k: int = 5) -> list:
+           top_k: int = 5, excluded_columns: list = None) -> list:
     """
     Tìm Top-K trong ma trận reference (N, D).
 
     Trả danh sách dict đã xếp hạng giảm dần, mỗi phần tử kèm `index`,
-    `similarity_score` và `oti`.
+    `similarity_score` và `oti`. `excluded_columns`: các cột coi như không có.
     """
     if reference_matrix is None or len(reference_matrix) == 0:
         return []
@@ -183,8 +183,11 @@ def search(query_descriptor: np.ndarray, reference_matrix: np.ndarray,
     scores = transpositions(query_descriptor) @ reference_matrix.T
     best_oti = scores.argmax(axis=0)
     best_scores = scores.max(axis=0)
+    if excluded_columns:
+        best_scores[excluded_columns] = -np.inf
 
-    order = np.argsort(-best_scores)[:max(1, top_k)]
+    order = [i for i in np.argsort(-best_scores)[:max(1, top_k)]
+             if np.isfinite(best_scores[i])]
     return [
         {"index": int(i),
          "similarity_score": float(best_scores[i]),
@@ -197,11 +200,15 @@ def identify_cover(audio_path: str, cover_index: CoverIndex = None,
                    candidate_recordings: list = None,
                    top_k: int = 5,
                    offset: float = 0.0,
-                   duration: float = 30.0) -> dict:
+                   duration: float = 30.0,
+                   exclude_recording_ids: frozenset = None) -> dict:
     """
     Nhận diện phiên bản/cover bằng CQT chroma + OTI.
     Trả kết quả gồm matched, best_match, candidates, oti, threshold.
+
+    `exclude_recording_ids`: che các bản ghi này khỏi chỉ mục (giao thức held-out).
     """
+    excluded = exclude_recording_ids or frozenset()
     try:
         query_desc = descriptor_from_file(audio_path, offset=offset, duration=duration)
     except Exception as e:
@@ -217,7 +224,10 @@ def identify_cover(audio_path: str, cover_index: CoverIndex = None,
     candidates = []
 
     if index is not None and index.matrix is not None and len(index.matrix) > 0:
-        raw_matches = search(query_desc, index.matrix, top_k=top_k)
+        excluded_columns = ([column for column, rec in enumerate(index.id_map)
+                             if str(rec) in excluded] if excluded else None)
+        raw_matches = search(query_desc, index.matrix, top_k=top_k,
+                             excluded_columns=excluded_columns)
         for m in raw_matches:
             idx = m["index"]
             rec_id = index.id_map[idx] if (index.id_map and idx < len(index.id_map)) else str(idx)
@@ -231,6 +241,8 @@ def identify_cover(audio_path: str, cover_index: CoverIndex = None,
         # So khớp trực tiếp với các candidate nếu có audio trên máy
         for cand in candidate_recordings:
             rec_id = cand.get("recording_id")
+            if str(rec_id) in excluded:
+                continue
             audio_file = cand.get("audio_path")
             if not audio_file and rec_id:
                 audio_file = config.resolve_audio_path(f"fma/{rec_id}.mp3")
