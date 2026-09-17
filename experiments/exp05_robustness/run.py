@@ -163,7 +163,10 @@ def main() -> int:
     print(f"Điểm mù (tầng nhận đúng <= {BLIND_SPOT_MAX_ACCURACY:.0%} cả nhóm):")
     print(f"  Chromaprint : {fmt(fp_blind, 'fingerprint_accuracy')}")
     print(f"  MERT        : {fmt(mert_blind, 'mert_accuracy')}")
-    print(f"  Cả hai tầng : {fmt(both_blind, 'cascade_accuracy')}")
+    # "Cả hai tầng" là cascade Chromaprint -> MERT: có tầng Cover thì phải lấy số
+    # KHÔNG có Cover, nếu không dòng này in 71% cho một nhóm mà hai tầng chỉ được 0,25%.
+    print(f"  Cả hai tầng : "
+          f"{fmt(both_blind, 'cascade_no_cover_accuracy' if has_cover else 'cascade_accuracy')}")
     if has_cover:
         print(f"  Cover       : {fmt(cover_blind, 'cover_accuracy')}")
         print(f"  Cả ba tầng  : {fmt(all_blind, 'cascade_accuracy')}")
