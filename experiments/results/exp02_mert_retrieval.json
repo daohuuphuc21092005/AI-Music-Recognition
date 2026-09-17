@@ -1,24 +1,24 @@
 {
   "experiment_id": "exp02_mert_retrieval",
-  "date": "2026-09-07T17:12:41",
-  "git_commit": "266fcd8",
-  "git_dirty": true,
+  "date": "2026-09-17T13:25:33",
+  "git_commit": "dfc2289",
+  "git_dirty": false,
   "dataset_version": {
     "metadata_master.csv": {
-      "bytes": 869989,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 41673661,
+      "mtime": "2026-09-16T22:06:30"
     },
     "rights_master.csv": {
-      "bytes": 1517215,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 61585559,
+      "mtime": "2026-09-16T22:06:32"
     },
     "fingerprints_master.csv": {
-      "bytes": 3746156,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 22719740,
+      "mtime": "2026-09-15T21:59:11"
     },
     "embeddings_master.csv": {
-      "bytes": 131916100,
-      "mtime": "2026-09-07T16:09:12"
+      "bytes": 803900847,
+      "mtime": "2026-09-16T16:55:30"
     }
   },
   "model": {
@@ -29,7 +29,7 @@
     "sample_rate": 24000
   },
   "environment": {
-    "python": "3.12.13",
+    "python": "3.12.1",
     "platform": "Windows-11-10.0.26200-SP0"
   },
   "parameters": {
@@ -39,43 +39,51 @@
       5,
       10
     ],
-    "reference_vectors": 8000,
-    "reference_recordings": 4000,
+    "reference_vectors": 48750,
+    "reference_recordings": 24375,
     "pooling": "mean",
-    "similarity": "cosine (IndexFlatIP on L2-normalized vectors)"
+    "similarity": "cosine (IndexFlatIP on L2-normalized vectors)",
+    "chunk_rows": 1024,
+    "different_pair_histogram_bins": 20000,
+    "tau_mert": 0.98
   },
   "metrics": {
-    "recall@1": 0.9195,
-    "recall@5": 0.9656,
-    "recall@10": 0.9715,
-    "mrr": 0.9407,
-    "map": 0.9383,
-    "queries_evaluated": 8000,
+    "recall@1": 0.8787,
+    "recall@5": 0.9374,
+    "recall@10": 0.9479,
+    "mrr": 0.9059,
+    "map": 0.9036,
+    "queries_evaluated": 48750,
     "similarity_distribution": {
       "same_recording": {
-        "count": 4000,
-        "mean": 0.9667,
-        "std": 0.0296,
-        "p05": 0.9095,
-        "p50": 0.9757,
-        "p95": 0.9938
+        "count": 24375,
+        "mean": 0.9645,
+        "std": 0.0328,
+        "p05": 0.9003,
+        "p50": 0.9746,
+        "p95": 0.9936
       },
       "different_recording": {
-        "count": 31992000,
-        "mean": 0.7765,
-        "std": 0.0748,
-        "p50": 0.7873,
-        "p95": 0.878,
-        "p99": 0.9036,
-        "max": 1.0
+        "count": 1188232500,
+        "mean": 0.7771,
+        "std": 0.0793,
+        "p50": 0.7897,
+        "p95": 0.8816,
+        "p99": 0.9078,
+        "max": 1.0,
+        "percentile_resolution": 0.0001,
+        "pairs_at_or_above_0.999": 283
       },
-      "overlap_same_below_diff_p99": 0.0387
+      "overlap_same_below_diff_p99": 0.0624
     },
     "current_threshold_flags": {
-      "tau_mert_in_config": 0.97,
-      "share_of_different_recording_pairs_above_tau": 0.0,
-      "share_of_same_recording_pairs_above_tau": 0.595
-    }
+      "tau_mert_in_config": 0.98,
+      "different_recording_pairs_above_tau": 1196,
+      "share_of_different_recording_pairs_above_tau": 1.01e-06,
+      "share_of_same_recording_pairs_above_tau": 0.3882
+    },
+    "reference_vectors": 48750,
+    "reference_recordings": 24375
   },
-  "notes": "Reference gồm 2.000 vector của 1.000 bản ghi có audio thật (922 bản ghi metadata-only không có embedding, đúng thiết kế). Truy vấn là chính các segment trong index theo giao thức leave-one-out, nên con số này là CẬN TRÊN của hiệu năng thực tế — truy vấn đã qua biến đổi được đo ở EXP-03 và EXP-04."
+  "notes": "Reference gồm 48750 vector của 24375 bản ghi có audio thật. Truy vấn là chính các segment trong index theo giao thức leave-one-out, nên con số này là CẬN TRÊN của hiệu năng thực tế — truy vấn đã qua biến đổi được đo ở EXP-03, EXP-04 và EXP-05. Phân vị của cặp KHÁC bản ghi lấy từ histogram (sai số một bin); các chỉ số còn lại là chính xác."
 }

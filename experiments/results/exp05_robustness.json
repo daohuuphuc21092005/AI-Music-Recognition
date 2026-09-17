@@ -1,24 +1,24 @@
 {
   "experiment_id": "exp05_robustness",
-  "date": "2026-09-08T23:28:53",
-  "git_commit": "266fcd8",
+  "date": "2026-09-17T17:40:30",
+  "git_commit": "5418a35",
   "git_dirty": true,
   "dataset_version": {
     "metadata_master.csv": {
-      "bytes": 869989,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 41673661,
+      "mtime": "2026-09-16T22:06:30"
     },
     "rights_master.csv": {
-      "bytes": 1517215,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 61585559,
+      "mtime": "2026-09-16T22:06:32"
     },
     "fingerprints_master.csv": {
-      "bytes": 3746156,
-      "mtime": "2026-09-07T00:28:40"
+      "bytes": 22719740,
+      "mtime": "2026-09-15T21:59:11"
     },
     "embeddings_master.csv": {
-      "bytes": 131916100,
-      "mtime": "2026-09-07T16:09:12"
+      "bytes": 803900847,
+      "mtime": "2026-09-16T16:55:30"
     }
   },
   "model": {
@@ -29,7 +29,7 @@
     "sample_rate": 24000
   },
   "environment": {
-    "python": "3.12.13",
+    "python": "3.12.1",
     "platform": "Windows-11-10.0.26200-SP0"
   },
   "parameters": {
@@ -73,8 +73,10 @@
         "audio_overlay"
       ]
     },
-    "tau_fp": 0.15,
-    "tau_mert": 0.97,
+    "tau_fp": 0.3,
+    "tau_mert": 0.98,
+    "tau_cover": 0.9,
+    "queries_shared_by_exp01_and_exp04": 1900,
     "blind_spot_max_accuracy": 0.05
   },
   "metrics": {
@@ -82,10 +84,12 @@
       "Cắt đoạn": {
         "n": 300,
         "fingerprint_accuracy": 1.0,
-        "mert_accuracy": 0.96,
+        "mert_accuracy": 0.7633,
         "cascade_accuracy": 1.0,
+        "cover_accuracy": 0.3333,
+        "cascade_no_cover_accuracy": 1.0,
         "fingerprint_mean_score": 1.0,
-        "mert_mean_score": 0.9878,
+        "mert_mean_score": 0.9869,
         "transformations": [
           "original_crop30s",
           "crop_15s",
@@ -95,10 +99,12 @@
       "Nén codec": {
         "n": 200,
         "fingerprint_accuracy": 1.0,
-        "mert_accuracy": 0.9,
+        "mert_accuracy": 0.5,
         "cascade_accuracy": 1.0,
-        "fingerprint_mean_score": 0.999,
-        "mert_mean_score": 0.9794,
+        "cover_accuracy": 1.0,
+        "cascade_no_cover_accuracy": 1.0,
+        "fingerprint_mean_score": 0.9991,
+        "mert_mean_score": 0.9782,
         "transformations": [
           "mp3_128k",
           "mp3_64k"
@@ -106,11 +112,13 @@
       },
       "Nhiễu": {
         "n": 300,
-        "fingerprint_accuracy": 0.9933,
-        "mert_accuracy": 0.2133,
-        "cascade_accuracy": 0.9933,
-        "fingerprint_mean_score": 0.9011,
-        "mert_mean_score": 0.9508,
+        "fingerprint_accuracy": 0.9967,
+        "mert_accuracy": 0.0833,
+        "cascade_accuracy": 1.0,
+        "cover_accuracy": 0.99,
+        "cascade_no_cover_accuracy": 0.9967,
+        "fingerprint_mean_score": 0.9215,
+        "mert_mean_score": 0.9498,
         "transformations": [
           "noise_snr20",
           "noise_snr10",
@@ -120,22 +128,26 @@
       "Biên độ / EQ": {
         "n": 200,
         "fingerprint_accuracy": 1.0,
-        "mert_accuracy": 0.54,
+        "mert_accuracy": 0.3,
         "cascade_accuracy": 1.0,
-        "fingerprint_mean_score": 0.9997,
-        "mert_mean_score": 0.9703,
+        "cover_accuracy": 1.0,
+        "cascade_no_cover_accuracy": 1.0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9697,
         "transformations": [
           "gain_minus12db",
           "eq_lowpass_4k"
         ]
       },
       "Dịch cao độ": {
-        "n": 401,
+        "n": 400,
         "fingerprint_accuracy": 0.0,
         "mert_accuracy": 0.0025,
-        "cascade_accuracy": 0.0025,
-        "fingerprint_mean_score": 0.0093,
-        "mert_mean_score": 0.9196,
+        "cascade_accuracy": 0.7125,
+        "cover_accuracy": 0.71,
+        "cascade_no_cover_accuracy": 0.0025,
+        "fingerprint_mean_score": 0.0127,
+        "mert_mean_score": 0.9266,
         "transformations": [
           "pitch_plus_1",
           "pitch_minus_1",
@@ -145,11 +157,13 @@
       },
       "Đổi tốc độ": {
         "n": 400,
-        "fingerprint_accuracy": 0.0075,
-        "mert_accuracy": 0.2325,
-        "cascade_accuracy": 0.24,
-        "fingerprint_mean_score": 0.0353,
-        "mert_mean_score": 0.9572,
+        "fingerprint_accuracy": 0.0,
+        "mert_accuracy": 0.0775,
+        "cascade_accuracy": 0.4475,
+        "cover_accuracy": 0.4025,
+        "cascade_no_cover_accuracy": 0.0775,
+        "fingerprint_mean_score": 0.0352,
+        "mert_mean_score": 0.9585,
         "transformations": [
           "tempo_0_90",
           "tempo_0_95",
@@ -159,11 +173,13 @@
       },
       "Chồng âm": {
         "n": 100,
-        "fingerprint_accuracy": 0.69,
-        "mert_accuracy": 0.34,
-        "cascade_accuracy": 0.7,
-        "fingerprint_mean_score": 0.4556,
-        "mert_mean_score": 0.9574,
+        "fingerprint_accuracy": 0.57,
+        "mert_accuracy": 0.17,
+        "cascade_accuracy": 0.65,
+        "cover_accuracy": 0.57,
+        "cascade_no_cover_accuracy": 0.57,
+        "fingerprint_mean_score": 0.4673,
+        "mert_mean_score": 0.9552,
         "transformations": [
           "audio_overlay"
         ]
@@ -183,326 +199,407 @@
     "both_blind_spots": [
       "Dịch cao độ"
     ],
+    "cover_blind_spots": [],
+    "all_tiers_blind_spots": [],
+    "has_cover_stage": true,
     "blind_spot_accuracy": {
       "Dịch cao độ": {
         "fingerprint": 0.0,
         "mert": 0.0025,
-        "cascade": 0.0025
+        "cascade": 0.7125,
+        "cover": 0.71
       },
       "Đổi tốc độ": {
-        "fingerprint": 0.0075,
-        "mert": 0.2325,
-        "cascade": 0.24
+        "fingerprint": 0.0,
+        "mert": 0.0775,
+        "cascade": 0.4475,
+        "cover": 0.4025
       }
     },
     "per_transformation_fingerprint": {
       "audio_overlay": {
         "n": 100,
-        "mean_score": 0.4556,
-        "min_score": 0.0045,
-        "matched_at_current_tau": 74,
-        "mean_latency_ms": 866.5,
-        "mean_held_out_score": 0.0318
+        "mean_score": 0.4673,
+        "min_score": 0.009,
+        "matched_at_current_tau": 67,
+        "mean_latency_ms": 4755.3,
+        "mean_held_out_score": 0.0391
       },
       "crop_10s": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 308.9,
-        "mean_held_out_score": 0.0274
+        "mean_latency_ms": 1590.8,
+        "mean_held_out_score": 0.0408
       },
       "crop_15s": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 446.6,
-        "mean_held_out_score": 0.0179
+        "mean_latency_ms": 2420.7,
+        "mean_held_out_score": 0.0294
       },
       "eq_lowpass_4k": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 862.7,
-        "mean_held_out_score": 0.011
+        "mean_latency_ms": 4792.5,
+        "mean_held_out_score": 0.0187
       },
       "gain_minus12db": {
         "n": 100,
-        "mean_score": 0.9995,
-        "min_score": 0.9457,
+        "mean_score": 1.0,
+        "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 861.2,
-        "mean_held_out_score": 0.011
+        "mean_latency_ms": 4810.5,
+        "mean_held_out_score": 0.0187
       },
       "mp3_128k": {
         "n": 100,
-        "mean_score": 0.9999,
+        "mean_score": 1.0,
         "min_score": 0.9955,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 866.6,
-        "mean_held_out_score": 0.0109
+        "mean_latency_ms": 4759.4,
+        "mean_held_out_score": 0.0187
       },
       "mp3_64k": {
         "n": 100,
-        "mean_score": 0.9982,
-        "min_score": 0.9774,
+        "mean_score": 0.9983,
+        "min_score": 0.9729,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 863.3,
-        "mean_held_out_score": 0.0111
+        "mean_latency_ms": 4760.1,
+        "mean_held_out_score": 0.0186
       },
       "noise_snr10": {
         "n": 100,
-        "mean_score": 0.9327,
-        "min_score": 0.3394,
+        "mean_score": 0.9517,
+        "min_score": 0.5204,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 860.4,
-        "mean_held_out_score": 0.0108
+        "mean_latency_ms": 4790.2,
+        "mean_held_out_score": 0.0189
       },
       "noise_snr20": {
         "n": 100,
-        "mean_score": 0.9865,
-        "min_score": 0.5068,
+        "mean_score": 0.9904,
+        "min_score": 0.8371,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 865.0,
-        "mean_held_out_score": 0.0111
+        "mean_latency_ms": 4806.1,
+        "mean_held_out_score": 0.0186
       },
       "noise_snr5": {
         "n": 100,
-        "mean_score": 0.7842,
-        "min_score": 0.1222,
+        "mean_score": 0.8223,
+        "min_score": 0.2986,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 855.8,
-        "mean_held_out_score": 0.0111
+        "mean_latency_ms": 4820.7,
+        "mean_held_out_score": 0.0178
       },
       "original_crop30s": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 854.4,
-        "mean_held_out_score": 0.011
+        "mean_latency_ms": 4800.9,
+        "mean_held_out_score": 0.0187
       },
       "pitch_minus_1": {
         "n": 100,
-        "mean_score": 0.0095,
+        "mean_score": 0.0122,
         "min_score": 0.0045,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 860.2,
-        "mean_held_out_score": 0.0095
+        "mean_latency_ms": 4800.2,
+        "mean_held_out_score": 0.0122
       },
       "pitch_minus_2": {
         "n": 100,
-        "mean_score": 0.0093,
+        "mean_score": 0.0131,
         "min_score": 0.0045,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 860.7,
-        "mean_held_out_score": 0.0093
+        "mean_latency_ms": 4747.8,
+        "mean_held_out_score": 0.0131
       },
       "pitch_plus_1": {
         "n": 100,
-        "mean_score": 0.0092,
+        "mean_score": 0.0126,
         "min_score": 0.0045,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 861.5,
-        "mean_held_out_score": 0.0092
+        "mean_latency_ms": 4789.6,
+        "mean_held_out_score": 0.0126
       },
       "pitch_plus_2": {
         "n": 100,
-        "mean_score": 0.0089,
+        "mean_score": 0.013,
         "min_score": 0.0045,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 858.5,
-        "mean_held_out_score": 0.0089
+        "mean_latency_ms": 4759.5,
+        "mean_held_out_score": 0.013
       },
       "tempo_0_90": {
         "n": 100,
-        "mean_score": 0.0278,
-        "min_score": 0.0045,
-        "matched_at_current_tau": 2,
-        "mean_latency_ms": 951.7,
-        "mean_held_out_score": 0.009
+        "mean_score": 0.0253,
+        "min_score": 0.009,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 5290.4,
+        "mean_held_out_score": 0.0136
       },
       "tempo_0_95": {
         "n": 100,
-        "mean_score": 0.0404,
-        "min_score": 0.009,
-        "matched_at_current_tau": 4,
-        "mean_latency_ms": 901.3,
-        "mean_held_out_score": 0.0092
+        "mean_score": 0.0403,
+        "min_score": 0.0045,
+        "matched_at_current_tau": 1,
+        "mean_latency_ms": 4998.0,
+        "mean_held_out_score": 0.0136
       },
       "tempo_1_05": {
         "n": 100,
-        "mean_score": 0.041,
-        "min_score": 0.0048,
-        "matched_at_current_tau": 3,
-        "mean_latency_ms": 818.6,
-        "mean_held_out_score": 0.0094
+        "mean_score": 0.0439,
+        "min_score": 0.0096,
+        "matched_at_current_tau": 4,
+        "mean_latency_ms": 4527.2,
+        "mean_held_out_score": 0.0137
       },
       "tempo_1_10": {
         "n": 100,
-        "mean_score": 0.0319,
-        "min_score": 0.0101,
-        "matched_at_current_tau": 4,
-        "mean_latency_ms": 790.2,
-        "mean_held_out_score": 0.0099
+        "mean_score": 0.0312,
+        "min_score": 0.005,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 4350.6,
+        "mean_held_out_score": 0.0136
       }
     },
     "per_transformation_hybrid": {
       "audio_overlay": {
         "n": 100,
-        "fingerprint_correct": 69,
-        "mert_correct": 34,
-        "cascade_correct": 70,
-        "fingerprint_mean_score": 0.4556,
-        "mert_mean_score": 0.9574
+        "fingerprint_correct": 57,
+        "mert_correct": 17,
+        "cover_correct": 57,
+        "cascade_no_cover_correct": 57,
+        "cascade_correct": 65,
+        "cascade_wrong_accept": 5,
+        "fingerprint_mean_score": 0.4673,
+        "mert_mean_score": 0.9552,
+        "cover_mean_score": 0.9028
       },
       "crop_10s": {
         "n": 100,
         "fingerprint_correct": 100,
-        "mert_correct": 97,
+        "mert_correct": 73,
+        "cover_correct": 0,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
         "fingerprint_mean_score": 1.0,
-        "mert_mean_score": 0.9846
+        "mert_mean_score": 0.9828,
+        "cover_mean_score": 0.5929
       },
       "crop_15s": {
         "n": 100,
         "fingerprint_correct": 100,
         "mert_correct": 100,
+        "cover_correct": 0,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
         "fingerprint_mean_score": 1.0,
-        "mert_mean_score": 0.9981
+        "mert_mean_score": 0.9981,
+        "cover_mean_score": 0.5878
       },
       "eq_lowpass_4k": {
         "n": 100,
         "fingerprint_correct": 100,
-        "mert_correct": 17,
+        "mert_correct": 4,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
         "fingerprint_mean_score": 1.0,
-        "mert_mean_score": 0.9598
+        "mert_mean_score": 0.9597,
+        "cover_mean_score": 0.9961
       },
       "gain_minus12db": {
         "n": 100,
         "fingerprint_correct": 100,
-        "mert_correct": 91,
+        "mert_correct": 56,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
-        "fingerprint_mean_score": 0.9995,
-        "mert_mean_score": 0.9807
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9797,
+        "cover_mean_score": 0.998
       },
       "mp3_128k": {
         "n": 100,
         "fingerprint_correct": 100,
-        "mert_correct": 90,
+        "mert_correct": 52,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
-        "fingerprint_mean_score": 0.9999,
-        "mert_mean_score": 0.9797
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9784,
+        "cover_mean_score": 0.9977
       },
       "mp3_64k": {
         "n": 100,
         "fingerprint_correct": 100,
-        "mert_correct": 90,
+        "mert_correct": 48,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
-        "fingerprint_mean_score": 0.9982,
-        "mert_mean_score": 0.9792
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.9983,
+        "mert_mean_score": 0.978,
+        "cover_mean_score": 0.9966
       },
       "noise_snr10": {
         "n": 100,
         "fingerprint_correct": 100,
-        "mert_correct": 13,
+        "mert_correct": 5,
+        "cover_correct": 99,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
-        "fingerprint_mean_score": 0.9327,
-        "mert_mean_score": 0.9516
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.9517,
+        "mert_mean_score": 0.9507,
+        "cover_mean_score": 0.9879
       },
       "noise_snr20": {
         "n": 100,
         "fingerprint_correct": 100,
-        "mert_correct": 49,
+        "mert_correct": 19,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
-        "fingerprint_mean_score": 0.9865,
-        "mert_mean_score": 0.967
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.9904,
+        "mert_mean_score": 0.9654,
+        "cover_mean_score": 0.9942
       },
       "noise_snr5": {
         "n": 100,
-        "fingerprint_correct": 98,
-        "mert_correct": 2,
-        "cascade_correct": 98,
-        "fingerprint_mean_score": 0.7842,
-        "mert_mean_score": 0.9339
+        "fingerprint_correct": 99,
+        "mert_correct": 1,
+        "cover_correct": 98,
+        "cascade_no_cover_correct": 99,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.8223,
+        "mert_mean_score": 0.9332,
+        "cover_mean_score": 0.9808
       },
       "original_crop30s": {
         "n": 100,
         "fingerprint_correct": 100,
-        "mert_correct": 91,
+        "mert_correct": 56,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
         "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
         "fingerprint_mean_score": 1.0,
-        "mert_mean_score": 0.9808
+        "mert_mean_score": 0.9798,
+        "cover_mean_score": 0.9986
       },
       "pitch_minus_1": {
         "n": 100,
         "fingerprint_correct": 0,
         "mert_correct": 0,
-        "cascade_correct": 0,
-        "fingerprint_mean_score": 0.0095,
-        "mert_mean_score": 0.9203
+        "cover_correct": 72,
+        "cascade_no_cover_correct": 0,
+        "cascade_correct": 72,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0122,
+        "mert_mean_score": 0.9265,
+        "cover_mean_score": 0.9224
       },
       "pitch_minus_2": {
-        "n": 101,
+        "n": 100,
         "fingerprint_correct": 0,
         "mert_correct": 0,
-        "cascade_correct": 0,
-        "fingerprint_mean_score": 0.0094,
-        "mert_mean_score": 0.9181
+        "cover_correct": 65,
+        "cascade_no_cover_correct": 0,
+        "cascade_correct": 65,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0132,
+        "mert_mean_score": 0.924,
+        "cover_mean_score": 0.9103
       },
       "pitch_plus_1": {
         "n": 100,
         "fingerprint_correct": 0,
         "mert_correct": 1,
-        "cascade_correct": 1,
-        "fingerprint_mean_score": 0.0093,
-        "mert_mean_score": 0.9216
+        "cover_correct": 76,
+        "cascade_no_cover_correct": 1,
+        "cascade_correct": 77,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0126,
+        "mert_mean_score": 0.9279,
+        "cover_mean_score": 0.9219
       },
       "pitch_plus_2": {
         "n": 100,
         "fingerprint_correct": 0,
         "mert_correct": 0,
-        "cascade_correct": 0,
-        "fingerprint_mean_score": 0.0089,
-        "mert_mean_score": 0.9185
+        "cover_correct": 71,
+        "cascade_no_cover_correct": 0,
+        "cascade_correct": 71,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.013,
+        "mert_mean_score": 0.9279,
+        "cover_mean_score": 0.9206
       },
       "tempo_0_90": {
         "n": 100,
         "fingerprint_correct": 0,
-        "mert_correct": 22,
-        "cascade_correct": 22,
-        "fingerprint_mean_score": 0.0278,
-        "mert_mean_score": 0.9555
+        "mert_correct": 7,
+        "cover_correct": 1,
+        "cascade_no_cover_correct": 7,
+        "cascade_correct": 8,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0253,
+        "mert_mean_score": 0.9579,
+        "cover_mean_score": 0.5738
       },
       "tempo_0_95": {
         "n": 100,
-        "fingerprint_correct": 1,
-        "mert_correct": 22,
-        "cascade_correct": 23,
-        "fingerprint_mean_score": 0.0405,
-        "mert_mean_score": 0.9574
+        "fingerprint_correct": 0,
+        "mert_correct": 9,
+        "cover_correct": 2,
+        "cascade_no_cover_correct": 9,
+        "cascade_correct": 10,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0403,
+        "mert_mean_score": 0.9585,
+        "cover_mean_score": 0.6212
       },
       "tempo_1_05": {
         "n": 100,
-        "fingerprint_correct": 1,
-        "mert_correct": 22,
-        "cascade_correct": 23,
-        "fingerprint_mean_score": 0.041,
-        "mert_mean_score": 0.9583
+        "fingerprint_correct": 0,
+        "mert_correct": 8,
+        "cover_correct": 77,
+        "cascade_no_cover_correct": 8,
+        "cascade_correct": 79,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0439,
+        "mert_mean_score": 0.9587,
+        "cover_mean_score": 0.9245
       },
       "tempo_1_10": {
         "n": 100,
-        "fingerprint_correct": 1,
-        "mert_correct": 27,
-        "cascade_correct": 28,
-        "fingerprint_mean_score": 0.0319,
-        "mert_mean_score": 0.9578
+        "fingerprint_correct": 0,
+        "mert_correct": 7,
+        "cover_correct": 81,
+        "cascade_no_cover_correct": 7,
+        "cascade_correct": 82,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0312,
+        "mert_mean_score": 0.9587,
+        "cover_mean_score": 0.9269
       }
     }
   },
-  "notes": "Tổng hợp lại từ EXP-01 và EXP-04, không chạy lại suy luận. Quy mô 1901 truy vấn, 100-101 mẫu cho mỗi phép biến đổi. Nhãn 'điểm mù' = tầng nhận đúng <= 5% trên cả nhóm."
+  "notes": "Tổng hợp lại từ EXP-01 và EXP-04, không chạy lại suy luận. Quy mô 1900 truy vấn, 100 mẫu cho mỗi phép biến đổi. Nhãn 'điểm mù' = tầng nhận đúng <= 5% trên cả nhóm."
 }

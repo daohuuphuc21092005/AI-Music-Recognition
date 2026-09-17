@@ -114,11 +114,16 @@ Mỗi thí nghiệm phải ghi nhận vào file cấu hình (CSV/JSON, không b�
 
 Mục tiêu chất lượng cần đạt cho các thí nghiệm trước khi tích hợp vào sản phẩm:
 
-| Tiêu chí đánh giá | Metric | Ngưỡng mục tiêu |
-|---|---|---|
-| **Clean Exact-Match** (Chromaprint) | Precision / Recall | **Precision ≥ 0.95**, **Recall ≥ 0.90** |
-| **Robust Retrieval** (MERT) | Recall@5 | **Recall@5 ≥ 0.80** |
-| **Unknown Detection** (Từ chối nhận diện) | False Match Rate (FMR) | **FMR ≤ 5%** |
-| **End-to-End System** | Macro-F1 (trên verified subset) | **Macro-F1 ≥ 0.80** |
+| Tiêu chí đánh giá | Metric | Ngưỡng mục tiêu | Đo được ở 24.375 bài (2026-09-17) |
+|---|---|---|---|
+| **Clean Exact-Match** (Chromaprint) | Precision / Recall | **Precision ≥ 0.95**, **Recall ≥ 0.90** | ✅ P 1.000 · R 1.000 (EXP-01, 800 truy vấn không đổi trục thời gian/cao độ, τFP 0.30) |
+| **Robust Retrieval** (MERT) | Recall@5 | **Recall@5 ≥ 0.80** | ❌ MERT **0.7921** (EXP-04 `retrieval_recall_at_k`, 1.900 truy vấn biến đổi, toàn chỉ mục) — thiếu hoàn toàn do dịch cao độ (0.185; bỏ pitch 0.954). Cover 0.8542, MERT∪Cover 0.9926 |
+| **Unknown Detection** (Từ chối nhận diện) | False Match Rate (FMR) | **FMR ≤ 5%** | ✅ FP 0,21% · MERT 2,65% · Cover 0,37% · cả pipeline 0,00% (EXP-08, 760 lượt held-out) |
+| **End-to-End System** | Macro-F1 (trên verified subset) | **Macro-F1 ≥ 0.80** | ✅ **0.9091**, đủ 4 lớp (LOW 114 · CONDITIONAL 475 · HIGH 171 · UNKNOWN 760) |
+
+- **Không đọc EXP-02 như Recall@5 "robust"**: EXP-02 dùng cửa sổ chưa biến đổi của chính bài trong chỉ mục (0.9374) — cận trên. Tiêu chí §13 chấm bằng EXP-04.
+- FPR của EXP-01 và FMR của EXP-07 đo trước `HeldOutProtocol` → cận trên (nhận ra bản gần trùng / bài bị trộn chồng vẫn bị đếm là nhận nhầm).
+- EXP-08 chỉ phủ nhóm CREATIVE_COMMONS + fallback bằng audio thật; các nhóm còn lại do `tests/test_decision_rules.py` bảo đảm. Điểm mù lớn nhất còn lại: tempo chậm (EXP-05 8–10%; nguyên nhân: cửa sổ 30 s đầu của tầng Cover, xem `02-pipeline-architecture.md` §4).
+- Robust Retrieval **chưa được điều chỉnh mục tiêu** — coi MERT∪Cover là đạt hay không là quyết định của chủ dự án, và phải ghi lý do.
 
 > Có thể điều chỉnh các ngưỡng trên sau Tuần 5 nếu số liệu baseline từ dataset thực tế cho thấy bài toán quá khó, nhưng mọi điều chỉnh đều phải lập biên bản ghi rõ lý do khoa học.
