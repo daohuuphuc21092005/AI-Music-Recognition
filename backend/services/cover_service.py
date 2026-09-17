@@ -146,6 +146,63 @@ def descriptor_from_file(audio_path: str, offset: float = 0.0,
     return build_descriptor(audio, sr)
 
 
+def query_spans(base_duration: float = 30.0, tempo_factors: tuple = None) -> list:
+    """
+    [(hệ số nhịp độ, số giây cần cắt)]: truy vấn ở nhịp f chứa `base_duration` giây
+    nội dung gốc trong `base_duration / f` giây đầu.
+    """
+    factors = tempo_factors or config.COVER_TEMPO_FACTORS or (1.0,)
+    return [(float(f), base_duration / float(f)) for f in factors]
+
+
+def query_descriptors(audio: np.ndarray, sr: int = CHROMA_SR, base_duration: float = 30.0,
+                      tempo_factors: tuple = None) -> tuple:
+    """
+    (ma trận (n, D) descriptor, danh sách hệ số nhịp độ ứng với từng dòng).
+
+    Mỗi dòng tính từ đúng đoạn audio bị cắt (không cắt khung chroma) để dòng nhịp
+    1.0 trùng khít với cách dựng reference. Độ dài cắt vượt quá audio thì nhiều
+    dòng giống hệt nhau — chỉ tính một lần.
+    """
+    rows, factors, by_length = [], [], {}
+    for factor, seconds in query_spans(base_duration, tempo_factors):
+        length = min(len(audio), int(round(seconds * sr)))
+        if length not in by_length:
+            by_length[length] = build_descriptor(audio[:length], sr)
+        rows.append(by_length[length])
+        factors.append(factor)
+    return np.stack(rows), factors
+
+
+def query_descriptors_from_file(audio_path: str, offset: float = 0.0,
+                                base_duration: float = 30.0,
+                                tempo_factors: tuple = None) -> tuple:
+    longest = max(seconds for _, seconds in query_spans(base_duration, tempo_factors))
+    audio, sr = librosa.load(audio_path, sr=CHROMA_SR, mono=True,
+                             offset=offset, duration=longest)
+    return query_descriptors(audio, sr, base_duration, tempo_factors)
+
+
+def best_scores(descriptors: np.ndarray, reference_matrix: np.ndarray) -> tuple:
+    """
+    (điểm, OTI, dòng truy vấn) tốt nhất cho TỪNG cột reference, lấy max qua mọi
+    phép xoay cao độ và mọi dòng (độ dài cắt) của truy vấn.
+    """
+    queries = np.atleast_2d(descriptors)
+    scores = np.full(len(reference_matrix), -np.inf)
+    oti = np.zeros(len(reference_matrix), dtype=int)
+    row_of = np.zeros(len(reference_matrix), dtype=int)
+    for row, descriptor in enumerate(queries):
+        # (12, D) @ (D, N) -> (12, N): điểm của mọi ứng viên ở mọi phép dịch cao độ
+        rotated = transpositions(descriptor) @ reference_matrix.T
+        row_best = rotated.max(axis=0)
+        better = row_best > scores
+        scores[better] = row_best[better]
+        oti[better] = rotated.argmax(axis=0)[better]
+        row_of[better] = row
+    return scores, oti, row_of
+
+
 def transpositions(descriptor: np.ndarray) -> np.ndarray:
     """
     Trả (12, D): descriptor sau cả 12 phép dịch cao độ.
@@ -173,25 +230,26 @@ def search(query_descriptor: np.ndarray, reference_matrix: np.ndarray,
     """
     Tìm Top-K trong ma trận reference (N, D).
 
+    `query_descriptor`: một descriptor (D,) hoặc nhiều dòng (n, D) — khi đó lấy dòng
+    cho điểm cao nhất với từng ứng viên.
+
     Trả danh sách dict đã xếp hạng giảm dần, mỗi phần tử kèm `index`,
-    `similarity_score` và `oti`. `excluded_columns`: các cột coi như không có.
+    `similarity_score`, `oti` và `query_row`. `excluded_columns`: các cột coi như không có.
     """
     if reference_matrix is None or len(reference_matrix) == 0:
         return []
 
-    # (12, D) @ (D, N) -> (12, N): điểm của mọi ứng viên ở mọi phép dịch cao độ
-    scores = transpositions(query_descriptor) @ reference_matrix.T
-    best_oti = scores.argmax(axis=0)
-    best_scores = scores.max(axis=0)
+    scores, best_oti, row_of = best_scores(query_descriptor, reference_matrix)
     if excluded_columns:
-        best_scores[excluded_columns] = -np.inf
+        scores[excluded_columns] = -np.inf
 
-    order = [i for i in np.argsort(-best_scores)[:max(1, top_k)]
-             if np.isfinite(best_scores[i])]
+    order = [i for i in np.argsort(-scores)[:max(1, top_k)]
+             if np.isfinite(scores[i])]
     return [
         {"index": int(i),
-         "similarity_score": float(best_scores[i]),
-         "oti": int(best_oti[i])}
+         "similarity_score": float(scores[i]),
+         "oti": int(best_oti[i]),
+         "query_row": int(row_of[i])}
         for i in order
     ]
 
@@ -201,16 +259,21 @@ def identify_cover(audio_path: str, cover_index: CoverIndex = None,
                    top_k: int = 5,
                    offset: float = 0.0,
                    duration: float = 30.0,
-                   exclude_recording_ids: frozenset = None) -> dict:
+                   exclude_recording_ids: frozenset = None,
+                   tempo_factors: tuple = None) -> dict:
     """
     Nhận diện phiên bản/cover bằng CQT chroma + OTI.
     Trả kết quả gồm matched, best_match, candidates, oti, threshold.
 
+    `duration`: số giây nội dung gốc mà reference mô tả (30 giây đầu). Truy vấn được
+    cắt theo từng hệ số trong `tempo_factors` (mặc định `config.COVER_TEMPO_FACTORS`),
+    mỗi ứng viên lấy độ dài cắt cho điểm cao nhất và ghi lại `tempo_factor` đó.
     `exclude_recording_ids`: che các bản ghi này khỏi chỉ mục (giao thức held-out).
     """
     excluded = exclude_recording_ids or frozenset()
     try:
-        query_desc = descriptor_from_file(audio_path, offset=offset, duration=duration)
+        query_desc, row_factors = query_descriptors_from_file(
+            audio_path, offset=offset, base_duration=duration, tempo_factors=tempo_factors)
     except Exception as e:
         return {
             "matched": False,
@@ -235,6 +298,7 @@ def identify_cover(audio_path: str, cover_index: CoverIndex = None,
                 "recording_id": rec_id,
                 "similarity_score": round(float(m["similarity_score"]), 4),
                 "oti": int(m["oti"]),
+                "tempo_factor": row_factors[m["query_row"]],
             })
     elif candidate_recordings:
         # Nếu chưa có toàn bộ ma trận index, nhưng có danh sách candidate từ MERT:
@@ -249,11 +313,12 @@ def identify_cover(audio_path: str, cover_index: CoverIndex = None,
             if audio_file and os.path.exists(audio_file):
                 try:
                     ref_desc = descriptor_from_file(audio_file, offset=offset, duration=duration)
-                    sim, oti = cover_similarity(query_desc, ref_desc)
+                    match = search(query_desc, ref_desc[None, :], top_k=1)[0]
                     candidates.append({
                         "recording_id": rec_id,
-                        "similarity_score": round(float(sim), 4),
-                        "oti": int(oti),
+                        "similarity_score": round(float(match["similarity_score"]), 4),
+                        "oti": int(match["oti"]),
+                        "tempo_factor": row_factors[match["query_row"]],
                     })
                 except Exception:
                     continue
@@ -268,5 +333,6 @@ def identify_cover(audio_path: str, cover_index: CoverIndex = None,
         "top_candidate": best,
         "candidates": candidates[:top_k],
         "threshold": config.COVER_THRESHOLD,
+        "tempo_factors": list(row_factors),
     }
 

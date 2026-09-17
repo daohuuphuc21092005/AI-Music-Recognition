@@ -201,6 +201,15 @@ MERT_THRESHOLD = _get_float("MERT_THRESHOLD", 0.98)
 # scripts/build_cover_index.py cho mọi bản ghi có audio thật.
 COVER_THRESHOLD = _get_float("COVER_THRESHOLD", 0.90)
 COVER_ENABLED = _get("COVER_ENABLED", "true").lower() in ("true", "1", "yes")
+# Các hệ số nhịp độ mà tầng Cover thử khi cắt truy vấn. Reference là 30 giây đầu ở
+# nhịp gốc; một truy vấn chậm 0.90× chứa đúng nội dung đó trong 33,3 giây đầu, nhanh
+# 1.10× trong 27,3 giây. Chỉ cắt cố định 30 giây thì bản chậm mất phần cuối và trục
+# thời gian lệch: tempo 0.90 đúng @1 27% (đọc trọn truy vấn: 100%, xem
+# experiments/exp07_cover/query_span_check.py). Dải 0.90–1.10 là dải biến đổi nhịp
+# độ của §11. Đặt "1.0" để quay về một cửa sổ 30 giây như trước.
+COVER_TEMPO_FACTORS = tuple(
+    float(value) for value in _get("COVER_TEMPO_FACTORS", "0.90,0.95,1.00,1.05,1.10").split(",")
+    if value.strip())
 COVER_INDEX_PATH = _path("COVER_INDEX_PATH", "data/processed/cover_descriptors.npy")
 COVER_ID_MAP_PATH = _path("COVER_ID_MAP_PATH", "data/processed/cover_id_map.json")
 TOP_K = _get_int("TOP_K", 5)

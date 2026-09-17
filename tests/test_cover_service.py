@@ -176,7 +176,8 @@ def test_loai_tru_cot_khong_bao_gio_tra_ve_ban_ghi_bi_loai(monkeypatch):
     id_map = [f"rec_{i}" for i in range(30)]
     query = matrix[4].copy()  # truy vấn trùng hệt rec_4
 
-    monkeypatch.setattr(cover_service, "descriptor_from_file", lambda *a, **k: query)
+    monkeypatch.setattr(cover_service, "query_descriptors_from_file",
+                        lambda *a, **k: (query[None, :], [1.0]))
     index = cover_service.CoverIndex(matrix=matrix, id_map=id_map)
 
     base = cover_service.identify_cover("x.wav", cover_index=index, top_k=5)
@@ -189,3 +190,98 @@ def test_loai_tru_cot_khong_bao_gio_tra_ve_ban_ghi_bi_loai(monkeypatch):
     assert not returned & excluded
     assert len(returned) == 28
     assert held["top_candidate"]["recording_id"] != "rec_4"
+
+
+# --------------------------------------------------------------------------
+# Cắt truy vấn theo nhiều hệ số nhịp độ
+# --------------------------------------------------------------------------
+# Tám hợp âm ba nốt đổi lần lượt: tín hiệu có CẤU TRÚC THỜI GIAN, nên cắt lệch
+# đoạn nội dung là điểm tụt thấy rõ (một hợp âm giữ nguyên thì cắt kiểu gì cũng khớp).
+PROGRESSION = ((0, 4, 7), (5, 9, 12), (7, 11, 14), (9, 12, 16),
+               (2, 5, 9), (4, 7, 11), (10, 14, 17), (3, 7, 10))
+PROGRESSION_S = 30.0
+
+
+def progression(tempo: float = 1.0) -> np.ndarray:
+    """
+    Chuỗi hợp âm dài PROGRESSION_S / tempo giây, cao độ giữ nguyên — đổi nhịp độ
+    CHÍNH XÁC (mỗi hợp âm kéo dài 1/tempo lần), không qua phase vocoder.
+    """
+    segment = PROGRESSION_S / len(PROGRESSION) / tempo
+    t = np.linspace(0, segment, int(CHROMA_SR * segment), endpoint=False)
+    parts = []
+    for notes in PROGRESSION:
+        signal = sum(np.sin(2 * np.pi * 261.63 * 2 ** (n / 12) * t) for n in notes)
+        parts.append(signal / np.max(np.abs(signal)))
+    return np.concatenate(parts).astype(np.float32)
+
+
+@pytest.fixture(scope="module")
+def progression_reference():
+    from backend.services.cover_service import build_descriptor
+
+    return build_descriptor(progression(1.0)[: int(PROGRESSION_S * CHROMA_SR)], CHROMA_SR)
+
+
+def test_do_dai_cat_theo_he_so_nhip_do():
+    from backend.services.cover_service import query_spans
+
+    spans = dict(query_spans(30.0, (0.9, 1.0, 1.1)))
+    assert spans[1.0] == 30.0
+    assert spans[0.9] == pytest.approx(33.333, abs=1e-3)  # bản chậm cần đọc dài hơn
+    assert spans[1.1] == pytest.approx(27.273, abs=1e-3)
+
+
+def test_dong_nhip_1_trung_khit_cach_dung_reference(progression_reference):
+    from backend.services.cover_service import query_descriptors
+
+    rows, factors = query_descriptors(progression(1.0), CHROMA_SR, 30.0, (0.9, 1.0, 1.1))
+    assert factors == [0.9, 1.0, 1.1]
+    assert np.array_equal(rows[1], progression_reference)
+
+
+def test_ban_cham_chi_khop_khi_cat_dung_do_dai(progression_reference):
+    """Bằng chứng cho lý do đổi: cắt cố định 30 s làm bản chậm 0.90× lệch nội dung."""
+    from backend.services.cover_service import query_descriptors
+
+    slowed = progression(0.9)
+    rows, factors = query_descriptors(slowed, CHROMA_SR, 30.0, (0.9, 0.95, 1.0, 1.05, 1.1))
+    matches = search(rows, progression_reference[None, :], top_k=1)
+    fixed = search(rows[factors.index(1.0)], progression_reference[None, :], top_k=1)
+
+    assert factors[matches[0]["query_row"]] == 0.9
+    assert matches[0]["similarity_score"] > 0.99
+    assert matches[0]["similarity_score"] - fixed[0]["similarity_score"] > 0.05
+
+
+def test_audio_ngan_hon_moi_do_dai_cat_chi_tinh_mot_lan():
+    from backend.services import cover_service
+
+    calls = []
+    original = cover_service.build_descriptor
+
+    def counting(audio, sr=CHROMA_SR):
+        calls.append(len(audio))
+        return original(audio, sr)
+
+    audio = chord(duration=5.0)
+    cover_service.build_descriptor = counting
+    try:
+        rows, _ = cover_service.query_descriptors(audio, CHROMA_SR, 30.0, (0.9, 1.0, 1.1))
+    finally:
+        cover_service.build_descriptor = original
+    assert len(calls) == 1
+    assert np.array_equal(rows[0], rows[2])
+
+
+def test_search_nhieu_dong_lay_dong_diem_cao_nhat_cho_tung_ung_vien():
+    rng = np.random.default_rng(5)
+    dim = N_CHROMA * DESCRIPTOR_FRAMES
+    matrix = rng.standard_normal((6, dim)).astype("float32")
+    matrix /= np.linalg.norm(matrix, axis=1, keepdims=True)
+    queries = np.vstack([matrix[2], matrix[4]])
+
+    results = {r["index"]: r for r in search(queries, matrix, top_k=6)}
+    assert results[2]["query_row"] == 0 and results[4]["query_row"] == 1
+    assert results[2]["similarity_score"] == pytest.approx(1.0, abs=1e-5)
+    assert results[4]["similarity_score"] == pytest.approx(1.0, abs=1e-5)

@@ -40,11 +40,7 @@ from backend import config
 from backend.database.session import SessionLocal
 from backend.services.cover_service import identify_cover, load_cover_index
 from backend.services.embedding_service import EmbeddingAudioError, extract_mert_embedding
-from backend.services.fingerprint_service import (
-    _decode_array,
-    extract_query_fingerprint,
-    match_decoded,
-)
+from backend.services.fingerprint_service import _decode_array, search_fingerprint
 from backend.services.retrieval_service import load_index, search_recordings
 from experiments.common import Checkpoint, print_table, save_result
 
@@ -71,24 +67,22 @@ def load_reference(db):
     return reference, equivalence
 
 
-def fingerprint_stage(query_path, reference):
+def fingerprint_stage(query_path, db):
+    """
+    Tầng 1 đúng như cascade_service gọi (search_fingerprint): lọc ứng viên theo hash
+    trùng, quay về quét đầy đủ khi sát ngưỡng, ngưỡng nâng theo độ dài truy vấn.
+    EXP-01 mới là nơi quét đầy đủ để hiệu chỉnh τFP.
+    """
     start = time.perf_counter()
-    _duration, fingerprint = extract_query_fingerprint(query_path)
-    query_vec = _decode_array(fingerprint)
-
-    best_id, best_score = None, 0.0
-    for rec_id, vector in reference:
-        score = match_decoded(query_vec, vector)
-        if score > best_score:
-            best_score, best_id = score, rec_id
-
+    result = search_fingerprint(db, query_path)
     latency = (time.perf_counter() - start) * 1000
-    accepted = best_score >= config.FP_THRESHOLD
+    accepted = result["match_type"] == "EXACT_MATCH"
     return {
-        "recording_id": best_id if accepted else None,
-        "score": float(best_score),
+        "recording_id": result["recording_id"] if accepted else None,
+        "score": float(result["fingerprint_score"]),
         "accepted": accepted,
         "latency_ms": latency,
+        "full_scan": bool(result["prefilter"]["full_scan"]),
     }
 
 
@@ -132,6 +126,7 @@ def cover_stage(query_path, cover_index):
         "accepted": accepted,
         "latency_ms": latency,
         "oti": top.get("oti"),
+        "tempo_factor": top.get("tempo_factor"),
         "top_k": [c["recording_id"] for c in result.get("candidates") or []],
     }
 
@@ -186,10 +181,7 @@ def main() -> int:
         queries = [q for q in queries if q["source_recording_id"] in keep]
 
     db = SessionLocal()
-    try:
-        reference, equivalence = load_reference(db)
-    finally:
-        db.close()
+    reference, equivalence = load_reference(db)
 
     vector_index = load_index(config.FAISS_INDEX_PATH, config.FAISS_ID_MAP_PATH)
     cover_index = load_cover_index()
@@ -212,6 +204,9 @@ def main() -> int:
         "tau_mert": config.MERT_THRESHOLD,
         "tau_cover": config.COVER_THRESHOLD,
         "cover_enabled": config.COVER_ENABLED,
+        "cover_tempo_factors": list(config.COVER_TEMPO_FACTORS),
+        "fp_prefilter": [config.FP_PREFILTER_TOP_K, config.FP_PREFILTER_BAND,
+                         config.FP_PREFILTER_MIN_QUERY_S],
         "top_k": config.TOP_K,
         "fp_max_align_offset": config.FP_MAX_ALIGN_OFFSET,
         "queries": len(queries),
@@ -230,7 +225,7 @@ def main() -> int:
         true_class = equivalence.get(query["source_recording_id"],
                                      {query["source_recording_id"]})
 
-        fp = fingerprint_stage(path, reference)
+        fp = fingerprint_stage(path, db)
         mert = mert_stage(path, vector_index)
         cover = cover_stage(path, cover_index)
 
@@ -257,6 +252,7 @@ def main() -> int:
               f"-> {cascade['stage'].replace('STAGE_', 'S')}"
               f"{'✓' if cascade['correct'] else '✗'}")
 
+    db.close()
     per_query = checkpoint.records
     total = len(per_query)
     summaries = [
@@ -306,24 +302,30 @@ def main() -> int:
     # Recall@K ở quy mô toàn chỉ mục với truy vấn ĐÃ BIẾN ĐỔI — đúng tiêu chí
     # "Robust retrieval Recall@5 >= 0.80" của §13. Tính trên top-K bất kể ngưỡng:
     # đây là khả năng TÌM THẤY, còn nhận/từ chối là việc của τ.
-    def recall_at_k(stage: str, rows: list) -> float:
+    #
+    # §13 chấm ở CẤP HỆ THỐNG (quyết định của chủ dự án, 2026-09-17): hợp top-K của
+    # các tầng truy xuất (MERT ∪ Cover) — cả hai danh sách đều hiện trong evidence
+    # cho người thẩm định. MERT đơn lẻ vẫn được báo cạnh bên, không bị giấu.
+    def recall_at_k(stages: tuple, rows: list) -> float:
         hits = sum(1 for q in rows
-                   if set(q[stage].get("top_k") or [])
+                   if set().union(*(q[s].get("top_k") or [] for s in stages))
                    & set(q.get("true_class") or [q["source_recording_id"]]))
         return round(hits / len(rows), 4) if rows else 0.0
 
     retrieval_recall = {
-        f"{stage}_recall@{config.TOP_K}": {
-            "overall": recall_at_k(stage, per_query),
-            "per_transformation": {name: recall_at_k(stage, rows)
-                                   for name, rows in sorted(by_transformation.items())},
+        f"{name}_recall@{config.TOP_K}": {
+            "overall": recall_at_k(stages, per_query),
+            "per_transformation": {t: recall_at_k(stages, rows)
+                                   for t, rows in sorted(by_transformation.items())},
         }
-        for stage in ("mert", "cover")
+        for name, stages in (("mert", ("mert",)), ("cover", ("cover",)),
+                             ("system", ("mert", "cover")))
     }
     print(f"\nRecall@{config.TOP_K} trên toàn chỉ mục (truy vấn đã biến đổi, bỏ qua ngưỡng): "
-          f"MERT {retrieval_recall[f'mert_recall@{config.TOP_K}']['overall']} | "
-          f"Cover {retrieval_recall[f'cover_recall@{config.TOP_K}']['overall']} "
-          f"(§13: Recall@5 >= 0.80)")
+          f"hệ thống (MERT ∪ Cover) {retrieval_recall[f'system_recall@{config.TOP_K}']['overall']}"
+          f" | MERT {retrieval_recall[f'mert_recall@{config.TOP_K}']['overall']}"
+          f" | Cover {retrieval_recall[f'cover_recall@{config.TOP_K}']['overall']}"
+          f" (§13: Recall@5 >= 0.80, chấm cấp hệ thống)")
 
     rescued = [name for name, rows in sorted(by_transformation.items())
                if sum(1 for r in rows if r["mert"]["correct"])
@@ -361,6 +363,8 @@ def main() -> int:
         },
         "transformations_rescued_by_mert": rescued,
         "transformations_rescued_by_cover": rescued_by_cover,
+        "fingerprint_full_scans": sum(1 for q in per_query
+                                      if q["fingerprint"].get("full_scan")),
         "cascade_stage_distribution": {
             stage: sum(1 for q in per_query if q["cascade"]["stage"] == stage)
             for stage in ("STAGE_1_CHROMAPRINT", "STAGE_2_MERT_RETRIEVAL", "STAGE_3_COVER")
@@ -374,6 +378,10 @@ def main() -> int:
             "tau_mert": config.MERT_THRESHOLD,
             "tau_cover": config.COVER_THRESHOLD,
             "cover_enabled_in_production": config.COVER_ENABLED,
+            "cover_tempo_factors": list(config.COVER_TEMPO_FACTORS),
+            "fp_prefilter": {"top_k": config.FP_PREFILTER_TOP_K,
+                             "band": config.FP_PREFILTER_BAND,
+                             "min_query_s": config.FP_PREFILTER_MIN_QUERY_S},
             "fp_max_align_offset": config.FP_MAX_ALIGN_OFFSET,
             "reference_fingerprints": len(reference),
             "reference_embedding_vectors": vector_index.ntotal,

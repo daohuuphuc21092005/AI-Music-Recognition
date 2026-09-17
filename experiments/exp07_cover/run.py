@@ -41,11 +41,13 @@ import numpy as np
 from backend import config
 from backend.services.cover_service import (
     CHROMA_SR,
+    best_scores,
     build_descriptor,
-    descriptor_from_file,
     load_cover_index,
+    query_descriptors,
+    query_descriptors_from_file,
+    query_spans,
     search,
-    transpositions,
 )
 from experiments.common import (
     HeldOutProtocol,
@@ -89,23 +91,29 @@ FAMILIES = {
 NOISE_COLORS = {"trang": 0.0, "hong": 0.5, "nau": 1.0}  # biên độ phổ ∝ 1 / f^alpha
 NOISE_SEEDS = range(10)
 
-# Server trích 30 giây đầu của file truy vấn (tham số mặc định của identify_cover)
+# Reference mô tả 30 giây đầu ở nhịp gốc (tham số mặc định của identify_cover);
+# truy vấn được cắt theo từng hệ số trong config.COVER_TEMPO_FACTORS.
 RUNTIME_DURATION_S = 30.0
 
 
-def noise_probe_descriptors(seconds: float = WINDOW_S) -> list:
-    """Descriptor của nhiễu trắng/hồng/nâu dài `seconds` giây — sinh tổng hợp, lặp lại được."""
+def noise_signals(seconds: float) -> list:
+    """Nhiễu trắng/hồng/nâu dài `seconds` giây — sinh tổng hợp, lặp lại được."""
     length = int(seconds * CHROMA_SR)
     freqs = np.fft.rfftfreq(length, 1.0 / CHROMA_SR)
     freqs[0] = freqs[1]
-    probes = []
+    signals = []
     for color, alpha in NOISE_COLORS.items():
         for seed in NOISE_SEEDS:
             spectrum = np.fft.rfft(np.random.RandomState(seed).normal(0, 1, length))
             signal = np.fft.irfft(spectrum / freqs ** alpha, n=length)
-            signal = (0.5 * signal / np.max(np.abs(signal))).astype(np.float32)
-            probes.append((f"{color}_{seed}", build_descriptor(signal, CHROMA_SR)))
-    return probes
+            signals.append((f"{color}_{seed}",
+                            (0.5 * signal / np.max(np.abs(signal))).astype(np.float32)))
+    return signals
+
+
+def noise_probe_descriptors(seconds: float = WINDOW_S) -> list:
+    """Descriptor một cửa sổ của từng mẫu nhiễu (giao thức cấp cửa sổ)."""
+    return [(name, build_descriptor(signal, CHROMA_SR)) for name, signal in noise_signals(seconds)]
 
 
 def describe_file(path: str, hop: float, timing: list):
@@ -190,8 +198,10 @@ def describe(values: list, percentile: int = None) -> dict:
 
 def runtime_protocol(manifest: list):
     """
-    Chấm τCover đúng điều kiện server: 30 giây đầu của file truy vấn, tìm trên
-    TOÀN BỘ chỉ mục cover (cover_service.identify_cover).
+    Chấm τCover đúng điều kiện server: truy vấn cắt theo từng hệ số nhịp độ của
+    `config.COVER_TEMPO_FACTORS` (30 giây nội dung gốc), tìm trên TOÀN BỘ chỉ mục
+    cover, lấy max qua mọi độ dài cắt (cover_service.identify_cover). Mẫu nhiễu đi
+    qua đúng đường đó — thử nhiều độ dài cũng là thêm cơ hội để nhận nhầm.
 
     Phần cấp cửa sổ chỉ có reference của các bài nguồn. Điểm cao nhất mà một bài
     ngoài CSDL đạt được tăng theo số ứng viên, nên ngưỡng chọn ở đó quá lạc quan
@@ -226,8 +236,9 @@ def runtime_protocol(manifest: list):
             continue
         try:
             t0 = time.perf_counter()
-            descriptor = descriptor_from_file(path, offset=0.0, duration=RUNTIME_DURATION_S)
-            best = (transpositions(descriptor) @ index.matrix.T).max(axis=0)
+            descriptors, factors = query_descriptors_from_file(
+                path, base_duration=RUNTIME_DURATION_S)
+            best, _, row_of = best_scores(descriptors, index.matrix)
             timing.append((time.perf_counter() - t0) * 1000)
         except Exception as e:
             print(f"  bỏ qua {row['path']}: {type(e).__name__}: {e}")
@@ -242,17 +253,22 @@ def runtime_protocol(manifest: list):
         top1_records.append((score, correct))
 
         bucket = per_transformation.setdefault(row["transformation"],
-                                               {"n": 0, "hit@1": 0, "scores": []})
+                                               {"n": 0, "hit@1": 0, "scores": [], "factors": {}})
         bucket["n"] += 1
         bucket["hit@1"] += int(correct)
         bucket["scores"].append(score)
+        if correct:
+            factor = str(factors[int(row_of[top])])
+            bucket["factors"][factor] = bucket["factors"].get(factor, 0) + 1
 
     if not top1_records:
         print("  không chấm được truy vấn nào (bài nguồn không có trong chỉ mục?)")
         return None
 
-    noise_scores = [float((transpositions(descriptor) @ index.matrix.T).max())
-                    for _, descriptor in noise_probe_descriptors(RUNTIME_DURATION_S)]
+    longest = max(seconds for _, seconds in query_spans(RUNTIME_DURATION_S))
+    noise_scores = [float(best_scores(query_descriptors(signal, CHROMA_SR, RUNTIME_DURATION_S)[0],
+                                      index.matrix)[0].max())
+                    for _, signal in noise_signals(longest)]
     sweep = threshold_sweep(top1_records, held_out, noise_scores)
     best_row, safe = pick_threshold(sweep)
     return {
@@ -274,7 +290,9 @@ def runtime_protocol(manifest: list):
                        "query_p95": round(float(np.percentile(timing, 95)), 1)},
         "per_transformation": {
             t: {"n": b["n"], "accuracy@1": round(b["hit@1"] / b["n"], 4),
-                "mean_top1_score": round(float(np.mean(b["scores"])), 4)}
+                "mean_top1_score": round(float(np.mean(b["scores"])), 4),
+                # Hệ số nhịp độ của độ dài cắt đã thắng, trên các truy vấn nhận đúng
+                "winning_tempo_factor": dict(sorted(b["factors"].items()))}
             for t, b in sorted(per_transformation.items())
         },
     }
@@ -328,8 +346,14 @@ def load_exp03_reference(reference_windows: int, query_windows: int):
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sources", type=int, default=None,
+                        help="Chỉ dùng N bài nguồn đầu tiên của manifest (cùng bộ với EXP-03/04)")
+    args = parser.parse_args()
     try:
-        manifest = load_query_manifest()
+        manifest = load_query_manifest(args.sources)
     except FileNotFoundError as e:
         print(e)
         return 1
@@ -617,7 +641,10 @@ def main() -> int:
             "similarity": "cosine trên descriptor đã chuẩn hoá L2, lấy max qua 12 phép xoay",
             "noise_probes": {"colors": list(NOISE_COLORS), "seeds": len(NOISE_SEEDS)},
             "runtime_protocol": {
-                "query": f"{RUNTIME_DURATION_S:g} giây đầu của file truy vấn (offset 0)",
+                "query": (f"{RUNTIME_DURATION_S:g} giây nội dung gốc, cắt truy vấn theo từng "
+                          f"hệ số nhịp độ, lấy max"),
+                "tempo_factors": list(config.COVER_TEMPO_FACTORS),
+                "spans_s": [round(s, 2) for _, s in query_spans(RUNTIME_DURATION_S)],
                 "gallery": "toàn bộ chỉ mục cover (scripts/build_cover_index.py)",
                 "held_out": ("bỏ bản trùng fingerprint, bản gần trùng và (với "
                              "audio_overlay) bài bị trộn chồng — xem "

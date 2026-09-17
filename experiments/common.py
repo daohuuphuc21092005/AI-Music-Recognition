@@ -218,8 +218,14 @@ def query_pitch_steps(row: dict) -> int:
         return PITCH_STEPS.get((row or {}).get("transformation"), 0)
 
 
-def load_query_manifest() -> list:
-    """Đọc manifest tập truy vấn biến đổi. Ném lỗi rõ ràng nếu chưa dựng."""
+def load_query_manifest(sources: int = None) -> list:
+    """
+    Đọc manifest tập truy vấn biến đổi. Ném lỗi rõ ràng nếu chưa dựng.
+
+    `sources`: chỉ giữ N bài nguồn đầu tiên theo thứ tự manifest. Manifest được ghi
+    nối (`augment_audio.py --append`, vd. 10 bài CC0 cho EXP-08), nên không giới hạn
+    thì EXP-03/07 chạy lại sẽ lệch bộ truy vấn với EXP-01/04 đã chạy trước đó.
+    """
     import csv
 
     if not os.path.exists(QUERY_MANIFEST):
@@ -228,7 +234,11 @@ def load_query_manifest() -> list:
             f"Chạy: python scripts/augment_audio.py --from-db"
         )
     with open(QUERY_MANIFEST, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+        rows = list(csv.DictReader(f))
+    if sources:
+        keep = set(list(dict.fromkeys(r["source_recording_id"] for r in rows))[:sources])
+        rows = [r for r in rows if r["source_recording_id"] in keep]
+    return rows
 
 
 def resolve_source_audio(manifest: list) -> dict:
