@@ -27,7 +27,6 @@ khác nhau — cùng tiêu đề, cùng nghệ sĩ, cùng thời lượng — v�
 cùng fingerprint là ĐÚNG vì chúng đúng là cùng audio. Chấm theo lớp tương đương là
 cách xử lý trung thực cho trùng lặp thật, không phải nới lỏng nhãn.
 """
-import csv
 import os
 import sys
 import time
@@ -45,7 +44,13 @@ from backend.services.fingerprint_service import (
     extract_query_fingerprint,
     match_decoded,
 )
-from experiments.common import Checkpoint, HeldOutProtocol, print_table, save_result
+from experiments.common import (
+    Checkpoint,
+    HeldOutProtocol,
+    load_query_manifest,
+    print_table,
+    save_result,
+)
 
 EXPERIMENT_ID = "exp01_fingerprint_baseline"
 MANIFEST = os.path.join(config.BASE_DIR, "data", "test_queries", "manifest.csv")
@@ -89,13 +94,19 @@ def score_all(query_vec, reference) -> np.ndarray:
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sources", type=int, default=None,
+                        help="Chỉ dùng N bài nguồn đầu tiên của manifest (cùng bộ với EXP-04, "
+                             "nếu không EXP-05 từ chối ghép)")
+    args = parser.parse_args()
     if not os.path.exists(MANIFEST):
         print(f"❌ Chưa có tập truy vấn: {MANIFEST}\n"
               f"   Chạy: python scripts/augment_audio.py --from-db")
         return 1
 
-    with open(MANIFEST, newline="", encoding="utf-8") as f:
-        queries = list(csv.DictReader(f))
+    queries = load_query_manifest(args.sources)
 
     db = SessionLocal()
     try:
@@ -265,6 +276,7 @@ def main() -> int:
         EXPERIMENT_ID,
         params={
             "reference_fingerprints": len(reference),
+            "sources_selected": args.sources,
             "threshold_sweep": THRESHOLD_SWEEP,
             "current_tau_fp": config.FP_THRESHOLD,
             "fpr_protocol": ("held-out: loại bản trùng fingerprint, bản gần trùng "
