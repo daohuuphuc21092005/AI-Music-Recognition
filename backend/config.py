@@ -174,6 +174,17 @@ FP_DURATION_WINDOW_S = _get_float("FP_DURATION_WINDOW_S", 0.0)
 # 0 = dò toàn bộ (mặc định). Đặt 120 để tái lập đúng hành vi của pyacoustid —
 # nhưng khi đó đoạn cắt từ giữa bài sẽ không khớp được (xem EXP-01).
 FP_MAX_ALIGN_OFFSET = _get_int("FP_MAX_ALIGN_OFFSET", 0)
+# Lọc ứng viên theo hash trùng TUYỆT ĐỐI trước khi chấm đầy đủ (Tầng 1). Quét cả
+# 24.375 fingerprint mất ~4,8 s/truy vấn; chỉ chấm TOP_K bản ghi nhiều hash trùng
+# nhất thì còn vài ms. Đối chứng trên đủ 1.900 truy vấn (TOP_K 50/200/1000): 0 lệch
+# quyết định, và trong dải τ ± 0.15 điểm lọc TRÙNG KHÍT điểm quét đầy đủ; chênh lớn
+# nhất quan sát được 0.1086, chỉ ở truy vấn có điểm đầy đủ ≤ 0.113.
+# Vẫn quay về quét đầy đủ khi (a) điểm tốt nhất sau lọc nằm trong ±BAND quanh ngưỡng
+# hiệu dụng, hoặc (b) truy vấn ngắn hơn MIN_QUERY_S — phép đối chứng chỉ phủ truy
+# vấn 10–33 giây, đoạn ngắn hơn có ít hash để lọc. TOP_K = 0 -> luôn quét đầy đủ.
+FP_PREFILTER_TOP_K = _get_int("FP_PREFILTER_TOP_K", 50)
+FP_PREFILTER_BAND = _get_float("FP_PREFILTER_BAND", 0.15)
+FP_PREFILTER_MIN_QUERY_S = _get_float("FP_PREFILTER_MIN_QUERY_S", 10.0)
 MERT_THRESHOLD = _get_float("MERT_THRESHOLD", 0.98)
 
 # COVER_THRESHOLD = 0.90 — hiệu chỉnh bằng EXP-07, đo ĐÚNG điều kiện server:

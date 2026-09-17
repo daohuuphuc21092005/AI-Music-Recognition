@@ -1,4 +1,6 @@
 """Kiểm thử tầng 1 (Chromaprint) trên database thật."""
+import numpy as np
+
 from backend import config
 from backend.services.fingerprint_service import (
     backend_status,
@@ -128,4 +130,95 @@ def test_loai_tru_ban_ghi_o_tang_chromaprint(monkeypatch):
         None, "q.wav", exclude_recording_ids=frozenset({"goc"}))
     assert held["recording_id"] != "goc"
     assert held.get("best_candidate_below_threshold") != "goc"
-    assert held["candidates_compared"] == 1
+    # Bản ghi bị loại không chiếm chỗ trong top-K của bộ lọc; "khac" không có hash
+    # trùng nào nên không cần chấm
+    assert held["candidates_compared"] == 0
+
+    monkeypatch.setattr(config, "FP_PREFILTER_TOP_K", 0)
+    full = fingerprint_service.search_fingerprint(
+        None, "q.wav", exclude_recording_ids=frozenset({"goc"}))
+    assert full["recording_id"] != "goc"
+    assert full["candidates_compared"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Bộ lọc ứng viên theo hash trùng
+# ---------------------------------------------------------------------------
+def _patch_references(monkeypatch, query, references, duration=30.0):
+    from backend.services import fingerprint_service
+
+    monkeypatch.setattr(fingerprint_service, "extract_query_fingerprint",
+                        lambda path: (duration, "fp"))
+    monkeypatch.setattr(fingerprint_service, "_decode_array", lambda fp: query)
+    monkeypatch.setattr(fingerprint_service, "_reference_fingerprints",
+                        lambda db: (references, 0))
+    return fingerprint_service
+
+
+def _random_references(rng, n, length=240):
+    return [(f"r{i}", rng.integers(0, 2 ** 32, length, dtype=np.uint64).astype(np.uint32), 30.0)
+            for i in range(n)]
+
+
+def test_dem_hash_trung_khop_cach_dem_vong_lap_da_doi_chung():
+    """Bản vector hoá phải đếm y hệt vòng lặp np.add.at của phép đối chứng 1.900 truy vấn."""
+    from backend.services.fingerprint_service import _hash_index, hash_hits
+
+    rng = np.random.default_rng(0)
+    # Giá trị nhỏ để có nhiều hash trùng lặp, cả trong truy vấn lẫn giữa các bản ghi
+    references = [(f"r{i}", rng.integers(0, 50, 80).astype(np.uint32), 30.0) for i in range(30)]
+    query = rng.integers(0, 50, 120).astype(np.uint32)
+
+    hashes, owners = _hash_index(references)
+    expected = np.zeros(len(references), dtype=np.int64)
+    for value in query:
+        lo, hi = np.searchsorted(hashes, value, "left"), np.searchsorted(hashes, value, "right")
+        np.add.at(expected, owners[lo:hi], 1)
+    assert np.array_equal(hash_hits(query, hashes, owners, len(references)), expected)
+
+
+def test_loc_ung_vien_cho_cung_ket_qua_voi_quet_day_du(monkeypatch):
+    rng = np.random.default_rng(1)
+    references = _random_references(rng, 300)
+    target = references[137][1].copy()
+    # Truy vấn = bản ghi đích bị lật 1 bit ở một nửa số item: vẫn khớp (bit-error <= 2)
+    # nhưng chỉ nửa còn lại là hash trùng tuyệt đối
+    target[::2] ^= np.uint32(1)
+    service = _patch_references(monkeypatch, target, references)
+
+    fast = service.search_fingerprint(None, "q.wav")
+    monkeypatch.setattr(config, "FP_PREFILTER_TOP_K", 0)
+    full = service.search_fingerprint(None, "q.wav")
+
+    assert fast["recording_id"] == full["recording_id"] == "r137"
+    assert fast["fingerprint_score"] == full["fingerprint_score"]
+    assert fast["prefilter"]["full_scan"] is False
+    assert fast["candidates_compared"] < full["candidates_compared"] == 300
+    assert full["prefilter"]["full_scan_reason"] == "PREFILTER_DISABLED"
+
+
+def test_diem_sat_nguong_thi_quay_ve_quet_day_du(monkeypatch):
+    rng = np.random.default_rng(2)
+    references = _random_references(rng, 100)
+    query = references[5][1].copy()
+    # Chỉ 30% item còn khớp -> điểm ~0.30, nằm trong dải τ ± 0.15
+    query[: int(len(query) * 0.7)] = rng.integers(0, 2 ** 32, int(len(query) * 0.7),
+                                                   dtype=np.uint64).astype(np.uint32)
+    service = _patch_references(monkeypatch, query, references)
+
+    result = service.search_fingerprint(None, "q.wav")
+    assert abs(result["fingerprint_score"] - result["threshold"]) <= config.FP_PREFILTER_BAND
+    assert result["prefilter"]["full_scan_reason"] == "NEAR_THRESHOLD"
+    assert result["candidates_compared"] == 100
+
+
+def test_truy_van_ngan_luon_quet_day_du(monkeypatch):
+    rng = np.random.default_rng(3)
+    references = _random_references(rng, 50)
+    service = _patch_references(monkeypatch, references[7][1].copy(), references,
+                                duration=config.FP_PREFILTER_MIN_QUERY_S - 1)
+
+    result = service.search_fingerprint(None, "q.wav")
+    assert result["recording_id"] == "r7"
+    assert result["prefilter"]["full_scan_reason"] == "QUERY_TOO_SHORT"
+    assert result["candidates_compared"] == 50

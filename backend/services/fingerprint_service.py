@@ -313,12 +313,70 @@ def _reference_fingerprints(db: Session) -> tuple:
     return _reference_cache["rows"], _reference_cache["undecodable"]
 
 
+_hash_index_cache = {"key": None, "hashes": None, "owners": None}
+
+
+def _hash_index(references: list) -> tuple:
+    """
+    (mọi hash của mọi fingerprint đã sắp xếp, vị trí bản ghi sở hữu từng hash).
+
+    Dựng một lần cho mỗi danh sách reference (~5,4 triệu hash, ~43 MB ở 24.375 bản
+    ghi). Khoá theo đối tượng danh sách: `_reference_fingerprints` tạo danh sách mới
+    mỗi khi bảng được nạp lại.
+    """
+    key = (id(references), len(references))
+    if _hash_index_cache["key"] != key:
+        if references:
+            hashes = np.concatenate([vector for _, vector, _ in references])
+            owners = np.concatenate([np.full(vector.size, position, dtype=np.int32)
+                                     for position, (_, vector, _) in enumerate(references)])
+            order = np.argsort(hashes, kind="stable")
+            hashes, owners = hashes[order], owners[order]
+        else:
+            hashes = np.empty(0, dtype=np.uint32)
+            owners = np.empty(0, dtype=np.int32)
+        _hash_index_cache.update(key=key, hashes=hashes, owners=owners)
+    return _hash_index_cache["hashes"], _hash_index_cache["owners"]
+
+
+def hash_hits(query_vec: np.ndarray, hashes: np.ndarray, owners: np.ndarray,
+              n_references: int) -> np.ndarray:
+    """
+    Số hash trùng TUYỆT ĐỐI giữa truy vấn và từng bản ghi — mỗi cặp item trùng giá
+    trị tính một lần, đúng như phép đối chứng 1.900 truy vấn đã dùng.
+    """
+    left = np.searchsorted(hashes, query_vec, side="left")
+    lengths = np.searchsorted(hashes, query_vec, side="right") - left
+    total = int(lengths.sum())
+    if total == 0:
+        return np.zeros(n_references, dtype=np.int64)
+    starts = np.repeat(left - (np.cumsum(lengths) - lengths), lengths)
+    matched = starts + np.arange(total)
+    return np.bincount(owners[matched], minlength=n_references)
+
+
+def _top_by_hits(counts: np.ndarray, k: int) -> np.ndarray:
+    """Vị trí của tối đa k bản ghi nhiều hash trùng nhất; bỏ bản ghi 0 hash trùng."""
+    if k <= 0 or not counts.any():
+        return np.empty(0, dtype=np.int64)
+    if k < len(counts):
+        picked = np.argpartition(-counts, k)[:k]
+    else:
+        picked = np.arange(len(counts))
+    return picked[counts[picked] > 0]
+
+
 def search_fingerprint(db: Session, audio_path: str,
                        exclude_recording_ids: frozenset = None) -> dict:
     """
-    Quét tuyến tính mọi fingerprint tham chiếu (đã giải nén sẵn, cache theo tiến trình).
+    Tìm bản ghi khớp nhất trong mọi fingerprint tham chiếu (đã giải nén sẵn, cache
+    theo tiến trình).
 
-    Trả EXACT_MATCH khi điểm cao nhất >= FP_THRESHOLD, ngược lại NO_MATCH kèm
+    Mặc định chỉ chấm đầy đủ `FP_PREFILTER_TOP_K` bản ghi có nhiều hash trùng nhất,
+    rồi quay về quét toàn bộ khi kết quả nằm sát ngưỡng hoặc truy vấn quá ngắn (xem
+    `config.FP_PREFILTER_*`). Evidence ghi rõ đã đi đường nào.
+
+    Trả EXACT_MATCH khi điểm cao nhất >= ngưỡng hiệu dụng, ngược lại NO_MATCH kèm
     điểm tốt nhất để tầng 2 (MERT) tiếp quản.
 
     `exclude_recording_ids`: bỏ qua các bản ghi này như thể chúng không có trong
@@ -329,32 +387,56 @@ def search_fingerprint(db: Session, audio_path: str,
     query_vec = _decode_array(query_fp)
 
     references, undecodable = _reference_fingerprints(db)
-
-    window = config.FP_DURATION_WINDOW_S
-    best_match_id, best_score = None, 0.0
-    compared, skipped_by_duration = 0, 0
-
-    excluded = exclude_recording_ids or ()
-    for rec_id, db_vec, db_duration in references:
-        if rec_id in excluded:
-            continue
-        # Lọc theo độ dài (mặc định TẮT: window = 0) — bật lên sẽ nhanh hơn
-        # nhiều nhưng có thể ảnh hưởng recall với truy vấn bị cắt (crop).
-        if window > 0 and db_duration and query_duration:
-            if abs(float(db_duration) - float(query_duration)) > window:
-                skipped_by_duration += 1
-                continue
-
-        score = match_decoded(query_vec, db_vec)
-        compared += 1
-        if score > best_score:
-            best_score, best_match_id = score, rec_id
-
     if undecodable:
         print(f"⚠️ Bỏ qua {undecodable} fingerprint không giải nén được trong DB")
 
     # Ngưỡng hiệu dụng = max(τFP đã hiệu chỉnh, điểm nền theo độ dài truy vấn)
     effective_threshold = min_score_for_duration(query_duration)
+
+    window = config.FP_DURATION_WINDOW_S
+    excluded = exclude_recording_ids or ()
+
+    def score(positions) -> tuple:
+        best_id, best, compared, skipped = None, 0.0, 0, 0
+        for position in positions:
+            rec_id, db_vec, db_duration = references[position]
+            if rec_id in excluded:
+                continue
+            # Lọc theo độ dài (mặc định TẮT: window = 0) — bật lên sẽ nhanh hơn
+            # nhiều nhưng có thể ảnh hưởng recall với truy vấn bị cắt (crop).
+            if window > 0 and db_duration and query_duration:
+                if abs(float(db_duration) - float(query_duration)) > window:
+                    skipped += 1
+                    continue
+            value = match_decoded(query_vec, db_vec)
+            compared += 1
+            if value > best:
+                best, best_id = value, rec_id
+        return best_id, best, compared, skipped
+
+    top_k = config.FP_PREFILTER_TOP_K
+    prefilter = {"top_k": top_k, "band": config.FP_PREFILTER_BAND}
+    if top_k <= 0:
+        prefilter["full_scan_reason"] = "PREFILTER_DISABLED"
+    elif not query_duration or query_duration < config.FP_PREFILTER_MIN_QUERY_S:
+        prefilter["full_scan_reason"] = "QUERY_TOO_SHORT"
+    else:
+        hashes, owners = _hash_index(references)
+        counts = hash_hits(query_vec, hashes, owners, len(references))
+        if excluded:
+            for position, (rec_id, _, _) in enumerate(references):
+                if rec_id in excluded:
+                    counts[position] = 0
+        picked = _top_by_hits(counts, top_k)
+        best_match_id, best_score, compared, skipped_by_duration = score(picked)
+        prefilter["candidates"] = int(picked.size)
+        prefilter["best_hash_hits"] = int(counts.max()) if counts.size else 0
+        if abs(best_score - effective_threshold) <= config.FP_PREFILTER_BAND:
+            prefilter["full_scan_reason"] = "NEAR_THRESHOLD"
+
+    prefilter["full_scan"] = "full_scan_reason" in prefilter
+    if prefilter["full_scan"]:
+        best_match_id, best_score, compared, skipped_by_duration = score(range(len(references)))
 
     result = {
         "recording_id": best_match_id if best_score >= effective_threshold else None,
@@ -364,6 +446,7 @@ def search_fingerprint(db: Session, audio_path: str,
         "threshold_raised_for_short_query": effective_threshold > FP_THRESHOLD,
         "candidates_compared": compared,
         "candidates_skipped_by_duration": skipped_by_duration,
+        "prefilter": prefilter,
         "query_duration": query_duration,
     }
 
