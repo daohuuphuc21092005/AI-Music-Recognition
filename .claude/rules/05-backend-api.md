@@ -52,6 +52,7 @@ Mọi logic nghiệp vụ phải được tổ chức trong các service độc 
 
 ### Cách backend giữ cam kết "không lộ thông tin nội bộ"
 - **Lưới an toàn toàn cục** (`backend/main.py::unhandled_exception`): mọi ngoại lệ không lường trước → HTTP 500 `INTERNAL_ERROR` cùng khuôn trên; chi tiết chỉ nằm trong log máy chủ.
+- **Tham số sai cũng theo khuôn** (`backend/main.py::invalid_request`): `RequestValidationError` KHÔNG đi qua lưới toàn cục — mặc định FastAPI trả `{"detail": [...]}` (danh sách, frontend không đọc được mã, trường `input` lặp lại giá trị người dùng gửi). Nay → HTTP 422 `INVALID_REQUEST`, `message` nêu tên trường + giá trị được chấp nhận, `details` = `[{field, message}]`, không lặp lại input.
 - **Kiểm UUID trước khi chạm CSDL** (`routes.parse_uuid`): `job_id` / `recording_id` sai dạng → 404 `UNKNOWN_TRACK`, không để PostgreSQL ném lỗi ép kiểu.
 - **Lỗi FILE và lỗi MÁY CHỦ phải ra hai mã khác nhau**: `embedding_service` ném `EmbeddingAudioError` (file không giải mã được → `NO_AUDIO`) hoặc `EmbeddingModelError` (không nạp/chạy được MERT → `MODEL_FAILURE`); không còn trả `None`. `fpcalc` không đọc được file (`AudioFingerprintError`) → `NO_AUDIO`.
 - **Không đưa nội dung ngoại lệ ra response**: stderr của FFmpeg và lỗi tầng Cover chỉ ghi log; evidence của Cover chỉ mang mã `COVER_STAGE_FAILED`.
@@ -71,6 +72,7 @@ Mọi logic nghiệp vụ phải được tổ chức trong các service độc 
 - **`UNKNOWN_TRACK`**: Không tìm thấy bản ghi tương đồng nào trong cơ sở dữ liệu.
 - **`LOW_CONFIDENCE`**: Độ tương đồng hoặc chất lượng tín hiệu quá thấp để đưa ra quyết định an toàn.
 - **`INTERNAL_ERROR`**: Lỗi không lường trước (HTTP 500). Thông báo chung, chi tiết chỉ nằm trong log máy chủ.
+- **`INVALID_REQUEST`**: Tham số yêu cầu sai kiểu/giá trị (HTTP 422), vd. `platform=youtube` thay vì `YOUTUBE`.
 
 ---
 

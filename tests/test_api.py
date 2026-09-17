@@ -119,6 +119,27 @@ def test_feedback_endpoint(client):
 def test_feedback_tu_choi_verdict_la(client):
     response = client.post("/api/v1/feedback", json={"verdict": "Maybe"})
     assert response.status_code == 422  # pydantic chặn từ đầu
+    detail = response.json()["detail"]
+    assert detail["error_code"] == "INVALID_REQUEST"
+    assert detail["details"][0]["field"] == "verdict"
+
+
+def test_tham_so_sai_tra_khuon_ma_loi_chuan_khong_lap_lai_input(client):
+    """
+    Trước đây 422 trả danh sách mặc định của FastAPI: frontend không đọc được mã lỗi
+    và trường `input` lặp lại nguyên giá trị người dùng gửi.
+    """
+    response = client.post(
+        "/api/v1/search",
+        files={"file": ("q.wav", b"RIFF0000WAVE", "audio/wav")},
+        data={"platform": "gia-tri-la-XYZ", "commercial_use": "false", "monetization": "false"},
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail["error_code"] == "INVALID_REQUEST"
+    assert "platform" in detail["message"] and "YOUTUBE" in detail["message"]
+    assert "gia-tri-la-XYZ" not in response.text
+    assert "Traceback" not in response.text
 
 
 def test_health_khong_lo_duong_dan_may_chu(client):

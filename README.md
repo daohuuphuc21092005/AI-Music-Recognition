@@ -179,7 +179,8 @@ phút vì tải MERT (đúng revision ghim) và dựng bộ đệm fingerprint.
 
 Lỗi luôn trả về mã chuẩn hoá, **không bao giờ trả traceback**:
 `FILE_TOO_LARGE`, `UNSUPPORTED_FORMAT`, `NO_AUDIO`, `NO_MUSIC`, `MODEL_FAILURE`,
-`DATABASE_FAILURE`, `TIMEOUT`, `UNKNOWN_TRACK`, `LOW_CONFIDENCE`.
+`DATABASE_FAILURE`, `TIMEOUT`, `UNKNOWN_TRACK`, `LOW_CONFIDENCE`, `INVALID_REQUEST` (tham số sai,
+422), `INTERNAL_ERROR` (lỗi không lường trước, 500).
 
 ### Rule Engine
 

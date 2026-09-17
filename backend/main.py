@@ -16,6 +16,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -96,6 +97,30 @@ app = FastAPI(
 )
 
 app.include_router(router)
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_request(request: Request, exc: RequestValidationError):
+    """
+    Tham số sai (vd. platform=youtube thay vì YOUTUBE) -> 422 cùng khuôn mã lỗi.
+
+    Mặc định FastAPI trả {"detail": [ {type, loc, msg, input, ...} ]} — một danh sách,
+    nên apiError của frontend không đọc được mã lỗi, và trường `input` lặp lại nguyên
+    giá trị người dùng gửi. Ở đây chỉ nêu TÊN trường và giá trị được chấp nhận.
+    """
+    details = []
+    for error in exc.errors():
+        field = ".".join(str(part) for part in error.get("loc", ())
+                         if part not in ("body", "query", "path", "form", "header"))
+        details.append({"field": field or None, "message": error.get("msg", "Không hợp lệ")})
+    summary = "; ".join(f"{d['field']}: {d['message']}" if d["field"] else d["message"]
+                        for d in details)
+    return JSONResponse(
+        status_code=422,
+        content={"detail": {"error_code": "INVALID_REQUEST",
+                            "message": f"Tham số không hợp lệ — {summary}",
+                            "details": details}},
+    )
 
 
 @app.exception_handler(Exception)
