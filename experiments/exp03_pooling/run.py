@@ -43,7 +43,7 @@ import numpy as np
 import torch
 
 from backend import config
-from backend.services.embedding_service import load_model
+from backend.services.embedding_service import get_device, load_model
 from backend.services.retrieval_service import build_faiss_index, search_top_k
 from experiments.common import (
     Checkpoint,
@@ -72,22 +72,31 @@ K_VALUES = (1, 5)
 # --------------------------------------------------------------------------
 def pool_both(chunk: np.ndarray, sr: int, processor, model, timing: dict):
     """Trả (vector mean 768 chiều, vector mean+std 1536 chiều), đều chuẩn hoá L2."""
-    inputs = processor(chunk, sampling_rate=sr, return_tensors="pt")
+    # Input phải nằm cùng thiết bị với model: load_model() đặt model lên GPU khi
+    # có CUDA, và để input ở CPU thì conv1d đầu tiên ném RuntimeError.
+    device = get_device()
+    inputs = processor(chunk, sampling_rate=sr, return_tensors="pt").to(device)
+
+    def synchronize():
+        # GPU chạy bất đồng bộ: không chờ thì đồng hồ chỉ đo lúc XẾP lệnh
+        if device == "cuda":
+            torch.cuda.synchronize()
 
     t0 = time.perf_counter()
     with torch.inference_mode():
         hidden = model(**inputs).last_hidden_state      # (1, T, 768)
+    synchronize()
     timing.setdefault("forward_ms", []).append((time.perf_counter() - t0) * 1000)
 
     t0 = time.perf_counter()
     mean = hidden.mean(dim=1)
-    v_mean = torch.nn.functional.normalize(mean, p=2, dim=1).squeeze().numpy()
+    v_mean = torch.nn.functional.normalize(mean, p=2, dim=1).squeeze().cpu().numpy()
     timing.setdefault("pool_mean_ms", []).append((time.perf_counter() - t0) * 1000)
 
     t0 = time.perf_counter()
     std = hidden.std(dim=1)
     v_ms = torch.nn.functional.normalize(torch.cat([mean, std], dim=1), p=2, dim=1)
-    v_ms = v_ms.squeeze().numpy()
+    v_ms = v_ms.squeeze().cpu().numpy()
     timing.setdefault("pool_mean_std_ms", []).append((time.perf_counter() - t0) * 1000)
 
     return v_mean.astype("float32"), v_ms.astype("float32")
@@ -216,6 +225,8 @@ def main() -> int:
         "sources": len(sources),
         "manifest_rows": len(manifest),
         "mert_model_version": config.MERT_MODEL_VERSION,
+        # Độ trễ forward chỉ so được giữa các lượt cùng thiết bị
+        "device": get_device(),
     })
 
     ref_meta, ref_mean, ref_mean_std = [], [], []
@@ -323,6 +334,7 @@ def main() -> int:
             "k_values": list(K_VALUES),
             "source_files": sorted(sources),
             "strategies": {"mean": 768, "mean_std": 1536},
+            "device": get_device(),
             "similarity": "cosine (IndexFlatIP trên vector đã chuẩn hoá L2)",
             "shared_forward_pass": True,
         },
