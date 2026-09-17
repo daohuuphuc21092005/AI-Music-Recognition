@@ -243,6 +243,7 @@ def main() -> int:
         checkpoint.add(query["path"], {
             "transformation": query["transformation"],
             "source_recording_id": query["source_recording_id"],
+            "true_class": sorted(true_class),
             "fingerprint": fp,
             "mert": mert,
             "cover": cover,
@@ -302,6 +303,28 @@ def main() -> int:
          "Nhận xét"],
     )
 
+    # Recall@K ở quy mô toàn chỉ mục với truy vấn ĐÃ BIẾN ĐỔI — đúng tiêu chí
+    # "Robust retrieval Recall@5 >= 0.80" của §13. Tính trên top-K bất kể ngưỡng:
+    # đây là khả năng TÌM THẤY, còn nhận/từ chối là việc của τ.
+    def recall_at_k(stage: str, rows: list) -> float:
+        hits = sum(1 for q in rows
+                   if set(q[stage].get("top_k") or [])
+                   & set(q.get("true_class") or [q["source_recording_id"]]))
+        return round(hits / len(rows), 4) if rows else 0.0
+
+    retrieval_recall = {
+        f"{stage}_recall@{config.TOP_K}": {
+            "overall": recall_at_k(stage, per_query),
+            "per_transformation": {name: recall_at_k(stage, rows)
+                                   for name, rows in sorted(by_transformation.items())},
+        }
+        for stage in ("mert", "cover")
+    }
+    print(f"\nRecall@{config.TOP_K} trên toàn chỉ mục (truy vấn đã biến đổi, bỏ qua ngưỡng): "
+          f"MERT {retrieval_recall[f'mert_recall@{config.TOP_K}']['overall']} | "
+          f"Cover {retrieval_recall[f'cover_recall@{config.TOP_K}']['overall']} "
+          f"(§13: Recall@5 >= 0.80)")
+
     rescued = [name for name, rows in sorted(by_transformation.items())
                if sum(1 for r in rows if r["mert"]["correct"])
                > sum(1 for r in rows if r["fingerprint"]["correct"])]
@@ -315,6 +338,7 @@ def main() -> int:
 
     metrics = {
         "systems": summaries,
+        "retrieval_recall_at_k": retrieval_recall,
         "per_transformation": {
             name: {
                 "n": len(rows),
