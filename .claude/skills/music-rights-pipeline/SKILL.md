@@ -61,6 +61,8 @@ Skill này hướng dẫn quy trình chuẩn hóa để xây dựng, kiểm th�
    fpcalc -json temp_audio.wav
    ```
 2. So khớp hash bitwise (Bit error rate / raw match score) với bảng `fingerprints`.
+   - `search_fingerprint` KHÔNG quét cả bảng: lọc `FP_PREFILTER_TOP_K` (50) bản ghi nhiều hash trùng tuyệt đối nhất rồi chấm đầy đủ; quay về quét toàn bộ khi điểm trong ±0.15 quanh ngưỡng hoặc truy vấn < 10 s. Đối chứng 1.900 truy vấn: 0 lệch quyết định, 110 ms thay vì ~4,5 s. `evidence.fingerprint.prefilter.full_scan_reason` cho biết đã đi đường nào.
+   - Hiệu chỉnh τFP (EXP-01) vẫn quét đầy đủ — cần phân bố điểm của mọi bản ghi.
 3. So sánh với ngưỡng `τFP`:
    - Nếu `score ≥ τFP`: Gán `match_type = EXACT_MATCH`, chuyển thẳng tới Rights Lookup.
    - Nếu `score < τFP`: Ghi log và chuyển tiếp sang Tầng 3.
@@ -99,6 +101,7 @@ Skill này hướng dẫn quy trình chuẩn hóa để xây dựng, kiểm th�
 | Quên giải phóng file tạm | AudioService không có hook cleanup | Sử dụng `tempfile.NamedTemporaryFile` hoặc `finally: os.remove(temp_path)` |
 | Tầng 1 báo `UNAVAILABLE`, `reason_code=DATABASE_UNAVAILABLE` | Server không kết nối được PostgreSQL (vd. `DATABASE_URL` trỏ cổng 5433 của Docker cũ trong khi PostgreSQL chạy ở 5432) | Sửa `DATABASE_URL`; kiểm tra `/health` → `components.database` |
 | Tầng 1 báo `UNAVAILABLE`, `reason_code=FPCALC_MISSING` | Tiến trình server không thấy `fpcalc` (PATH của server khác PATH của shell) | Đặt `FPCALC_PATH` trong `.env` hoặc để binary ở `~/bin` |
+| Bản chậm (tempo < 1) không qua tầng Cover dù dịch cao độ vẫn bắt được | Reference là 30 s đầu co về 64 khung; cắt truy vấn cố định 30 s làm bản chậm mất phần cuối (tempo 0.90: đúng @1 27%) | `COVER_TEMPO_FACTORS` (mặc định 0.90–1.10) cắt truy vấn theo từng hệ số rồi lấy max: tempo 0.90 lên 100% @1. Đổi dải hệ số thì chạy lại EXP-07 — thêm độ dài cắt là thêm cơ hội nhận nhầm. Kiểm nhanh: `experiments/exp07_cover/query_span_check.py --off-grid` |
 | Nhiễu / tạp âm bị trả `COVER_MATCH` | Descriptor chroma không trừ trung bình → cosine giữa hai bài bất kỳ đã cao sẵn | Dùng `cover_service.normalize_frames`; dựng lại `cover_descriptors.npy` và chạy lại EXP-07 (có mẫu nhiễu) để hiệu chỉnh τCover |
 | Tầng 1 trả `EXACT_MATCH` cho bài không có audio | Fingerprint không sinh từ audio thật lọt vào bảng (gộp dữ liệu chỉ có metadata) | `python scripts/check_data_integrity.py` — mục "Fingerprint là đầu ra thật của fpcalc" phải PASS |
 | Badge HIGH/CONDITIONAL từ giấy phép do model đoán | Thiếu cổng độ tin cậy dữ liệu quyền | `rights_gate` trong `configs/rules_v1.yaml` hạ về UNKNOWN; kết luận tạm ở `evidence.rule_engine.provisional_decision` |

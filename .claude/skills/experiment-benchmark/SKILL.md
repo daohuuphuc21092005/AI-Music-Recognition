@@ -80,11 +80,13 @@ Sau khi hoàn tất mỗi thí nghiệm, đối chiếu kết quả với bảng
 ├──────────────────────────────────────┼──────────────────────┼─────────────┤
 │ 1. Clean Exact-Match (Chromaprint)   │ Precision ≥ 0.95     │    [...]    │
 │                                      │ Recall ≥ 0.90        │    [...]    │
-│ 2. Robust Retrieval (MERT-v1-95M)    │ Recall@5 ≥ 0.80      │    [...]    │
+│ 2. Robust Retrieval (MERT ∪ Cover)   │ Recall@5 ≥ 0.80      │    [...]    │
 │ 3. Unknown Detection (Nhạc lạ)       │ False Match Rate ≤ 5%│    [...]    │
 │ 4. End-to-End System (Cascade)       │ Macro-F1 ≥ 0.80      │    [...]    │
 └──────────────────────────────────────┴──────────────────────┴─────────────┘
 ```
+
+- **Robust Retrieval chấm ở cấp hệ thống** (quyết định của chủ dự án, 2026-09-17): `metrics.retrieval_recall_at_k.system_recall@5` của EXP-04 — hợp top-5 của MERT và Cover trên truy vấn ĐÃ biến đổi, tìm trên toàn chỉ mục. Luôn báo kèm `mert_recall@5` (MERT đơn lẻ trượt ở dịch cao độ). EXP-02 là cận trên (truy vấn chưa biến đổi), không dùng cho tiêu chí này.
 
 > [!CAUTION]
 > Nếu một thí nghiệm không đạt ngưỡng tối thiểu:

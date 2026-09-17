@@ -55,6 +55,7 @@ INPUT AUDIO/VIDEO
   - Tuyệt đối **không được chọn tùy tiện**.
   - Bắt buộc phải xác định thông qua việc quét ngưỡng trên Validation Set để đạt sự cân bằng tối ưu giữa Precision, Recall và False Positive Rate (FPR).
 - Nếu `score ≥ τFP`: Xác nhận `match_type = EXACT_MATCH` hoặc `NEAR_EXACT_MATCH`, chuyển thẳng đến Track Resolver, **bỏ qua tầng MERT**.
+- **Lọc ứng viên theo hash** (`config.FP_PREFILTER_*`): chỉ chấm đầy đủ 50 bản ghi có nhiều hash trùng tuyệt đối nhất, quay về quét toàn bộ khi điểm nằm trong ±0.15 quanh ngưỡng hiệu dụng hoặc truy vấn < 10 s (phép đối chứng chỉ phủ 10–33 s). Đối chứng hàm production trên 1.900 truy vấn: 0 lệch quyết định, 1,6% quay về quét toàn bộ, độ trễ TB 110 ms thay vì ~4,5 s. Đổi `TOP_K`/`BAND` thì phải đối chứng lại; EXP-01 (hiệu chỉnh τFP) luôn quét toàn bộ.
 
 ---
 
@@ -82,8 +83,9 @@ INPUT AUDIO/VIDEO
 - **Baseline bắt buộc**: Biểu diễn CQT (Constant-Q Transform) / Chroma features kết hợp so khớp chuỗi thời gian (dynamic time warping / dynamic alignment).
 - **Descriptor đang dùng** (`cover_service.normalize_frames`): chroma-CQT gộp về 64 khung, **trừ trung bình từng khung** rồi chuẩn hoá L2; so khớp bằng cosine lấy max qua 12 phép xoay (OTI). Không trừ trung bình thì chroma (luôn không âm) cho cosine cao sẵn giữa hai bài bất kỳ — nhiễu trắng từng đạt 0.985 > τCover.
 - **Ngưỡng `τCover` phụ thuộc thang điểm của descriptor VÀ quy mô chỉ mục**: đổi descriptor hoặc đổi số bài trong chỉ mục thì bắt buộc dựng lại `cover_descriptors.npy` (`scripts/build_cover_index.py`, mọi bản ghi có audio thật) và chạy lại EXP-07 (có nhiễu làm mẫu âm) trước khi tin ngưỡng.
-- **`τCover` hiện tại = 0.90**, hiệu chỉnh trên chỉ mục 24.375 bài đúng điều kiện server (30 giây đầu của truy vấn): Precision 0.9946, nhận nhầm bài ngoài CSDL 0,4%, mẫu nhiễu cao nhất chỉ 0.7278. Ở quy mô này tầng Cover nhận đúng 83% truy vấn ở vị trí 1 và bắt đúng lượng dịch cao độ (OTI) 91% — đúng chỗ Chromaprint được 0%.
-- **Giới hạn đã đo — cửa sổ truy vấn cố định 30 giây đầu**: descriptor co giãn về 64 khung chỉ bất biến nhịp độ khi truy vấn chứa TRỌN đoạn nội dung của reference. Bản chậm (tempo 0.90 dài 33 s) bị cắt ở giây 30 → đúng @1 chỉ 27%; đọc trọn truy vấn thì 100% (qua τ 83%). Đoạn cắt ngắn hơn 30 s lệch trục thời gian (điểm 0.40 so với 1.000 khi cắt reference cùng khoảng) — nhóm này Chromaprint đã bắt. Kiểm lại: `experiments/exp07_cover/query_span_check.py`. Đổi cách đọc truy vấn ở server thì bắt buộc chạy lại EXP-07 trước (FMR chưa đo).
+- **Cắt truy vấn theo nhiều hệ số nhịp độ** (`config.COVER_TEMPO_FACTORS`, mặc định 0.90–1.10 — dải của §11): reference là 30 giây đầu ở nhịp gốc co về 64 khung, nên chỉ khớp khi đoạn truy vấn chứa TRỌN đúng phần nội dung đó. Truy vấn nhịp f chứa nó trong `30 / f` giây đầu; `cover_service.query_descriptors` dựng một descriptor cho mỗi độ dài và lấy max theo từng ứng viên, evidence ghi `tempo_factor` đã thắng. Trước đây cắt cố định 30 s: tempo 0.90 đúng @1 chỉ 27%, nay 100%. Kiểm lại (kèm nhịp ngoài bảng hệ số): `experiments/exp07_cover/query_span_check.py --off-grid`.
+- **`τCover` hiện tại = 0.90**, hiệu chỉnh lại sau khi đổi cách cắt, trên chỉ mục 24.375 bài đúng điều kiện server với `HeldOutProtocol`: Precision 0.9952, Recall 0.7663, nhận nhầm bài ngoài CSDL 0,11%, mẫu nhiễu cao nhất 0.7347; đúng @1 88,8%. **Đổi dải hệ số nhịp độ thì bắt buộc chạy lại EXP-07** — mỗi độ dài cắt thêm là thêm một cơ hội nhận nhầm.
+- **Giới hạn còn lại**: đoạn truy vấn ngắn hơn 30 s nội dung (cắt 10/15 s) lệch trục thời gian với reference — đúng @1 chỉ 2% (so với reference cắt cùng khoảng thì điểm 1.000). Nhóm này Chromaprint đã bắt 100%, nên không phải điểm mù của cascade.
 - **Phương án nâng cao**: Sử dụng model chuyên dụng như CoverHunter (hoặc tương đương) dưới dạng **pretrained inference**. Tuyệt đối **không huấn luyện từ đầu (train from scratch)**.
 
 ---

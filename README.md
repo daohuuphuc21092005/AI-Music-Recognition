@@ -18,6 +18,8 @@ INPUT (audio/video)
 - **Tầng 1 (Exact Match):** Chromaprint. Fingerprint được giải nén bằng
   `backend/services/chromaprint_codec.py` (thuần Python, không cần thư viện native)
   và so khớp bằng thuật toán bit-error của Chromaprint đã vector hoá bằng numpy.
+  Chỉ chấm đầy đủ 50 bản ghi có nhiều hash trùng nhất (quay về quét toàn bộ khi
+  điểm sát ngưỡng): đối chứng 1.900 truy vấn 0 lệch quyết định, ~110 ms thay vì ~4,5 s.
 - **Tầng 2 (Deep Retrieval):** MERT-v1-95M + FAISS `IndexFlatIP` trên vector đã
   chuẩn hoá L2. Điểm được **gộp theo `recording_id`** nên Top-K là K bản ghi khác
   nhau, không phải K đoạn của cùng một bài.
@@ -41,9 +43,9 @@ INPUT (audio/video)
 > **τMERT = 0.98** — EXP-06: False Match Rate **2,65%** (≤ 5% của §13). Chính τ = 0.97
 > cũ cho FMR 6,12% ở quy mô này, dù chỉ 4,40% khi corpus còn 4.000 bản ghi.
 >
-> **τCover = 0.90** — EXP-07 đúng điều kiện server (30 giây đầu, tìm trên cả
-> 24.375 bài): Precision 0.9946, FMR 0,37%, không nhận mẫu nhiễu nào (nhiễu cao
-> nhất 0.7278).
+> **τCover = 0.90** — EXP-07 đúng điều kiện server (cắt truy vấn theo từng hệ số nhịp
+> độ 0.90–1.10, tìm trên cả 24.375 bài): Precision 0.9952, Recall 0.7663, FMR 0,11%,
+> không nhận mẫu nhiễu nào (nhiễu cao nhất 0.7347).
 >
 > ⚠️ **Cả ba ngưỡng phụ thuộc QUY MÔ reference.** Cùng bộ truy vấn, τCover = 0.70
 > cho FMR 4,9% trên 100 bài nhưng 17,4% trên 24.375 bài. **Mở rộng dữ liệu ⇒ bắt
@@ -233,69 +235,79 @@ tham số và ngưỡng (§14).
 Số liệu EXP-01 → EXP-08 đo trên **corpus FMA thật ở quy mô hiện tại**: 24.375 bản
 ghi có audio, 48.750 vector MERT, chỉ mục cover 24.375 bài; 1.900 truy vấn biến
 đổi từ 100 bài nguồn (EXP-08 thêm 190 truy vấn từ 10 bài CC0). Ngưỡng đúng cấu
-hình server: τFP 0.30 · τMERT 0.98 · τCover 0.90.
+hình server: τFP 0.30 · τMERT 0.98 · τCover 0.90; Tầng 1 lọc ứng viên theo hash,
+tầng Cover cắt truy vấn theo hệ số nhịp độ 0.90–1.10.
 
 | # | Thí nghiệm | Kết quả chính |
 |---|---|---|
 | EXP-01 | Fingerprint Baseline | → chốt **τFP = 0.30**: 800 truy vấn sạch P = R = 1.000; cả 1.900 truy vấn P 0.9981 · FPR 0,21% |
 | EXP-02 | MERT Retrieval | Recall@1 0.8787 · Recall@5 0.9374 · MRR 0.9059 (leave-one-out, truy vấn chưa biến đổi) |
 | EXP-03 | Pooling Strategy | `mean+std` chỉ +1,13pp Recall@1 nhưng index ×2 → **giữ `mean`** |
-| EXP-04 | FP vs MERT vs Cover vs Cascade | **Cascade production F1 0.8905** (R 0.8047) > Cover 0.8104 > FP→MERT 0.7278 > FP 0.7140 > MERT 0.3915 |
-| EXP-05 | Robustness | Dịch cao độ 0,25% → **71%** nhờ tầng Cover; còn yếu nhất: **tempo chậm** (8–10%) |
+| EXP-04 | FP vs MERT vs Cover vs Cascade | **Cascade production F1 0.9352** (R 0.8805) > Cover 0.8659 > FP→MERT 0.7278 > FP 0.7140 > MERT 0.3915 |
+| EXP-05 | Robustness | Nhờ tầng Cover: dịch cao độ 0,25% → **71%**, đổi nhịp 0% → **81%**; còn yếu nhất: chồng âm 65% |
 | EXP-06 | Unknown Detection | → chốt **τMERT = 0.98** (FMR 2,65%) |
-| EXP-07 | Cover Identification | → chốt **τCover = 0.90** (P 0.9946 · FMR 0,37%); dịch cao độ ±1/±2 đúng 100% |
-| EXP-08 | End-to-End | Macro-F1 **0.9091** · FMR held-out **0,00%** · nhận đúng bài có trong CSDL 80,3% |
+| EXP-07 | Cover Identification | → chốt **τCover = 0.90** (P 0.9952 · R 0.7663 · FMR 0,11%); dịch cao độ và đổi nhịp 0.90–1.10 đúng @1 100% |
+| EXP-08 | End-to-End | Macro-F1 **0.9518** · FMR held-out **0,00%** · nhận đúng bài có trong CSDL 87,9% |
 | EXP-09 | Học bản quyền từ âm thanh? | Tín hiệu rất yếu, không dùng được (đo ở corpus 4.000) |
 
-### Nghiệm thu §13
+### Nghiệm thu §13 — đạt cả bốn tiêu chí
 
 | Tiêu chí | Mục tiêu | Đo được | Nguồn | |
 |---|---|---|---|---|
 | Clean exact-match | P ≥ 0.95, R ≥ 0.90 | **P 1.000 · R 1.000** trên 800 truy vấn (30 s, cắt 10/15 s, MP3 128k/64k, EQ, gain, nhiễu SNR 20) | EXP-01 | ✅ |
-| Robust retrieval | Recall@5 ≥ 0.80 | MERT **0.7921** · Cover 0.8542 · MERT hoặc Cover 0.9926 | EXP-04 | ❌ MERT đơn lẻ thiếu 0.008 |
-| Unknown FMR | ≤ 5% | Chromaprint 0,21% · MERT 2,65% · Cover 0,37% · **cả pipeline 0,00%** (760 lượt held-out) | EXP-01/06/07/08 | ✅ |
-| End-to-end | Macro-F1 ≥ 0.80 | **0.9091**, đủ 4 lớp có mẫu (LOW 114 · CONDITIONAL 475 · HIGH 171 · UNKNOWN 760) | EXP-08 | ✅ |
+| Robust retrieval | Recall@5 ≥ 0.80 | **0.9937** cấp hệ thống (MERT ∪ Cover) · MERT đơn lẻ 0.7921 · Cover đơn lẻ 0.8947 | EXP-04 | ✅ |
+| Unknown FMR | ≤ 5% | Chromaprint 0,21% · MERT 2,65% · Cover 0,11% · **cả pipeline 0,00%** (760 lượt held-out) | EXP-01/06/07/08 | ✅ |
+| End-to-end | Macro-F1 ≥ 0.80 | **0.9518**, đủ 4 lớp có mẫu (LOW 114 · CONDITIONAL 475 · HIGH 171 · UNKNOWN 760) | EXP-08 | ✅ |
 
-**Robust retrieval chưa đạt nếu đọc đúng chữ của tiêu chí** (Recall@5 của MERT).
-Toàn bộ phần thiếu đến từ dịch cao độ: MERT@5 nhóm này chỉ 0.185, bỏ nhóm đó ra
-thì 0.954. Tầng Cover được thêm vào đúng vì điểm mù này và đưa Recall@5 kết hợp lên
-0.9926. Có coi đó là đạt hay không là quyết định của chủ dự án theo §13 ("*có thể
-điều chỉnh ... nhưng phải ghi lý do*") — mục tiêu chưa được sửa.
+**Robust retrieval chấm ở cấp hệ thống — và vì sao phải nói rõ điều này.** MERT đơn
+lẻ đạt 0.7921, thiếu 0.008; toàn bộ phần thiếu đến từ dịch cao độ (MERT mã hoá cao
+độ tuyệt đối: 0.185, bỏ nhóm đó ra thì 0.954). Chủ dự án quyết định chấm trên hợp
+top-5 của MERT và Cover: §13 chỉ ghi "Robust retrieval", tầng Cover là một phần của
+cascade production và được thêm vào đúng vì điểm mù này, và cả hai danh sách đều hiện
+trong evidence. Mục tiêu 0.80 giữ nguyên. Cách chấm được chọn **sau** khi đã thấy MERT
+trượt, nên con số MERT đơn lẻ luôn được báo cạnh bên (biên bản ở
+`.claude/rules/06-experiments-evaluation.md` §5).
 
-FPR của EXP-01 và FMR của EXP-07 đo trước khi có `HeldOutProtocol` (held-out khi đó
-chỉ loại bản trùng hệt), nên là **cận trên**: vài lần hệ thống nhận ra bản gần trùng
-hoặc bài bị trộn chồng — tức nhận đúng — vẫn bị đếm là nhận nhầm.
+FPR của EXP-01 đo trước khi có `HeldOutProtocol` (held-out khi đó chỉ loại bản trùng
+hệt), nên là **cận trên**: vài lần hệ thống nhận ra bản gần trùng hoặc bài bị trộn
+chồng — tức nhận đúng — vẫn bị đếm là nhận nhầm.
 
 ### EXP-08 — trọn pipeline: đạt ngưỡng nghiệm thu
 
 380 truy vấn từ 20 bài nguồn chọn phân tầng theo giấy phép (3 bài mỗi loại; tập
 truy vấn chỉ có 2 bài CC_BY_ND; bài CC0 lấy từ 10 bài sinh thêm), mỗi truy vấn chạy
 2 điều kiện (`known`, `held_out`) × 2 ngữ cảnh (phi thương mại, thương mại) =
-**1.520 lượt**, đúng đường chạy production có tầng Cover.
+**1.520 lượt**, đúng đường chạy production.
 
 | Mức rủi ro | Precision | Recall | F1 | Số mẫu |
 |---|---|---|---|---|
-| LOW | 1.000 | 0.8772 | 0.9346 | 114 |
-| CONDITIONAL | 1.000 | 0.7811 | 0.8771 | 475 |
-| HIGH | 0.9931 | 0.8421 | 0.9114 | 171 |
-| UNKNOWN | 0.8407 | 1.000 | 0.9135 | 760 |
+| LOW | 1.000 | 0.9825 | 0.9912 | 114 |
+| CONDITIONAL | 1.000 | 0.8547 | 0.9217 | 475 |
+| HIGH | 0.9936 | 0.9064 | 0.9480 | 171 |
+| UNKNOWN | 0.8983 | 1.000 | 0.9465 | 760 |
 
 | Điều kiện | Macro-F1 | Accuracy | n |
 |---|---|---|---|
 | `held_out` (bài ngoài CSDL) | **1.000** | 1.000 | 760 |
-| `known` (bài có trong CSDL) | 0.9077 | 0.8092 | 760 |
+| `known` (bài có trong CSDL) | 0.9536 | 0.8855 | 760 |
 
-- **Sai sót gần như chỉ có một kiểu: nhận diện thất bại thì ra `UNKNOWN`** (144/150
+- **Sai sót gần như chỉ có một kiểu: nhận diện thất bại thì ra `UNKNOWN`** (86/92
   lần). Hệ thống không đoán bừa — Precision của LOW / CONDITIONAL / HIGH là 1.000 /
-  1.000 / 0.9931. 70 trong 150 lần thất bại là tempo chậm 0.90/0.95 — đúng điểm mù
-  đã đo ở EXP-05 và EXP-07.
+  1.000 / 0.9936. Trong 92 lần thất bại: 48 dịch cao độ, 30 đổi nhịp, 14 chồng âm.
 - **Lỗi mức rủi ro duy nhất không phải `UNKNOWN`**: một truy vấn `audio_overlay` (bài
   CC_BY_ND trộn với bài phi thương mại, dùng thương mại) ra HIGH thay vì CONDITIONAL,
   vì hệ thống nhận ra bài bị trộn chồng. Cả 6 lần nhận ra bản ghi khác ở điều kiện
   `known` đều là bài bị trộn chồng. Với một bản trộn thì HIGH mới là rủi ro thật; giới
   hạn thực sự là pipeline chỉ báo **một** bài cho mỗi truy vấn.
-- Độ trễ trung bình 5,8 s (P95 7,5 s): 4,8 s là Chromaprint so với toàn bảng; tra
-  quyền 1,6 ms, Rule Engine dưới 0,1 ms.
+- Độ trễ trung bình 1,4 s (P50 1,7 s, P95 2,5 s) — phần lớn là MERT (~1 s) vì điều
+  kiện held-out luôn đi hết ba tầng. Chromaprint P50 41 ms; tra quyền 1,6 ms; Rule
+  Engine 0,1 ms.
+
+So với lượt trước trên cùng bộ truy vấn (cắt Cover cố định 30 s, Tầng 1 quét toàn bộ):
+Macro-F1 0.9091 → **0.9518**, nhận đúng bài có trong CSDL 80,3% → **87,9%**, số lần
+thất bại vì tempo chậm 70 → 12, độ trễ trung bình 5,8 s → **1,4 s**. Lượt này dừng một
+lần ở truy vấn 338/380 vì lỗi GPU nhất thời (`CUDA error: an illegal memory access`,
+backend trả đúng `MODEL_FAILURE`) và chạy tiếp từ checkpoint.
 
 **Phạm vi — đọc trước khi trích dẫn con số.** Chỉ nhóm CREATIVE_COMMONS và nhánh
 fallback đi được bằng audio thật (FMA). AUDIO_LIBRARY, CREATOR_MUSIC,
@@ -303,11 +315,6 @@ COMMERCIAL_CONTENT_ID và PUBLIC_DOMAIN không có audio trong CSDL; các nhánh
 bảo đảm bằng `tests/test_decision_rules.py`, không phải bằng EXP-08. Nhãn đúng của
 điều kiện `known` sinh bằng Rule Engine với danh tính đúng, nên EXP-08 đo **sai sót
 nhận diện lan sang mức rủi ro ra sao**, không đo tính đúng pháp lý của luật.
-
-Lần chạy trước (corpus 4.000, τ cũ, chưa có tầng Cover, held-out còn rò) ra Macro-F1
-0.785 và không có mẫu LOW nào. Hai lần dùng tập truy vấn khác nhau nên không so
-thẳng con số; khác biệt chính là tầng Cover (nhận diện `known` 61% → 80%) và giao
-thức held-out đã sửa.
 
 ### Ngưỡng phụ thuộc QUY MÔ REFERENCE — đo được, không phải suy đoán
 
@@ -378,36 +385,45 @@ Chroma/OTI **thắng MERT ở đúng nhóm dịch cao độ** — chính là đi
 Chromaprint lẫn MERT đều bó tay. Đây là căn cứ bằng số cho việc nối tầng cover vào
 cascade, chứ không phải suy đoán.
 
-**Điều kiện server** (`metrics.runtime_protocol`) — 30 giây đầu của 1.900 file
-truy vấn, tìm trên toàn chỉ mục cover 24.375 bài: đúng ở vị trí 1 **83%**. τCover =
-**0.90** cho Precision 0.9946, Recall 0.6837, nhận nhầm bài ngoài CSDL **0,37%**,
-mẫu nhiễu cao nhất chỉ 0.7278.
+**Điều kiện server** (`metrics.runtime_protocol`) — 1.900 file truy vấn, tìm trên toàn
+chỉ mục cover 24.375 bài, held-out theo `HeldOutProtocol`: đúng ở vị trí 1 **88,8%**.
+τCover = **0.90** cho Precision 0.9952, Recall 0.7663, nhận nhầm bài ngoài CSDL
+**0,11%**, mẫu nhiễu cao nhất chỉ 0.7347.
 
 | Biến đổi | Đúng @1 | Biến đổi | Đúng @1 |
 |---|---|---|---|
-| pitch ±1, ±2 | **100%** | tempo 1.05 / 1.10 | 100% |
-| MP3, EQ, gain, nhiễu | 100% | tempo 0.95 | 64% |
-| chồng âm | 84% | tempo 0.90 | **27%** |
+| pitch ±1, ±2 | **100%** | tempo 0.90 / 0.95 / 1.05 / 1.10 | **100%** |
+| MP3, EQ, gain, nhiễu | 100% | chồng âm | 84% |
 | original 30 s | 100% | cắt 10 s / 15 s | **2%** |
 
-Các chỗ yếu có chung một cơ chế: descriptor lấy 30 giây đầu rồi co giãn về đúng 64
-khung, nên chỉ bất biến nhịp độ khi truy vấn chứa **trọn** đoạn nội dung của
-reference. Bản tăng tốc (27–29 s) chứa trọn 30 s nguồn nên khớp; bản chậm 0.90 dài
-33 s bị cắt ở giây 30, mất 10% nội dung cuối và trục thời gian lệch; đoạn cắt 10/15
-giây thì chỉ chứa một phần. Đã kiểm lại trên cả 100 bài nguồn, chỉ đổi đúng một yếu tố
-(`python experiments/exp07_cover/query_span_check.py`, ~6 phút):
+**Cắt truy vấn theo nhiều hệ số nhịp độ.** Descriptor là 30 giây đầu co giãn về đúng
+64 khung, nên chỉ bất biến nhịp độ khi đoạn truy vấn chứa **trọn** phần nội dung của
+reference. Bản chậm 0.90 chứa nó trong 33,3 giây đầu; server trước đây cắt cố định 30
+giây nên mất 10% nội dung cuối. Nay `cover_service` cắt theo từng hệ số trong
+`COVER_TEMPO_FACTORS` (0.90–1.10, dải biến đổi nhịp độ của §11) và lấy điểm cao nhất.
+Kiểm lại trên 100 bài nguồn, chỉ đổi đúng cách cắt
+(`python experiments/exp07_cover/query_span_check.py --off-grid`, ~17 phút):
 
-| Truy vấn | 30 giây đầu (như server) | Trọn truy vấn |
+| Truy vấn | Cắt cố định 30 s (cũ) | Nhiều hệ số (hiện tại) |
 |---|---|---|
 | tempo 0.90 | @1 27% · qua τ 1% | **@1 100% · qua τ 83%** |
 | tempo 0.95 | @1 64% · qua τ 2% | **@1 100% · qua τ 77%** |
-| tempo 1.05 / 1.10 | @1 100% | @1 100% (không đổi) |
+| tempo 1.05 / 1.10 | @1 100% · qua τ 77% / 81% | không đổi |
+| *tempo 0.92 — không có trong bảng hệ số* | @1 43% · qua τ 2% | **@1 100% · qua τ 82%** |
+| *tempo 1.07 — không có trong bảng hệ số* | @1 100% · qua τ 76% | không đổi |
 
-Đoạn cắt 10/15 giây so với reference cắt **cùng khoảng** đạt điểm 1.000 (thấp nhất
-0.984), so với reference 30 giây chỉ 0.40 — lệch trục thời gian thuần tuý. Nhóm này
-Chromaprint đã bắt 100% nên không phải điểm mù của cascade; tempo chậm thì có. Đọc
-trọn truy vấn là hướng sửa rõ ràng, nhưng mới đo trên truy vấn có trong CSDL: phải
-chạy lại EXP-07 (nhiễu + held-out) để xem FMR đổi thế nào trước khi đổi server.
+Hai dòng cuối có mặt vì các hệ số 0.90/0.95/1.05/1.10 trùng đúng mức tempo của tập
+kiểm thử — số ở trên có thể chỉ phản ánh việc "đoán trúng lưới". Nhịp 0.92 (tự đổi
+nhịp bằng `librosa.effects.time_stretch`) nằm giữa hai hệ số mà vẫn lên 100% @1.
+
+Thử nhiều độ dài cũng là thêm cơ hội nhận nhầm, nên τCover được hiệu chỉnh lại chứ
+không giữ nguyên theo quán tính: ngưỡng vẫn ra 0.90, Recall 0.6837 → **0.7663**, nhận
+nhầm 0,37% → 0,11% (lần cũ đo trước `HeldOutProtocol` nên là cận trên — không so
+thẳng được), mẫu nhiễu cao nhất 0.7278 → 0.7347.
+
+Đoạn cắt 10/15 giây vẫn trượt vì lệch trục thời gian thuần tuý: so với reference cắt
+**cùng khoảng** thì điểm 1.000 (thấp nhất 0.984), so với reference 30 giây chỉ 0.40.
+Nhóm này Chromaprint đã bắt 100% nên không phải điểm mù của cascade.
 
 Một điểm dễ đọc nhầm: MERT@1 nhóm pitch = 49% mà trong cascade MERT gần như không
 nhận truy vấn pitch nào. Không mâu thuẫn — ở đây chấm **xếp hạng**, còn cascade áp
@@ -415,10 +431,9 @@ nhận truy vấn pitch nào. Không mâu thuẫn — ở đây chấm **xếp h
 đúng nhưng bị từ chối. **Điểm mù đó đến từ ngưỡng, không phải từ năng lực model** —
 mà ngưỡng buộc phải chặt để giữ FMR ≤ 5%.
 
-> FMR của EXP-07 (và FPR của EXP-01) đo trước khi có `HeldOutProtocol`: held-out
-> khi đó chỉ loại bản trùng hệt, nên những lần hệ thống nhận ra bản gần trùng hay
-> bài bị trộn chồng — tức nhận ĐÚNG — vẫn bị đếm là nhận nhầm. Các con số trên là
-> cận trên.
+> FPR của EXP-01 đo trước khi có `HeldOutProtocol`: held-out khi đó chỉ loại bản
+> trùng hệt, nên những lần hệ thống nhận ra bản gần trùng hay bài bị trộn chồng —
+> tức nhận ĐÚNG — vẫn bị đếm là nhận nhầm. Con số đó là cận trên.
 
 
 ### EXP-09 — Bản quyền có học được từ âm thanh không?
@@ -543,38 +558,47 @@ triệu), trong đó 283 cặp ≥ 0.999 — mức chỉ gặp khi hai bản ghi
 audio.
 
 **EXP-04 — Năm hệ thống trên cùng 1.900 truy vấn** (thí nghiệm chính; τFP 0.30 ·
-τMERT 0.98 · τCover 0.90 — đúng cấu hình server)
+τMERT 0.98 · τCover 0.90 — đúng cấu hình server, kể cả bộ lọc hash ở Tầng 1 và cách
+cắt truy vấn theo nhịp độ ở tầng Cover)
 
 | Hệ thống | Precision | Recall | F1 | Nhận sai | Latency TB |
 |---|---|---|---|---|---|
-| A. Chromaprint | 0.9981 | 0.5558 | 0.7140 | 2 | 4.775 ms |
-| B. MERT | 0.9957 | 0.2437 | 0.3915 | 2 | 1.127 ms |
-| C. Cover (chroma/OTI) | 0.9946 | 0.6837 | 0.8104 | 7 | 277 ms |
-| D. Cascade FP → MERT | 0.9982 | 0.5726 | 0.7278 | 2 | 5.291 ms |
-| **E. Cascade production** (FP → MERT → Cover) | 0.9967 | **0.8047** | **0.8905** | 5 | 5.411 ms |
+| A. Chromaprint | 0.9981 | 0.5558 | 0.7140 | 2 | 147 ms |
+| B. MERT | 0.9957 | 0.2437 | 0.3915 | 2 | 946 ms |
+| C. Cover (chroma/OTI) | 0.9952 | 0.7663 | 0.8659 | 7 | 688 ms |
+| D. Cascade FP → MERT | 0.9982 | 0.5726 | 0.7278 | 2 | 587 ms |
+| **E. Cascade production** (FP → MERT → Cover) | 0.9970 | **0.8805** | **0.9352** | 5 | 906 ms |
 
-- Tầng Cover nâng Recall của cascade từ **0.5726 lên 0.8047** mà Precision gần như
+- Tầng Cover nâng Recall của cascade từ **0.5726 lên 0.8805** mà Precision gần như
   giữ nguyên. 1.058 truy vấn dừng ở Chromaprint, 32 ở MERT, 810 đi tới Cover.
 - **Cả 5 "nhận sai" của cascade production đều là truy vấn `audio_overlay` nhận ra
   bài bị trộn chồng** — bài đó cũng nằm trong CSDL, nhưng EXP-04 lấy nhãn đúng là
   bài nguồn nên vẫn chấm SAI. Không có lần nào nhận ra một bài không liên quan.
 - MERT đơn lẻ Recall chỉ 0.2437 vì τMERT = 0.98 rất chặt — cần chặt như vậy để
-  FMR ≤ 5% ở 24.375 bài (EXP-06). Tầng 1 là nút cổ chai về độ trễ: so với toàn bảng
-  24.375 fingerprint mất ~4,8 giây mỗi truy vấn.
+  FMR ≤ 5% ở 24.375 bài (EXP-06).
+- Độ trễ: cascade P50 57 ms (dừng ở Tầng 1), P95 2,3 s (đi tới Cover). Tầng 1 lọc
+  ứng viên theo hash — P50 41 ms, 30/1.900 truy vấn (1,6%) quay về quét toàn bộ vì
+  điểm sát ngưỡng. Lượt trước quét toàn bộ mọi truy vấn: Tầng 1 mất ~4,8 s, cascade
+  trung bình 5.411 ms.
+
+So với lượt trước (Tầng 1 quét toàn bộ, Cover cắt cố định 30 s): Recall cascade 0.8047
+→ 0.8805, F1 0.8905 → 0.9352; từng biến đổi đổi nhịp của cascade 8/10/79/82% →
+**83/79/79/82%** (tempo 0.90/0.95/1.05/1.10).
 
 **Recall@5 với truy vấn đã biến đổi, tìm trên toàn chỉ mục** — tiêu chí "Robust
-retrieval" của §13, tính trên top-5 bất kể ngưỡng:
+retrieval" của §13, chấm ở cấp hệ thống (`system_recall@5`), tính trên top-5 bất kể
+ngưỡng:
 
-| Nhóm | N | MERT | Cover | MERT hoặc Cover |
+| Nhóm | N | MERT | Cover | **Hệ thống (MERT ∪ Cover)** |
 |---|---|---|---|---|
 | Dịch cao độ | 400 | **0.185** | 1.000 | 1.000 |
-| Đổi tốc độ | 400 | 0.945 | 0.805 | 0.9925 |
-| Còn lại (cắt, codec, nhiễu, EQ, chồng âm) | 1.100 | 0.957 | 0.819 | 0.990 |
-| **Toàn bộ** | 1.900 | **0.7921** | 0.8542 | **0.9926** |
+| Đổi tốc độ | 400 | 0.945 | 1.000 | 1.000 |
+| Còn lại (cắt, codec, nhiễu, EQ, chồng âm) | 1.100 | 0.957 | 0.818 | 0.989 |
+| **Toàn bộ** | 1.900 | 0.7921 | 0.8947 | **0.9937** |
 
-MERT đơn lẻ **thiếu 0.008** so với mục tiêu 0.80, và toàn bộ phần thiếu đến từ dịch
-cao độ (MERT mã hoá cao độ tuyệt đối). Bỏ nhóm đó ra thì MERT đạt 0.954; tính cả
-tầng Cover — tầng được thêm vào chính vì điểm mù này — thì 0.9926.
+MERT đơn lẻ thiếu 0.008 so với mục tiêu 0.80, toàn bộ do dịch cao độ (MERT mã hoá cao
+độ tuyệt đối; bỏ nhóm đó ra thì 0.954). Cover trượt ở chiều ngược lại — đoạn cắt 10/15
+giây (0.06) — và ở đó MERT bắt đủ. Hai tầng bù đúng điểm mù của nhau.
 
 **EXP-05 — Độ bền theo nhóm biến đổi** (tổng hợp lại từ EXP-01 và EXP-04; mỗi ô là
 tỉ lệ nhận ĐÚNG sau khi áp ngưỡng)
@@ -585,15 +609,15 @@ tỉ lệ nhận ĐÚNG sau khi áp ngưỡng)
 | Nén codec | 200 | **100%** | 50% | 100% | **100%** | −0.001 |
 | Biên độ / EQ | 200 | **100%** | 30% | 100% | **100%** | +0.000 |
 | Nhiễu | 300 | 99,7% | 8% | 99% | **100%** | −0.079 |
-| Chồng âm | 100 | 57% | 17% | 57% | **65%** | −0.533 |
-| Đổi tốc độ | 400 | 0% | 8% | 40% | **45%** | −0.965 |
-| Dịch cao độ | 400 | 0% | 0,25% | 71% | **71%** | −0.987 |
+| Đổi tốc độ | 400 | 0% | 8% | 80% | **81%** | −0.970 |
+| Dịch cao độ | 400 | 0% | 0,25% | 71% | **71%** | −0.992 |
+| Chồng âm | 100 | 57% | 17% | 57% | **65%** | −0.538 |
 
-- **Dịch cao độ** từng là điểm mù của cả Chromaprint lẫn MERT; tầng Cover đưa
-  cascade từ **0,25% lên 71%**.
-- **Đổi tốc độ là điểm yếu lớn nhất còn lại (45%)**: bản tăng tốc 1.05/1.10 được
-  79–82%, còn bản chậm 0.90/0.95 chỉ 8–10%. Nguyên nhân đã đo ở EXP-07 — cửa sổ 30
-  giây đầu cắt mất phần cuối của bản chậm.
+- **Dịch cao độ và đổi tốc độ** từng là điểm mù của cả Chromaprint lẫn MERT; tầng Cover
+  đưa cascade lên **71%** và **81%** (đổi tốc độ từ 45% trước khi cắt truy vấn theo
+  nhịp độ).
+- **Còn yếu nhất: chồng âm (65%) và dịch cao độ (71%)** — với dịch cao độ, Cover luôn
+  xếp đúng bài ở top-5 (1.000) nhưng điểm nhiều truy vấn rơi dưới τCover = 0.90.
 - Cột MERT thấp không phải vì MERT xếp hạng kém: điểm MERT chỉ giảm 0.03–0.06 khi
   biến đổi, nhưng thế là đủ rơi dưới τMERT = 0.98.
 

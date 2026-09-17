@@ -84,7 +84,7 @@ Mỗi thí nghiệm phải ghi nhận vào file cấu hình (CSV/JSON, không b�
   - Đánh giá khả năng nhận diện các bản cover / biến thể giai điệu so với bản thu gốc.
   - Chấm ở **hai giao thức**, và `recommended_tau_cover` luôn lấy từ giao thức thứ hai:
     1. *Cấp cửa sổ* — cửa sổ 15s, reference chỉ là các bài nguồn của tập truy vấn. Dùng để so với MERT của EXP-03 trên CÙNG bộ cửa sổ (đo điểm mù dịch cao độ).
-    2. *Điều kiện server* (`metrics.runtime_protocol`) — 30 giây đầu của file truy vấn, tìm trên TOÀN BỘ chỉ mục cover (`scripts/build_cover_index.py`, mọi bản ghi có audio thật). Bài ngoài CSDL phải thắng cả chỉ mục; held-out loại bản trùng fingerprint, bản gần trùng và (với `audio_overlay`) bài bị trộn chồng (`HeldOutProtocol`).
+    2. *Điều kiện server* (`metrics.runtime_protocol`) — cắt truy vấn theo từng hệ số `COVER_TEMPO_FACTORS` rồi lấy max (đúng `cover_service.query_descriptors`), mẫu nhiễu đi qua cùng đường; `metrics.runtime_protocol.per_transformation.*.winning_tempo_factor` ghi hệ số đã thắng. Chạy với `--sources 100` để cùng bộ cửa sổ với EXP-03 (manifest đã ghi nối bài CC0). Tìm trên TOÀN BỘ chỉ mục cover (`scripts/build_cover_index.py`, mọi bản ghi có audio thật). Bài ngoài CSDL phải thắng cả chỉ mục; held-out loại bản trùng fingerprint, bản gần trùng và (với `audio_overlay`) bài bị trộn chồng (`HeldOutProtocol`).
   - Ngưỡng chọn theo ràng buộc trước, F1 sau: không nhận mẫu nhiễu nào → FMR ≤ 0.005 → F1 cao nhất; không đạt 0.005 mới nới về trần 5% của §16. Siết hơn §16 vì Cover là tầng CUỐI của cascade, nhận nhầm ở đây ra thẳng kết luận về quyền.
   - **Quy mô reference đổi thì phải chạy lại**: cùng bộ truy vấn, τ = 0.70 cho FMR 4,9% trên 100 bài nguồn nhưng 17,4% trên chỉ mục 24.375 bài.
 - **`EXP-08` — End-to-End System Evaluation**:
@@ -117,13 +117,13 @@ Mục tiêu chất lượng cần đạt cho các thí nghiệm trước khi tí
 | Tiêu chí đánh giá | Metric | Ngưỡng mục tiêu | Đo được ở 24.375 bài (2026-09-17) |
 |---|---|---|---|
 | **Clean Exact-Match** (Chromaprint) | Precision / Recall | **Precision ≥ 0.95**, **Recall ≥ 0.90** | ✅ P 1.000 · R 1.000 (EXP-01, 800 truy vấn không đổi trục thời gian/cao độ, τFP 0.30) |
-| **Robust Retrieval** (MERT) | Recall@5 | **Recall@5 ≥ 0.80** | ❌ MERT **0.7921** (EXP-04 `retrieval_recall_at_k`, 1.900 truy vấn biến đổi, toàn chỉ mục) — thiếu hoàn toàn do dịch cao độ (0.185; bỏ pitch 0.954). Cover 0.8542, MERT∪Cover 0.9926 |
-| **Unknown Detection** (Từ chối nhận diện) | False Match Rate (FMR) | **FMR ≤ 5%** | ✅ FP 0,21% · MERT 2,65% · Cover 0,37% · cả pipeline 0,00% (EXP-08, 760 lượt held-out) |
-| **End-to-End System** | Macro-F1 (trên verified subset) | **Macro-F1 ≥ 0.80** | ✅ **0.9091**, đủ 4 lớp (LOW 114 · CONDITIONAL 475 · HIGH 171 · UNKNOWN 760) |
+| **Robust Retrieval** (cấp hệ thống: MERT ∪ Cover) | Recall@5 | **Recall@5 ≥ 0.80** | ✅ **0.9937** (EXP-04 `system_recall@5`, 1.900 truy vấn biến đổi, toàn chỉ mục). Báo kèm: MERT đơn lẻ 0.7921 (dịch cao độ 0.185), Cover đơn lẻ 0.8947 |
+| **Unknown Detection** (Từ chối nhận diện) | False Match Rate (FMR) | **FMR ≤ 5%** | ✅ FP 0,21% · MERT 2,65% · Cover 0,11% · cả pipeline 0,00% (EXP-08, 760 lượt held-out) |
+| **End-to-End System** | Macro-F1 (trên verified subset) | **Macro-F1 ≥ 0.80** | ✅ **0.9518**, đủ 4 lớp (LOW 114 · CONDITIONAL 475 · HIGH 171 · UNKNOWN 760) |
 
+- **Biên bản điều chỉnh cách chấm Robust Retrieval (2026-09-17, chủ dự án quyết định)**: chấm ở CẤP HỆ THỐNG — hợp top-5 của các tầng truy xuất (MERT ∪ Cover) — thay vì MERT đơn lẻ. Mục tiêu 0.80 KHÔNG đổi. Lý do: (1) §13 trong CLAUDE.md ghi "Robust retrieval", không gắn với một tầng; nhãn "(MERT)" chỉ có ở bảng này. (2) Tầng Cover là một phần của cascade production, và cả hai danh sách top-K đều hiện trong evidence cho người thẩm định. (3) Phần MERT trượt là điểm mù có cơ chế rõ — MERT mã hoá cao độ tuyệt đối, dịch cao độ còn 0.185 — và tầng Cover được thêm vào đúng vì nó. Cái giá phải nói thẳng: cách chấm này được chọn SAU khi đã thấy MERT đơn lẻ trượt 0.008, nên `mert_recall@5` luôn phải báo cạnh bên, không được giấu.
 - **Không đọc EXP-02 như Recall@5 "robust"**: EXP-02 dùng cửa sổ chưa biến đổi của chính bài trong chỉ mục (0.9374) — cận trên. Tiêu chí §13 chấm bằng EXP-04.
-- FPR của EXP-01 và FMR của EXP-07 đo trước `HeldOutProtocol` → cận trên (nhận ra bản gần trùng / bài bị trộn chồng vẫn bị đếm là nhận nhầm).
-- EXP-08 chỉ phủ nhóm CREATIVE_COMMONS + fallback bằng audio thật; các nhóm còn lại do `tests/test_decision_rules.py` bảo đảm. Điểm mù lớn nhất còn lại: tempo chậm (EXP-05 8–10%; nguyên nhân: cửa sổ 30 s đầu của tầng Cover, xem `02-pipeline-architecture.md` §4).
-- Robust Retrieval **chưa được điều chỉnh mục tiêu** — coi MERT∪Cover là đạt hay không là quyết định của chủ dự án, và phải ghi lý do.
+- FPR của EXP-01 đo trước `HeldOutProtocol` → cận trên (nhận ra bản gần trùng / bài bị trộn chồng vẫn bị đếm là nhận nhầm). EXP-07 đã chạy lại dưới giao thức này.
+- EXP-08 chỉ phủ nhóm CREATIVE_COMMONS + fallback bằng audio thật; các nhóm còn lại do `tests/test_decision_rules.py` bảo đảm. Điểm yếu lớn nhất còn lại theo EXP-05: dịch cao độ 71% và chồng âm 65% ở cascade (đổi nhịp đã lên 81% nhờ cắt truy vấn theo nhiều hệ số nhịp độ).
 
 > Có thể điều chỉnh các ngưỡng trên sau Tuần 5 nếu số liệu baseline từ dataset thực tế cho thấy bài toán quá khó, nhưng mọi điều chỉnh đều phải lập biên bản ghi rõ lý do khoa học.

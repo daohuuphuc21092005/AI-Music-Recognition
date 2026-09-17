@@ -188,12 +188,15 @@ FP_PREFILTER_MIN_QUERY_S = _get_float("FP_PREFILTER_MIN_QUERY_S", 10.0)
 MERT_THRESHOLD = _get_float("MERT_THRESHOLD", 0.98)
 
 # COVER_THRESHOLD = 0.90 — hiệu chỉnh bằng EXP-07, đo ĐÚNG điều kiện server:
-# truy vấn là 30 giây đầu của file, tìm trên toàn bộ chỉ mục 24.375 bài
+# truy vấn cắt theo từng hệ số COVER_TEMPO_FACTORS, tìm trên toàn bộ chỉ mục
+# 24.375 bài, held-out theo HeldOutProtocol
 # (experiments/results/exp07_cover.json -> metrics.runtime_protocol):
-#   τ = 0.80 -> P 0.9846 / R 0.7732 / FMR 5.7%   (trượt trần 5% của §16)
-#   τ = 0.85 -> P 0.9908 / R 0.7405 / FMR 3.3%
-#   τ = 0.90 -> P 0.9946 / R 0.6837 / FMR 0.4%   <- đang dùng
-#   30 mẫu nhiễu trắng/hồng/nâu đạt cao nhất 0.7278, nên τ phải trên mức đó.
+#   τ = 0.80 -> P 0.9869 / R 0.8700 / FMR 5.47%  (trượt trần 5% của §16)
+#   τ = 0.85 -> P 0.9919 / R 0.8358 / FMR 3.21%
+#   τ = 0.88 -> P 0.9948 / R 0.8011 / FMR 1.11%
+#   τ = 0.90 -> P 0.9952 / R 0.7663 / FMR 0.11%  <- đang dùng
+#   (Cắt cố định 30 s trước đây: τ 0.90 -> R 0.6837, FMR 0.37%.)
+#   30 mẫu nhiễu trắng/hồng/nâu đạt cao nhất 0.7347, nên τ phải trên mức đó.
 #   Siết FMR <= 0.005 thay vì dừng ở trần 5% của §16 vì Cover là tầng CUỐI:
 #   nhận nhầm ở đây ra thẳng một kết luận về quyền, không còn tầng nào đỡ.
 #

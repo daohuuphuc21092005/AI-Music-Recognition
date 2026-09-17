@@ -40,10 +40,10 @@ identity_gate:
   #                                 FMR 2,65%, đổi lại chỉ nhận đúng 38,1% truy vấn
   #                                 known. Chính τ = 0.97 cũ nay cho FMR 6,1%, tức
   #                                 trượt ngưỡng ≤5% của §16 khi corpus lớn lên.
-  #   COVER_MATCH = τCover = 0.90 — EXP-07 đo ĐÚNG điều kiện server (30 giây đầu
-  #                                 của truy vấn, chỉ mục 24.375 bài): FMR 0,4%,
-  #                                 và không nhận mẫu nhiễu nào (nhiễu cao nhất
-  #                                 0.7278).
+  #   COVER_MATCH = τCover = 0.90 — EXP-07 đo ĐÚNG điều kiện server (cắt truy vấn
+  #                                 theo từng hệ số nhịp độ 0.90–1.10, chỉ mục
+  #                                 24.375 bài): FMR 0,11%, và không nhận mẫu
+  #                                 nhiễu nào (nhiễu cao nhất 0.7347).
   #
   # NGƯỠNG PHỤ THUỘC QUY MÔ REFERENCE — đo được, không phải suy đoán. Ở CÙNG
   # τFP = 0.10, FPR tăng từ 0.0044 (1.000 bản ghi) lên 0.0095 (4.000) rồi 0.0226

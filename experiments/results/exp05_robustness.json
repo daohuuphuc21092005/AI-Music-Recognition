@@ -1,7 +1,7 @@
 {
   "experiment_id": "exp05_robustness",
-  "date": "2026-09-17T17:40:30",
-  "git_commit": "5418a35",
+  "date": "2026-09-17T22:02:37",
+  "git_commit": "2bf97b2",
   "git_dirty": true,
   "dataset_version": {
     "metadata_master.csv": {
@@ -146,7 +146,7 @@
         "cascade_accuracy": 0.7125,
         "cover_accuracy": 0.71,
         "cascade_no_cover_accuracy": 0.0025,
-        "fingerprint_mean_score": 0.0127,
+        "fingerprint_mean_score": 0.0082,
         "mert_mean_score": 0.9266,
         "transformations": [
           "pitch_plus_1",
@@ -159,10 +159,10 @@
         "n": 400,
         "fingerprint_accuracy": 0.0,
         "mert_accuracy": 0.0775,
-        "cascade_accuracy": 0.4475,
-        "cover_accuracy": 0.4025,
+        "cascade_accuracy": 0.8075,
+        "cover_accuracy": 0.795,
         "cascade_no_cover_accuracy": 0.0775,
-        "fingerprint_mean_score": 0.0352,
+        "fingerprint_mean_score": 0.0296,
         "mert_mean_score": 0.9585,
         "transformations": [
           "tempo_0_90",
@@ -178,7 +178,7 @@
         "cascade_accuracy": 0.65,
         "cover_accuracy": 0.57,
         "cascade_no_cover_accuracy": 0.57,
-        "fingerprint_mean_score": 0.4673,
+        "fingerprint_mean_score": 0.4615,
         "mert_mean_score": 0.9552,
         "transformations": [
           "audio_overlay"
@@ -212,8 +212,8 @@
       "Đổi tốc độ": {
         "fingerprint": 0.0,
         "mert": 0.0775,
-        "cascade": 0.4475,
-        "cover": 0.4025
+        "cascade": 0.8075,
+        "cover": 0.795
       }
     },
     "per_transformation_fingerprint": {
@@ -379,7 +379,7 @@
         "cascade_no_cover_correct": 57,
         "cascade_correct": 65,
         "cascade_wrong_accept": 5,
-        "fingerprint_mean_score": 0.4673,
+        "fingerprint_mean_score": 0.4615,
         "mert_mean_score": 0.9552,
         "cover_mean_score": 0.9028
       },
@@ -511,7 +511,7 @@
         "cascade_no_cover_correct": 0,
         "cascade_correct": 72,
         "cascade_wrong_accept": 0,
-        "fingerprint_mean_score": 0.0122,
+        "fingerprint_mean_score": 0.0075,
         "mert_mean_score": 0.9265,
         "cover_mean_score": 0.9224
       },
@@ -523,7 +523,7 @@
         "cascade_no_cover_correct": 0,
         "cascade_correct": 65,
         "cascade_wrong_accept": 0,
-        "fingerprint_mean_score": 0.0132,
+        "fingerprint_mean_score": 0.0089,
         "mert_mean_score": 0.924,
         "cover_mean_score": 0.9103
       },
@@ -535,7 +535,7 @@
         "cascade_no_cover_correct": 1,
         "cascade_correct": 77,
         "cascade_wrong_accept": 0,
-        "fingerprint_mean_score": 0.0126,
+        "fingerprint_mean_score": 0.0082,
         "mert_mean_score": 0.9279,
         "cover_mean_score": 0.9219
       },
@@ -547,7 +547,7 @@
         "cascade_no_cover_correct": 0,
         "cascade_correct": 71,
         "cascade_wrong_accept": 0,
-        "fingerprint_mean_score": 0.013,
+        "fingerprint_mean_score": 0.0081,
         "mert_mean_score": 0.9279,
         "cover_mean_score": 0.9206
       },
@@ -555,25 +555,25 @@
         "n": 100,
         "fingerprint_correct": 0,
         "mert_correct": 7,
-        "cover_correct": 1,
+        "cover_correct": 83,
         "cascade_no_cover_correct": 7,
-        "cascade_correct": 8,
+        "cascade_correct": 83,
         "cascade_wrong_accept": 0,
-        "fingerprint_mean_score": 0.0253,
+        "fingerprint_mean_score": 0.0208,
         "mert_mean_score": 0.9579,
-        "cover_mean_score": 0.5738
+        "cover_mean_score": 0.9331
       },
       "tempo_0_95": {
         "n": 100,
         "fingerprint_correct": 0,
         "mert_correct": 9,
-        "cover_correct": 2,
+        "cover_correct": 77,
         "cascade_no_cover_correct": 9,
-        "cascade_correct": 10,
+        "cascade_correct": 79,
         "cascade_wrong_accept": 0,
-        "fingerprint_mean_score": 0.0403,
+        "fingerprint_mean_score": 0.0336,
         "mert_mean_score": 0.9585,
-        "cover_mean_score": 0.6212
+        "cover_mean_score": 0.9256
       },
       "tempo_1_05": {
         "n": 100,
@@ -583,7 +583,7 @@
         "cascade_no_cover_correct": 8,
         "cascade_correct": 79,
         "cascade_wrong_accept": 0,
-        "fingerprint_mean_score": 0.0439,
+        "fingerprint_mean_score": 0.0381,
         "mert_mean_score": 0.9587,
         "cover_mean_score": 0.9245
       },
@@ -595,7 +595,7 @@
         "cascade_no_cover_correct": 7,
         "cascade_correct": 82,
         "cascade_wrong_accept": 0,
-        "fingerprint_mean_score": 0.0312,
+        "fingerprint_mean_score": 0.0261,
         "mert_mean_score": 0.9587,
         "cover_mean_score": 0.9269
       }
