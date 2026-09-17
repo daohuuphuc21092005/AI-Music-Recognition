@@ -60,10 +60,11 @@ def load_model():
     """Nạp processor + model (idempotent). Gọi lúc startup để 'làm nóng'."""
     global _processor, _model
     if _model is None:
+        revision = config.MERT_MODEL_REVISION or None
         _processor = Wav2Vec2FeatureExtractor.from_pretrained(
-            MODEL_NAME, trust_remote_code=True
+            MODEL_NAME, trust_remote_code=True, revision=revision
         )
-        _model = AutoModel.from_pretrained(MODEL_NAME, trust_remote_code=True)
+        _model = AutoModel.from_pretrained(MODEL_NAME, trust_remote_code=True, revision=revision)
         _model.eval()
         _model.to(get_device())
     return _processor, _model

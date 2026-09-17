@@ -103,7 +103,8 @@ Mở `.env` và chọn một profile:
 DATABASE_URL=postgresql://postgres:<MAT_KHAU>@localhost:5432/music_rights_ai
 
 # B. PostgreSQL bằng Docker Compose (cổng 5433 để không đụng bản cài sẵn)
-# DATABASE_URL=postgresql://postgres:postgrespassword@localhost:5433/music_rights_ai
+# DATABASE_URL=postgresql://postgres:<MAT_KHAU>@localhost:5433/music_rights_ai
+# POSTGRES_PASSWORD=<MAT_KHAU>          # bắt buộc, trùng mật khẩu ở dòng trên
 ```
 
 ---
@@ -126,7 +127,41 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 Swagger UI: <http://localhost:8000/docs> · Health: <http://localhost:8000/health>
 
-Chạy bằng Docker: `docker compose up --build` (API ở cổng 8000, DB ở cổng 5433).
+### Chạy bằng Docker (backend + CSDL)
+
+`.env` trên máy host cần `POSTGRES_PASSWORD` và `AUDIO_ROOT` (thư mục audio corpus,
+đường dẫn tuyệt đối) — compose dừng ngay nếu thiếu, không có mật khẩu mặc định.
+
+```bash
+docker compose up -d --build        # API: http://127.0.0.1:8000 · CSDL: 127.0.0.1:5433
+docker compose ps                   # backend chuyển "healthy" khi /health báo ONLINE
+```
+
+Khi volume CSDL còn rỗng (máy mới), nạp dữ liệu tham chiếu từ `data/processed/`:
+`docker compose run --rm backend python init_db.py`.
+
+- **Không có gì nhạy cảm trong image**: `.dockerignore` loại `.env*`, `data/`, audio
+  test. `data/` mount chỉ đọc; audio corpus mount từ `AUDIO_ROOT` vào `/audio`.
+- **Chạy bằng user thường** (`app`, uid 10001); mã nguồn thuộc root, chỉ
+  `temp_uploads/` và cache model ghi được. Cổng API và CSDL chỉ mở trên `127.0.0.1`.
+- **GPU**: torch trên PyPI cho Linux là bản CUDA nên image nặng vài GB; compose xin
+  một GPU NVIDIA (`deploy.resources`). Máy không có GPU thì xoá khối `deploy` —
+  `DEVICE=auto` tự chạy CPU.
+- **MERT ghim revision** (`MERT_MODEL_REVISION`): model dùng `trust_remote_code`, không
+  ghim thì container mới tải bản mới nhất cả trọng số lẫn mã, embedding lệch chỉ mục
+  mà không báo lỗi. Trọng số tải một lần vào volume `hf_cache`.
+- Tên project compose cố định `music-recognition-main` để dùng lại đúng container và
+  volume CSDL đã có; đổi tên là compose tạo một CSDL rỗng mới. Container CSDL cũ được
+  tạo với `restart: always`, nên lần `docker compose up` đầy đủ đầu tiên sẽ tạo lại nó
+  (dữ liệu nằm trong volume, không mất); chỉ bật backend thì dùng `--no-deps`.
+
+**Đã kiểm chứng (2026-09-17, GTX 1650):** image `music-rights-ai-backend` 9,7 GB, build
+context 98 KB; trong image không có `.env`, `data/`, `.git`; tiến trình chạy bằng `app`
+(uid 10001), không ghi được vào mã nguồn; `torch.cuda.is_available()` = True trong
+container. `/health` ONLINE (CSDL qua hostname `db`, FAISS 48.750 vector, fpcalc,
+ffmpeg, Rule Engine, chỉ mục Cover). Truy vấn tempo 0.90 qua `POST /api/v1/search`:
+`COVER_MATCH` đúng bài nguồn, `tempo_factor` 0.9, 2,4 s. Truy vấn **đầu tiên** mất ~2
+phút vì tải MERT (đúng revision ghim) và dựng bộ đệm fingerprint.
 
 ---
 

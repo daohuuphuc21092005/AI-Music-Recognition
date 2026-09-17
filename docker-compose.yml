@@ -1,16 +1,24 @@
+# Tên project cố định. CSDL đang dùng (container music_rights_db, volume
+# music-recognition-main_postgres_data) được tạo khi repo còn nằm ở thư mục
+# music-recognition-main. Không khai báo thì compose lấy tên thư mục hiện tại:
+# đụng tên container, và tạo một volume CSDL RỖNG mới.
+name: music-recognition-main
+
 services:
   db:
     image: postgres:15-alpine
     container_name: music_rights_db
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
+      # Bắt buộc đặt trong .env — không có mật khẩu mặc định viết sẵn trong repo.
+      # Chỉ có tác dụng lúc volume được khởi tạo lần đầu.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Đặt POSTGRES_PASSWORD trong .env}
       POSTGRES_DB: music_rights_ai
     ports:
-      # Cổng host mặc định 5433 để không đụng PostgreSQL đã cài sẵn trên máy
-      # (máy dev hiện tại đang chạy PostgreSQL 18 ở cổng 5432).
-      - "${POSTGRES_HOST_PORT:-5433}:5432"
+      # Chỉ mở cho máy này, không mở ra mạng LAN. Cổng host mặc định 5433 để không
+      # đụng PostgreSQL cài sẵn trên máy (cổng 5432).
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,22 +31,40 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: music-rights-ai-backend:latest
     container_name: music_rights_api
-    restart: always
+    restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
     environment:
       # Trong mạng nội bộ của compose thì host là "db" và cổng luôn là 5432.
-      # Biến này giờ ĐƯỢC code đọc thật qua backend/config.py — trước đây nó bị
-      # bỏ qua vì chuỗi kết nối bị hardcode trong từng file.
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@db:5432/music_rights_ai
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Đặt POSTGRES_PASSWORD trong .env}@db:5432/music_rights_ai
+      # recordings.audio_path lưu đường dẫn TƯƠNG ĐỐI (vd. fma/132788.mp3), nối với
+      # AUDIO_ROOT. Trong container đó là điểm mount bên dưới.
+      AUDIO_ROOT: /audio
+      # auto: có GPU thì dùng, không có thì chạy CPU. Ép bằng DEVICE=cpu|cuda.
+      DEVICE: ${DEVICE:-auto}
     volumes:
+      # Chỉ mục FAISS, descriptor cover, CSV metadata — chỉ đọc
+      - ./data:/app/data:ro
       - ./temp_uploads:/app/temp_uploads
-      # Mount dữ liệu tham chiếu để không phải build lại image khi rebuild index
-      - ./data:/app/data
+      # Audio corpus tham chiếu nằm ngoài repo (AUDIO_ROOT trong .env của máy host)
+      - ${AUDIO_ROOT:?Đặt AUDIO_ROOT (thư mục audio corpus trên máy host) trong .env}:/audio:ro
+      # Trọng số MERT (~380 MB) tải một lần, giữ qua các lần dựng lại container
+      - hf_cache:/home/app/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            # Cần NVIDIA driver + Docker hỗ trợ GPU. Máy không có GPU thì xoá khối
+            # deploy này — image vẫn chạy trên CPU.
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
 volumes:
   postgres_data:
+  hf_cache:

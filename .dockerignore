@@ -1,0 +1,25 @@
+# Build context của image backend. Trước khi có file này, `COPY . .` đưa vào image
+# cả .env (mật khẩu CSDL) lẫn toàn bộ data/ — ai có image là có mật khẩu.
+
+# Bí mật — không bao giờ được nằm trong image
+.env
+.env.*
+!.env.example
+
+# Dữ liệu: mount lúc chạy (docker-compose.yml), không nhúng vào image
+data/
+temp_uploads/
+test_audio/
+test.mp3
+experiments/results/
+
+# Công cụ, lịch sử git, rác
+.git/
+.claude/
+.idea/
+.vscode/
+.pytest_cache/
+**/__pycache__/
+**/*.py[cod]
+*.log
+*.docx

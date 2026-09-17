@@ -222,6 +222,11 @@ TOP_K = _get_int("TOP_K", 5)
 # --------------------------------------------------------------------------
 MERT_MODEL = _get("MERT_MODEL", "m-a-p/MERT-v1-95M")
 MERT_MODEL_VERSION = _get("MERT_MODEL_VERSION", "MERT-v1-95M")
+# Commit cụ thể trên Hugging Face — đúng bản đã dựng 48.750 vector trong chỉ mục.
+# Không ghim thì một container mới tải bản mới nhất: MERT dùng trust_remote_code,
+# nên thứ đổi theo không chỉ là trọng số mà cả MÃ Python được chạy, và embedding
+# lệch khỏi chỉ mục mà không báo lỗi gì. Để rỗng = bản mới nhất (không khuyến nghị).
+MERT_MODEL_REVISION = _get("MERT_MODEL_REVISION", "12af15fef9d0ac838c3f475bfbbf26d2060dd4f5")
 MERT_SAMPLE_RATE = _get_int("MERT_SAMPLE_RATE", 24000)
 MERT_MAX_DURATION = _get_float("MERT_MAX_DURATION", 30.0)
 EMBEDDING_DIM = _get_int("EMBEDDING_DIM", 768)
