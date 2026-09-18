@@ -93,10 +93,15 @@ function dl(container, rows) {
     const dt = document.createElement('dt');
     dt.textContent = label;
     const dd = document.createElement('dd');
-    if (opts.mono) dd.className = 'mono';
+    const classes = [opts.mono ? 'mono' : '', opts.className || ''].filter(Boolean);
+    if (classes.length) dd.className = classes.join(' ');
 
     if (opts.html) {
       dd.innerHTML = opts.html;
+    } else if ((value === true || value === false) && opts.neutral) {
+      // Có/Không không mang nghĩa tốt/xấu (vd. "bắt buộc ghi nguồn: Có" là một điều
+      // kiện, "PD của bản thu: Không" là một trạng thái) — không tô xanh/đỏ
+      dd.textContent = show(value, opts);
     } else if (value === true || value === false) {
       dd.innerHTML = `<span class="${value ? 'yes' : 'no'}">${show(value, opts)}</span>`;
     } else {
@@ -380,6 +385,13 @@ async function loadResult() {
 
 /* ─────────────────────────── Màn 3: Result ─────────────────────────── */
 
+/** Giá trị quyền do mô hình suy đoán: thành chữ kèm "(suy đoán)" — không còn là
+ *  true/false nên dl() không tô xanh/đỏ. Quyền tra được thì giữ nguyên. */
+function asGuess(value, guessed) {
+  if (!guessed || value === null || value === undefined || value === '') return value;
+  return `${show(value)} (suy đoán)`;
+}
+
 function renderResult(result) {
   const { identity = {}, match = {}, rights = {}, assessment = {} } = result;
   const risk = assessment.risk || 'UNKNOWN';
@@ -410,17 +422,22 @@ function renderResult(result) {
     ['composition_id', identity.composition_id, { mono: true }],
   ]);
 
+  // Quyền SUY ĐOÁN từ âm thanh và quyền TRA CỨU phải trình bày khác hẳn nhau (§2.4).
+  // Một dòng nhãn là chưa đủ: các ô Có/Không vẫn tô xanh/đỏ y như quyền tra được, cho
+  // con số đoán vẻ chắc chắn mà EXP-09 không ủng hộ (dưới baseline lớp phổ biến).
+  const guessed = Boolean(rights.predicted);
+  $('#card-rights').classList.toggle('predicted', guessed);
   dl($('#rights-list'), [
-    // Quyền SUY ĐOÁN từ âm thanh và quyền TRA CỨU phải trình bày khác hẳn nhau
-    // (§2.4) — backend đã có cờ `predicted` nhưng màn hình trước đây không hiện.
-    ['Nguồn gốc giấy phép', rights.predicted
+    ['Nguồn gốc giấy phép', guessed
       ? 'SUY ĐOÁN bởi mô hình từ âm thanh — không phải tra cứu, cần người kiểm tra'
-      : (rights.rights_found ? 'Tra cứu từ cơ sở dữ liệu quyền' : null)],
-    ['Giấy phép', rights.license],
-    ['Trạng thái bản quyền', rights.copyright_status],
-    ['Bắt buộc ghi nguồn', rights.attribution_required],
-    ['Cho dùng thương mại', rights.commercial_use_allowed],
-    ['Cho bật kiếm tiền', rights.monetization_allowed],
+      : (rights.rights_found ? 'Tra cứu từ cơ sở dữ liệu quyền' : null),
+    { className: guessed ? 'guess-warning' : '' }],
+    ['Giấy phép', asGuess(rights.license, guessed)],
+    ['Trạng thái bản quyền', asGuess(rights.copyright_status, guessed)],
+    // Ghi nguồn là một ĐIỀU KIỆN, không phải điều tốt — không tô xanh
+    ['Bắt buộc ghi nguồn', asGuess(rights.attribution_required, guessed), { neutral: true }],
+    ['Cho dùng thương mại', asGuess(rights.commercial_use_allowed, guessed)],
+    ['Cho bật kiếm tiền', asGuess(rights.monetization_allowed, guessed)],
     ['Nguồn dữ liệu', rights.source],
     ['Xác minh lần cuối', rights.verified_at],
   ]);
@@ -563,7 +580,13 @@ function renderEvidence(result) {
     ['Luật kích hoạt', rules.rule_id, { mono: true }],
     ['Nhóm bản quyền', result.assessment ? result.assessment.category : null],
     ['Thứ tự ưu tiên nhóm', rules.group_order],
-    ['Ngưỡng định danh tối thiểu', rules.min_identity_confidence],
+    // Ngưỡng tách THEO loại khớp (thang điểm mỗi tầng khác nhau); "0" trần cạnh một
+    // kết quả UNKNOWN đọc như "ngưỡng 0 mà vẫn không qua" — ghi rõ nó của loại nào.
+    ['Ngưỡng định danh tối thiểu', rules.min_identity_confidence == null ? null
+      : `${rules.min_identity_confidence}${rules.match_type ? ` (loại khớp ${rules.match_type}`
+        + (rules.match_type === 'LICENSE_PREDICTED'
+          ? ' — không có định danh nào để đặt ngưỡng; chặn bằng độ tin cậy dữ liệu quyền)' : ')')
+        : ''}`],
     ['Điều kiện đã khớp', rules.matched_conditions
       ? JSON.stringify(rules.matched_conditions) : null, { mono: true }],
     ['Trừ điểm dữ liệu quyền', (rules.rights_confidence_penalties || []).join('; ') || null],
@@ -581,6 +604,8 @@ function renderEvidence(result) {
       ? JSON.stringify(rules.usage_context) : null, { mono: true }],
   ]);
 
+  const guessed = Boolean((result.rights || {}).predicted);
+  $('#card-source').classList.toggle('predicted', guessed);
   dl($('#ev-source'), [
     ['Nguồn metadata quyền', rightsRecord.source],
     ['Đường dẫn nguồn', null, {
@@ -597,9 +622,10 @@ function renderEvidence(result) {
       ? `${rightsRecord.territory} / ${show(rightsRecord.platform)}` : null],
     ['Tác phẩm (composition)', composition.title],
     ['Tác giả', composition.composer],
-    // §2: PD của tác phẩm và PD của bản thu là hai trường ĐỘC LẬP
-    ['PD của tác phẩm', composition.public_domain_status],
-    ['PD của bản thu', rightsRecord.recording_public_domain],
+    // §2: PD của tác phẩm và PD của bản thu là hai trường ĐỘC LẬP. "Không" ở đây là
+    // một trạng thái, không phải lỗi — không tô đỏ.
+    ['PD của tác phẩm', asGuess(composition.public_domain_status, guessed)],
+    ['PD của bản thu', asGuess(rightsRecord.recording_public_domain, guessed), { neutral: true }],
   ]);
 
   const cover = identification.cover || {};

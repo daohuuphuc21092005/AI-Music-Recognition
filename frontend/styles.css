@@ -10,6 +10,7 @@
   --muted: #646b75;
   --accent: #2f6df6;
   --accent-soft: #e8effe;
+  --on-accent: #ffffff;       /* chữ trên nền --accent / --low */
   --low: #1a8f4c;
   --conditional: #b8770a;
   --high: #cf2a2a;
@@ -27,6 +28,8 @@
     --muted: #9aa3ae;
     --accent: #6b9bff;
     --accent-soft: #212c44;
+    /* Chữ trắng trên #6b9bff chỉ đạt tương phản ~2,7:1 (AA cần 4,5:1); chữ tối ~7:1 */
+    --on-accent: #0b1220;
     --low: #4ac47e;
     --conditional: #e0a33a;
     --high: #ef6b6b;
@@ -55,7 +58,7 @@ code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas
 .brand { display: flex; align-items: center; gap: 12px; }
 .logo {
   display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px;
-  background: var(--accent); color: #fff; font-size: 20px;
+  background: var(--accent); color: var(--on-accent); font-size: 20px;
 }
 .topbar h1 { margin: 0; font-size: 17px; letter-spacing: -.01em; }
 .topbar p { margin: 0; font-size: 13px; color: var(--muted); }
@@ -82,8 +85,8 @@ code, pre { font-family: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas
   background: var(--border); color: var(--muted); font-size: 12px; font-weight: 600;
 }
 .steps li.active { color: var(--text); border-color: var(--accent); }
-.steps li.active span { background: var(--accent); color: #fff; }
-.steps li.done span { background: var(--low); color: #fff; }
+.steps li.active span { background: var(--accent); color: var(--on-accent); }
+.steps li.done span { background: var(--low); color: var(--on-accent); }
 
 /* ── Bố cục ─────────────────────────────────────────────── */
 main { max-width: 940px; margin: 0 auto; padding: 20px 24px 48px; }
@@ -100,6 +103,11 @@ h3 { font-size: 15px; margin: 0 0 12px; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow);
 }
+/* Quyền do mô hình SUY ĐOÁN từ âm thanh: viền nét đứt + chữ nhạt, để không đọc như
+   quyền tra được từ nguồn thật (README, mục bộ phân loại giấy phép). */
+.card.predicted { border-style: dashed; border-color: var(--muted); }
+.card.predicted dd { color: var(--muted); }
+.card.predicted dd.guess-warning { color: var(--conditional); font-weight: 600; }
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
 
@@ -147,7 +155,7 @@ h3 { font-size: 15px; margin: 0 0 12px; }
 button { font: inherit; }
 .primary {
   margin-top: 18px; padding: 12px 22px; border: none; border-radius: 10px;
-  background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+  background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer;
 }
 .primary:disabled { opacity: .45; cursor: not-allowed; }
 .ghost {
@@ -195,9 +203,17 @@ button { font: inherit; }
 .risk-UNKNOWN .risk-level { color: var(--unknown); }
 
 /* ── Danh sách khoá/giá trị ─────────────────────────────── */
-dl { display: grid; grid-template-columns: minmax(140px, auto) 1fr; gap: 8px 16px; margin: 0; }
-dt { color: var(--muted); font-size: 13px; }
+/* Cột nhãn vừa đúng nội dung nhưng không quá 38%: nhãn dài thì NHÃN xuống dòng,
+   không bóp cột giá trị (bản cũ `minmax(140px, auto)` để nhãn dài nhất quyết định). */
+dl { display: grid; grid-template-columns: fit-content(38%) minmax(0, 1fr); gap: 8px 16px; margin: 0; }
+dt { color: var(--muted); font-size: 13px; min-width: 140px; }
 dd { margin: 0; word-break: break-word; }
+@media (max-width: 560px) {
+  /* Điện thoại: nhãn nằm TRÊN giá trị. Hai cột ở 390px chỉ còn ~45px cho giá trị —
+     "rights_gate.low_rights_confidence" từng bị bẻ thành 6 dòng. */
+  dl { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
+  dd { margin-bottom: 10px; }
+}
 dd.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 13px; }
 .pill {
   display: inline-block; padding: 2px 9px; border-radius: 999px;
@@ -221,6 +237,13 @@ table { border-collapse: collapse; width: 100%; font-size: 13px; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 th { color: var(--muted); font-weight: 600; }
 tr.hit td { background: var(--accent-soft); }
+@media (max-width: 560px) {
+  /* UUID 36 ký tự không xuống dòng chiếm ~250px, đẩy cột Similarity — con số chính
+     của bảng — ra ngoài màn hình điện thoại. Cho cột bản ghi xuống dòng. */
+  #ev-topk th, #ev-topk td { padding: 8px 6px; }
+  #ev-topk td:nth-child(2) { white-space: normal; min-width: 140px; }
+  #ev-topk td:nth-child(2) .mono { word-break: break-all; font-size: 11px; }
+}
 
 /* ── Phản hồi ───────────────────────────────────────────── */
 .feedback-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -229,7 +252,7 @@ tr.hit td { background: var(--accent-soft); }
   background: var(--bg); color: var(--text); cursor: pointer;
 }
 .feedback-buttons button:hover { border-color: var(--accent); color: var(--accent); }
-.feedback-buttons button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.feedback-buttons button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 pre {
   max-height: 420px; overflow: auto; padding: 14px; margin: 12px 0 0;
