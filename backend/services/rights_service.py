@@ -153,6 +153,25 @@ def get_full_music_rights(recording_id: str, db: Session) -> dict:
     }
 
 
+# Câu hành động cho từng mã `condition` của Rule Engine. Thêm điều kiện mới vào
+# configs/rules_v1.yaml thì thêm câu ở đây — tests/test_rights_service.py kiểm đủ.
+ACTION_BY_CONDITION = {
+    "ATTRIBUTION_REQUIRED": "Hãy ghi công tác giả trong phần mô tả.",
+    "REVENUE_SHARE_APPLIED": "Doanh thu sẽ bị chia sẻ theo thoả thuận.",
+    "REVENUE_REDIRECTED": "Doanh thu sẽ chuyển cho chủ sở hữu bản quyền.",
+    "VIDEO_BLOCKED_OR_STRIKE": "Nên thay bằng bản nhạc khác.",
+    "NON_COMMERCIAL_VIOLATION": "Hãy chuyển sang mục đích phi thương mại hoặc đổi nhạc.",
+    "MONETIZATION_NOT_PERMITTED": "Hãy tắt kiếm tiền hoặc đổi nhạc.",
+    "RECORDING_PERMISSION_REQUIRED": "Cần xin phép chủ bản thu, hoặc dùng bản thu khác thuộc miền công cộng.",
+    "COMPOSITION_PERMISSION_REQUIRED": "Cần xử lý quyền của phần sáng tác.",
+    "LICENSE_REQUIRED": "Cần mua giấy phép trước khi sử dụng.",
+    "HUMAN_REVIEW_REQUIRED": "Cần người kiểm tra thủ công trước khi phát hành.",
+    "MONETIZABLE_UNTIL_RETROACTIVE_CLAIM": "Có thể kiếm tiền, nhưng vẫn có rủi ro bị khiếu nại hồi tố.",
+    "FREE_TO_USE": "Được sử dụng tự do.",
+    "FULL_REVENUE_RETAINED": "Bạn giữ toàn bộ doanh thu.",
+}
+
+
 def generate_rights_recommendation(decision: dict) -> str:
     """
     Câu khuyến nghị bằng ngôn ngữ tự nhiên, DỰA TRÊN quyết định của Rule Engine.
@@ -171,20 +190,10 @@ def generate_rights_recommendation(decision: dict) -> str:
         "UNKNOWN": "⚪ CHƯA XÁC ĐỊNH.",
     }.get(risk, "⚪ CHƯA XÁC ĐỊNH.")
 
-    suffix = {
-        "ATTRIBUTION_REQUIRED": "Hãy ghi công tác giả trong phần mô tả.",
-        "REVENUE_SHARE_APPLIED": "Doanh thu sẽ bị chia sẻ theo thoả thuận.",
-        "REVENUE_REDIRECTED": "Doanh thu sẽ chuyển cho chủ sở hữu bản quyền.",
-        "VIDEO_BLOCKED_OR_STRIKE": "Nên thay bằng bản nhạc khác.",
-        "NON_COMMERCIAL_VIOLATION": "Hãy chuyển sang mục đích phi thương mại hoặc đổi nhạc.",
-        "MONETIZATION_NOT_PERMITTED": "Hãy tắt kiếm tiền hoặc đổi nhạc.",
-        "RECORDING_PERMISSION_REQUIRED": "Cần xin phép chủ bản thu, hoặc dùng bản thu khác thuộc miền công cộng.",
-        "COMPOSITION_PERMISSION_REQUIRED": "Cần xử lý quyền của phần sáng tác.",
-        "LICENSE_REQUIRED": "Cần mua giấy phép trước khi sử dụng.",
-        "HUMAN_REVIEW_REQUIRED": "Cần người kiểm tra thủ công trước khi phát hành.",
-        "MONETIZABLE_UNTIL_RETROACTIVE_CLAIM": "Có thể kiếm tiền, nhưng vẫn có rủi ro bị khiếu nại hồi tố.",
-        "FREE_TO_USE": "Được sử dụng tự do.",
-        "FULL_REVENUE_RETAINED": "Bạn giữ toàn bộ doanh thu.",
-    }.get(condition, "")
-
-    return " ".join(part for part in (prefix, reason, suffix) if part)
+    # Khuyến nghị = mức rủi ro + HÀNH ĐỘNG (schema: "khuyến nghị hành động cụ thể").
+    # Lý do nằm riêng ở assessment.reason và màn Result in nó ngay bên dưới; ghép cả
+    # hai thì câu lặp ý ("...cần người kiểm tra trước khi sử dụng. Cần người kiểm tra
+    # thủ công trước khi phát hành.") và màn hình in lý do hai lần. Điều kiện chưa có
+    # câu hành động thì mới dùng lý do, để câu không cụt còn mỗi mức rủi ro.
+    action = ACTION_BY_CONDITION.get(condition, "")
+    return " ".join(part for part in (prefix, action or reason) if part)
