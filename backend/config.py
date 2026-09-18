@@ -126,15 +126,20 @@ def resolve_audio_path(audio_path: str) -> str:
 # nhỏ hiếm khi chứa cặp gây nhầm.
 #
 # FP_THRESHOLD = 0.30 — hiệu chỉnh bằng EXP-01 (Fingerprint Baseline),
-# xem experiments/results/exp01_fingerprint_baseline.json:
-#   τ = 0.05 -> P 0.9880 / R 0.6053 / F1 0.7507 / FPR 0.0484
-#   τ = 0.15 -> P 0.9972 / R 0.5642 / F1 0.7207 / FPR 0.0163
-#   τ = 0.30 -> P 0.9981 / R 0.5558 / F1 0.7140 / FPR 0.0021   <- đang dùng
-#   τ = 0.95 -> P 1.0000 / R 0.4679 / F1 0.6375 / FPR 0.0
-#   Tiêu chí chọn, tường minh chứ không theo cảm tính: F1 cao nhất trong nhóm
-#   giữ FPR <= 0.005. KHÔNG lấy τ = 0.95 dù ở đó FPR = 0: "0 lần nhận nhầm trên
-#   1.900 truy vấn" không phân biệt được với 0.0011 (đúng 2 truy vấn) — khoảng
-#   tin cậy 95% của 0/1.900 vẫn kéo tới ~0.0016 — mà cái giá là 8,8 điểm recall.
+# xem experiments/results/exp01_fingerprint_baseline.json. FPR đo theo
+# HeldOutProtocol (2026-09-18); trong ngoặc là giao thức cũ chỉ loại bản trùng hệt,
+# vốn đếm cả việc nhận ra bản gần trùng / bài bị trộn chồng là nhận nhầm:
+#   τ = 0.10 -> P 0.9954 / R 0.5716 / F1 0.7262 / FPR 0.0037 (0.0226)
+#   τ = 0.15 -> P 0.9972 / R 0.5642 / F1 0.7207 / FPR 0.0011 (0.0163)
+#   τ = 0.20 -> P 0.9981 / R 0.5605 / F1 0.7179 / FPR 0.0    (0.0068)
+#   τ = 0.30 -> P 0.9981 / R 0.5558 / F1 0.7140 / FPR 0.0    (0.0021)  <- đang dùng
+#   Quy tắc "F1 cao nhất trong nhóm giữ FPR <= 0.005" nay ra 0.10. Chủ dự án GIỮ
+#   0.30 (2026-09-18) vì lợi ích đo ở cấp hệ thống quá nhỏ so với cái giá: F1
+#   cascade 0.9352 -> 0.9368 (MERT/Cover đã bắt lại phần tầng 1 bỏ sót), nhận sai
+#   5 -> 8, 1 lần nhận nhầm bài lạ, và 44% truy vấn mất tăng tốc của bộ lọc hash
+#   (dải ±0.15 quanh 0.10 phủ gần hết truy vấn không khớp). Nhiễu trắng 30 s đạt
+#   tới 0.0814 trên 24.375 bài — ở 0.10 lề chỉ còn 0.019.
+#   scripts/apply_calibrated_thresholds.py không tự HẠ ngưỡng (cần --allow-loosen).
 #   Recall trần của tầng này chỉ ~0.58: dịch cao độ và đổi tốc độ (8/19 phép biến
 #   đổi) Chromaprint không bắt được bài nào, đó là việc của tầng MERT và Cover.
 #

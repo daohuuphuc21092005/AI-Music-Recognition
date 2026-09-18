@@ -35,7 +35,7 @@ identity_gate:
   # Giá trị dưới đây bằng ĐÚNG ngưỡng chấp nhận của từng tầng trong cascade,
   # hiệu chỉnh trên corpus FMA medium thật (24.375 bản ghi có fingerprint và có
   # descriptor cover, 1.900 truy vấn biến đổi từ 100 bài nguồn):
-  #   EXACT_MATCH = τFP    = 0.30 — EXP-01: Precision 0.9981, FPR 0.0021
+  #   EXACT_MATCH = τFP    = 0.30 — EXP-01: Precision 0.9981, FPR held-out 0.0 (quy tắc đề xuất 0.10, chủ dự án giữ 0.30)
   #   NEAR_MATCH  = τMERT  = 0.98 — EXP-06 trên 48.750 vector / 24.375 bản ghi:
   #                                 FMR 2,65%, đổi lại chỉ nhận đúng 38,1% truy vấn
   #                                 known. Chính τ = 0.97 cũ nay cho FMR 6,1%, tức

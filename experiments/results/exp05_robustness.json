@@ -1,7 +1,7 @@
 {
   "experiment_id": "exp05_robustness",
-  "date": "2026-09-17T22:02:37",
-  "git_commit": "2bf97b2",
+  "date": "2026-09-18T09:52:41",
+  "git_commit": "4127914",
   "git_dirty": true,
   "dataset_version": {
     "metadata_master.csv": {
@@ -221,96 +221,96 @@
         "n": 100,
         "mean_score": 0.4673,
         "min_score": 0.009,
-        "matched_at_current_tau": 67,
-        "mean_latency_ms": 4755.3,
-        "mean_held_out_score": 0.0391
+        "matched_at_current_tau": 57,
+        "mean_latency_ms": 4891.6,
+        "mean_held_out_score": 0.0117
       },
       "crop_10s": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 1590.8,
-        "mean_held_out_score": 0.0408
+        "mean_latency_ms": 1608.8,
+        "mean_held_out_score": 0.0359
       },
       "crop_15s": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 2420.7,
-        "mean_held_out_score": 0.0294
+        "mean_latency_ms": 2460.0,
+        "mean_held_out_score": 0.025
       },
       "eq_lowpass_4k": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 4792.5,
-        "mean_held_out_score": 0.0187
+        "mean_latency_ms": 4857.3,
+        "mean_held_out_score": 0.0129
       },
       "gain_minus12db": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 4810.5,
-        "mean_held_out_score": 0.0187
+        "mean_latency_ms": 4854.9,
+        "mean_held_out_score": 0.0129
       },
       "mp3_128k": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 0.9955,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 4759.4,
-        "mean_held_out_score": 0.0187
+        "mean_latency_ms": 4903.1,
+        "mean_held_out_score": 0.0129
       },
       "mp3_64k": {
         "n": 100,
         "mean_score": 0.9983,
         "min_score": 0.9729,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 4760.1,
-        "mean_held_out_score": 0.0186
+        "mean_latency_ms": 4905.6,
+        "mean_held_out_score": 0.0127
       },
       "noise_snr10": {
         "n": 100,
         "mean_score": 0.9517,
         "min_score": 0.5204,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 4790.2,
-        "mean_held_out_score": 0.0189
+        "mean_latency_ms": 4864.1,
+        "mean_held_out_score": 0.013
       },
       "noise_snr20": {
         "n": 100,
         "mean_score": 0.9904,
         "min_score": 0.8371,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 4806.1,
-        "mean_held_out_score": 0.0186
+        "mean_latency_ms": 4860.8,
+        "mean_held_out_score": 0.0127
       },
       "noise_snr5": {
         "n": 100,
         "mean_score": 0.8223,
         "min_score": 0.2986,
-        "matched_at_current_tau": 100,
-        "mean_latency_ms": 4820.7,
-        "mean_held_out_score": 0.0178
+        "matched_at_current_tau": 99,
+        "mean_latency_ms": 4844.4,
+        "mean_held_out_score": 0.0125
       },
       "original_crop30s": {
         "n": 100,
         "mean_score": 1.0,
         "min_score": 1.0,
         "matched_at_current_tau": 100,
-        "mean_latency_ms": 4800.9,
-        "mean_held_out_score": 0.0187
+        "mean_latency_ms": 4901.3,
+        "mean_held_out_score": 0.0129
       },
       "pitch_minus_1": {
         "n": 100,
         "mean_score": 0.0122,
         "min_score": 0.0045,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 4800.2,
+        "mean_latency_ms": 4882.6,
         "mean_held_out_score": 0.0122
       },
       "pitch_minus_2": {
@@ -318,7 +318,7 @@
         "mean_score": 0.0131,
         "min_score": 0.0045,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 4747.8,
+        "mean_latency_ms": 4861.9,
         "mean_held_out_score": 0.0131
       },
       "pitch_plus_1": {
@@ -326,7 +326,7 @@
         "mean_score": 0.0126,
         "min_score": 0.0045,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 4789.6,
+        "mean_latency_ms": 4882.3,
         "mean_held_out_score": 0.0126
       },
       "pitch_plus_2": {
@@ -334,7 +334,7 @@
         "mean_score": 0.013,
         "min_score": 0.0045,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 4759.5,
+        "mean_latency_ms": 4863.5,
         "mean_held_out_score": 0.013
       },
       "tempo_0_90": {
@@ -342,32 +342,32 @@
         "mean_score": 0.0253,
         "min_score": 0.009,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 5290.4,
-        "mean_held_out_score": 0.0136
+        "mean_latency_ms": 5395.0,
+        "mean_held_out_score": 0.0133
       },
       "tempo_0_95": {
         "n": 100,
         "mean_score": 0.0403,
         "min_score": 0.0045,
-        "matched_at_current_tau": 1,
-        "mean_latency_ms": 4998.0,
-        "mean_held_out_score": 0.0136
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 5120.2,
+        "mean_held_out_score": 0.0134
       },
       "tempo_1_05": {
         "n": 100,
         "mean_score": 0.0439,
         "min_score": 0.0096,
-        "matched_at_current_tau": 4,
-        "mean_latency_ms": 4527.2,
-        "mean_held_out_score": 0.0137
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 4666.0,
+        "mean_held_out_score": 0.0136
       },
       "tempo_1_10": {
         "n": 100,
         "mean_score": 0.0312,
         "min_score": 0.005,
         "matched_at_current_tau": 0,
-        "mean_latency_ms": 4350.6,
-        "mean_held_out_score": 0.0136
+        "mean_latency_ms": 4470.8,
+        "mean_held_out_score": 0.0134
       }
     },
     "per_transformation_hybrid": {

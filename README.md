@@ -37,8 +37,10 @@ INPUT (audio/video)
 >
 > **τFP = 0.30** — EXP-01: trên 800 truy vấn không làm biến dạng trục thời gian/cao
 > độ (cắt đoạn, nén MP3, nhiễu SNR 20, gain, EQ) **Precision = Recall = 1.0**; toàn
-> tập Precision 0.9981, FPR held-out 0.0021. Chọn theo quy tắc "F1 cao nhất trong
-> nhóm giữ FPR ≤ 0.005" — nhận nhầm tốn kém hơn bỏ sót, bỏ sót còn tầng sau đỡ.
+> tập Precision 0.9981, nhận nhầm bài ngoài CSDL **0/1.900** (`HeldOutProtocol`).
+> Quy tắc "F1 cao nhất trong nhóm giữ FPR ≤ 0.005" nay đề xuất 0.10, nhưng **giữ
+> 0.30** theo quyết định của chủ dự án: ở cấp hệ thống F1 chỉ +0.0016 mà nhận sai
+> tăng 5 → 8 và bộ lọc hash phải quét toàn bộ 44% truy vấn (xem mục Nghiệm thu §13).
 >
 > **τMERT = 0.98** — EXP-06: False Match Rate **2,65%** (≤ 5% của §13). Chính τ = 0.97
 > cũ cho FMR 6,12% ở quy mô này, dù chỉ 4,40% khi corpus còn 4.000 bản ghi.
@@ -276,7 +278,7 @@ tầng Cover cắt truy vấn theo hệ số nhịp độ 0.90–1.10.
 
 | # | Thí nghiệm | Kết quả chính |
 |---|---|---|
-| EXP-01 | Fingerprint Baseline | → chốt **τFP = 0.30**: 800 truy vấn sạch P = R = 1.000; cả 1.900 truy vấn P 0.9981 · FPR 0,21% |
+| EXP-01 | Fingerprint Baseline | **τFP = 0.30**: 800 truy vấn sạch P = R = 1.000; cả 1.900 truy vấn P 0.9981 · nhận nhầm held-out 0,00% |
 | EXP-02 | MERT Retrieval | Recall@1 0.8787 · Recall@5 0.9374 · MRR 0.9059 (leave-one-out, truy vấn chưa biến đổi) |
 | EXP-03 | Pooling Strategy | `mean+std` chỉ +1,13pp Recall@1 nhưng index ×2 → **giữ `mean`** |
 | EXP-04 | FP vs MERT vs Cover vs Cascade | **Cascade production F1 0.9352** (R 0.8805) > Cover 0.8659 > FP→MERT 0.7278 > FP 0.7140 > MERT 0.3915 |
@@ -292,7 +294,7 @@ tầng Cover cắt truy vấn theo hệ số nhịp độ 0.90–1.10.
 |---|---|---|---|---|
 | Clean exact-match | P ≥ 0.95, R ≥ 0.90 | **P 1.000 · R 1.000** trên 800 truy vấn (30 s, cắt 10/15 s, MP3 128k/64k, EQ, gain, nhiễu SNR 20) | EXP-01 | ✅ |
 | Robust retrieval | Recall@5 ≥ 0.80 | **0.9937** cấp hệ thống (MERT ∪ Cover) · MERT đơn lẻ 0.7921 · Cover đơn lẻ 0.8947 | EXP-04 | ✅ |
-| Unknown FMR | ≤ 5% | Chromaprint 0,21% · MERT 2,65% · Cover 0,11% · **cả pipeline 0,00%** (760 lượt held-out) | EXP-01/06/07/08 | ✅ |
+| Unknown FMR | ≤ 5% | Chromaprint 0,00% · MERT 2,65% · Cover 0,11% · **cả pipeline 0,00%** (760 lượt held-out) | EXP-01/06/07/08 | ✅ |
 | End-to-end | Macro-F1 ≥ 0.80 | **0.9518**, đủ 4 lớp có mẫu (LOW 114 · CONDITIONAL 475 · HIGH 171 · UNKNOWN 760) | EXP-08 | ✅ |
 
 **Robust retrieval chấm ở cấp hệ thống — và vì sao phải nói rõ điều này.** MERT đơn
@@ -304,9 +306,21 @@ trong evidence. Mục tiêu 0.80 giữ nguyên. Cách chấm được chọn **s
 trượt, nên con số MERT đơn lẻ luôn được báo cạnh bên (biên bản ở
 `.claude/rules/06-experiments-evaluation.md` §5).
 
-FPR của EXP-01 đo trước khi có `HeldOutProtocol` (held-out khi đó chỉ loại bản trùng
-hệt), nên là **cận trên**: vài lần hệ thống nhận ra bản gần trùng hoặc bài bị trộn
-chồng — tức nhận đúng — vẫn bị đếm là nhận nhầm.
+**Giữ τFP = 0.30 dù quy tắc hiệu chỉnh đề xuất 0.10.** EXP-01 đo lại dưới
+`HeldOutProtocol` cho tỉ lệ nhận nhầm của tầng 1 là 0,37% / 0,11% / 0 ở τ 0.10 / 0.15 /
+≥ 0.20 (giao thức cũ đếm cả việc nhận ra bài bị trộn chồng là nhận nhầm: 2,26% / 1,63%
+/ 0,68%). Quy tắc chỉ nhìn F1 của tầng 1 nên ra 0.10. Mô phỏng cả cascade (điểm quét
+đầy đủ của EXP-01 + quyết định MERT/Cover của EXP-04, tái lập đúng EXP-04 ở 0.30):
+
+| τFP | F1 cascade | Nhận sai | Nhận nhầm bài lạ | Bộ lọc hash quét toàn bộ |
+|---|---|---|---|---|
+| **0.30** | 0.9352 | 5 | 0 | 1,6% |
+| 0.20 | 0.9361 | 5 | 0 | 5,4% |
+| 0.10 | 0.9368 | 8 | 1 | 44% |
+
+Phần tầng 1 bỏ sót ở 0.30 đã được MERT/Cover bắt lại, nên hạ ngưỡng chỉ đổi an toàn
+và tốc độ lấy vài truy vấn. `scripts/apply_calibrated_thresholds.py` nay chỉ tự động
+**siết** ngưỡng; hạ ngưỡng phải có `--allow-loosen`.
 
 ### EXP-08 — trọn pipeline: đạt ngưỡng nghiệm thu
 
@@ -354,7 +368,9 @@ nhận diện lan sang mức rủi ro ra sao**, không đo tính đúng pháp l�
 
 ### Ngưỡng phụ thuộc QUY MÔ REFERENCE — đo được, không phải suy đoán
 
-Cùng bộ truy vấn, **cùng một ngưỡng**, chỉ đổi số bản ghi trong reference:
+Cùng bộ truy vấn, **cùng một ngưỡng**, chỉ đổi số bản ghi trong reference (FPR ở đây
+theo giao thức held-out CŨ — chỉ loại bản trùng hệt — vì các cột 1.000/4.000 đo như vậy;
+đo theo `HeldOutProtocol` thì ở 24.375 bài τFP 0.10 chỉ còn 0.0037, 0.15 còn 0.0011):
 
 | Ngưỡng | Chỉ số | @1.000 | @4.000 | @24.375 |
 |---|---|---|---|---|
@@ -396,11 +412,11 @@ không bao giờ hạ dưới τFP — với τFP 0.30 thì chỉ còn tác dụ
 và response mang cờ `threshold_raised_for_short_query` để việc này không diễn ra
 âm thầm.
 
-Hai giới hạn cần biết: τFP = 0.30 hiệu chỉnh bằng EXP-01 trên tập truy vấn 10–30
-giây, nên **không chuyển thẳng sang truy vấn ngắn hơn được**; và bảng nhiễu nền trên
-đo với reference **4.000** bản ghi, chưa đo lại ở 24.375. Reference lớn hơn chỉ có
-thể làm điểm nền lớn nhất tăng lên (thêm ứng viên để khớp may), nên các số trên là
-cận dưới.
+Hai điều cần biết: τFP = 0.30 hiệu chỉnh bằng EXP-01 trên tập truy vấn 10–30 giây,
+nên **không chuyển thẳng sang truy vấn ngắn hơn được**; và bảng nhiễu nền trên đo với
+reference 4.000 bản ghi. Đo lại trên 24.375 bài (cùng 10 seed) cho đúng các giá trị
+lớn nhất đó ở 30 s (0.0814) và 20 s (0.1286) — reference lớn gấp 6 lần không làm điểm
+nền của nhiễu cao lên.
 
 ### EXP-07 — tầng cover lấp đúng điểm mù
 
@@ -466,10 +482,6 @@ nhận truy vấn pitch nào. Không mâu thuẫn — ở đây chấm **xếp h
 **ngưỡng τMERT = 0.98**: truy vấn dịch cao độ có điểm MERT khoảng 0.87–0.92, xếp
 đúng nhưng bị từ chối. **Điểm mù đó đến từ ngưỡng, không phải từ năng lực model** —
 mà ngưỡng buộc phải chặt để giữ FMR ≤ 5%.
-
-> FPR của EXP-01 đo trước khi có `HeldOutProtocol`: held-out khi đó chỉ loại bản
-> trùng hệt, nên những lần hệ thống nhận ra bản gần trùng hay bài bị trộn chồng —
-> tức nhận ĐÚNG — vẫn bị đếm là nhận nhầm. Con số đó là cận trên.
 
 
 ### EXP-09 — Bản quyền có học được từ âm thanh không?

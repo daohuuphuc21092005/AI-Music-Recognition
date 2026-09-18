@@ -55,6 +55,7 @@ INPUT AUDIO/VIDEO
   - Tuyệt đối **không được chọn tùy tiện**.
   - Bắt buộc phải xác định thông qua việc quét ngưỡng trên Validation Set để đạt sự cân bằng tối ưu giữa Precision, Recall và False Positive Rate (FPR).
 - Nếu `score ≥ τFP`: Xác nhận `match_type = EXACT_MATCH` hoặc `NEAR_EXACT_MATCH`, chuyển thẳng đến Track Resolver, **bỏ qua tầng MERT**.
+- **`τFP` hiện tại = 0.30, giữ theo quyết định của chủ dự án (2026-09-18)** dù quy tắc hiệu chỉnh (F1 tầng 1 cao nhất trong nhóm FPR ≤ 0.005) đề xuất 0.10: ở cấp hệ thống F1 cascade chỉ +0.0016, nhận sai 5 → 8, và dải ±0.15 của bộ lọc hash quanh 0.10 buộc 44% truy vấn quét toàn bộ. **Hạ τFP là quyết định của người**, không để `run_all_experiments.py` tự làm — `apply_calibrated_thresholds.py` chỉ tự động siết, nới phải có `--allow-loosen`. Nếu hạ τFP, phải đối chứng lại bộ lọc hash (và thu hẹp `BAND` nếu cần) trước.
 - **Lọc ứng viên theo hash** (`config.FP_PREFILTER_*`): chỉ chấm đầy đủ 50 bản ghi có nhiều hash trùng tuyệt đối nhất, quay về quét toàn bộ khi điểm nằm trong ±0.15 quanh ngưỡng hiệu dụng hoặc truy vấn < 10 s (phép đối chứng chỉ phủ 10–33 s). Đối chứng hàm production trên 1.900 truy vấn: 0 lệch quyết định, 1,6% quay về quét toàn bộ, độ trễ TB 110 ms thay vì ~4,5 s. Đổi `TOP_K`/`BAND` thì phải đối chứng lại; EXP-01 (hiệu chỉnh τFP) luôn quét toàn bộ.
 
 ---
