@@ -142,3 +142,30 @@ def test_exp08_chon_phan_tang_theo_giay_phep():
 
     assert {q["source_recording_id"] for q in select_queries(queries, sources=2)} == {"a", "b"}
     assert select_queries(queries) == queries
+
+
+@pytest.mark.parametrize("flags, expected_written", [
+    (["--write"], {"MERT_THRESHOLD": 0.99}),
+    (["--write", "--allow-loosen"], {"FP_THRESHOLD": 0.10, "MERT_THRESHOLD": 0.99}),
+])
+def test_ap_nguong_tu_dong_siet_khong_tu_dong_noi(monkeypatch, flags, expected_written):
+    """
+    Đề xuất HẠ ngưỡng (nới) không được tự ghi vào .env — cần --allow-loosen; đề xuất
+    NÂNG (siết) thì ghi luôn. EXP-01 từng đề xuất τFP 0.30 -> 0.10 và chủ dự án giữ 0.30.
+    """
+    import sys
+
+    from scripts import apply_calibrated_thresholds as apply
+
+    monkeypatch.setattr(apply.config, "FP_THRESHOLD", 0.30)
+    monkeypatch.setattr(apply.config, "MERT_THRESHOLD", 0.98)
+    monkeypatch.setattr(apply.config, "COVER_THRESHOLD", 0.90)
+    monkeypatch.setattr(apply, "tau_fp", lambda: (0.10, "nới"))
+    monkeypatch.setattr(apply, "tau_mert", lambda: (0.99, "siết"))
+    monkeypatch.setattr(apply, "tau_cover", lambda: (0.90, "giữ"))
+    written = {}
+    monkeypatch.setattr(apply, "write_env", lambda updates: written.update(updates))
+    monkeypatch.setattr(sys, "argv", ["apply_calibrated_thresholds.py", *flags])
+
+    assert apply.main() == 0
+    assert written == expected_written

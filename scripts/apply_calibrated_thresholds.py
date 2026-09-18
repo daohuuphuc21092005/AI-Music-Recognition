@@ -23,6 +23,12 @@ Ngưỡng lấy từ đâu:
 
 Không đoán: thiếu file kết quả hoặc thiếu khoá thì báo rõ và bỏ qua ngưỡng đó,
 KHÔNG ghi một giá trị bịa vào .env.
+
+Tự động SIẾT, không tự động NỚI: đề xuất nâng ngưỡng được ghi ngay, đề xuất HẠ ngưỡng
+chỉ được in ra — ghi thật phải có `--allow-loosen`. Quy tắc trên chỉ nhìn một tầng,
+còn hạ ngưỡng là đánh đổi cấp hệ thống (các tầng sau đã bắt lại phần bị bỏ sót, còn
+nhận nhầm thì đi thẳng ra kết luận về quyền). Ví dụ có thật: EXP-01 đo lại dưới
+HeldOutProtocol đề xuất τFP 0.10; chủ dự án giữ 0.30.
 """
 import argparse
 import json
@@ -189,6 +195,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write", action="store_true",
                         help="Ghi vào .env (mặc định chỉ hiển thị)")
+    parser.add_argument("--allow-loosen", action="store_true",
+                        help="Cho phép HẠ ngưỡng (mặc định chỉ tự động nâng)")
     args = parser.parse_args()
 
     current = {
@@ -215,6 +223,14 @@ def main() -> int:
         mark = "=" if abs(float(value) - float(old)) < 1e-9 else "->"
         print(f"  {key:<16} {old}  {mark}  {value}")
         print(f"  {'':<16} vì {why}")
+        if mark == "->" and float(value) < float(old) and not args.allow_loosen:
+            # Tự động SIẾT, không tự động NỚI. Hạ ngưỡng đổi an toàn lấy recall và
+            # (với τFP) còn làm bộ lọc hash mất tác dụng — đó là quyết định của người.
+            # 2026-09-18: EXP-01 dưới HeldOutProtocol đề xuất τFP 0.10, chủ dự án giữ
+            # 0.30 (F1 cascade chỉ +0.0016, nhận sai 5 -> 8, 44% truy vấn quét toàn
+            # bộ) — xem .claude/rules/06-experiments-evaluation.md §5.
+            print(f"  {'':<16} KHÔNG tự hạ ngưỡng: đây là nới lỏng, cần --allow-loosen")
+            continue
         if mark == "->":
             updates[key] = value
 
