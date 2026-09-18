@@ -5,12 +5,12 @@ Nguyên tắc: thiếu phụ thuộc ngoài (PostgreSQL, fpcalc, file audio) th�
 lý do rõ ràng, không để test đỏ vì lý do không liên quan tới code.
 """
 import os
-import shutil
 
 import pytest
 
 from backend import config
 from backend.database.session import SessionLocal, check_connection
+from backend.services.fingerprint_service import find_fpcalc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEST_AUDIO = os.path.join(ROOT, "test.mp3")
@@ -28,10 +28,15 @@ requires_db = pytest.mark.skipif(
            f"Tạo file .env từ .env.example rồi điền mật khẩu.",
 )
 
+# Dò ĐÚNG như backend (FPCALC_PATH -> PATH -> ~/bin, ~/.cache/...), không chỉ PATH:
+# Git Bash tự thêm ~/bin vào PATH còn PowerShell thì không, nên cùng một máy từng
+# ra 2 hoặc 5 test bị bỏ qua tuỳ shell chạy pytest, trong khi server vẫn thấy fpcalc.
+FPCALC = find_fpcalc()
+
 requires_fpcalc = pytest.mark.skipif(
-    shutil.which("fpcalc") is None,
-    reason="Chưa có fpcalc trong PATH "
-           "(https://github.com/acoustid/chromaprint/releases)",
+    not FPCALC,
+    reason="Không tìm thấy fpcalc (FPCALC_PATH, PATH, ~/bin) — "
+           "https://github.com/acoustid/chromaprint/releases",
 )
 
 requires_index = pytest.mark.skipif(

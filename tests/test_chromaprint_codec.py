@@ -14,11 +14,11 @@ from backend.services.chromaprint_codec import (
     InvalidFingerprintError,
     decode_fingerprint,
 )
-from tests.conftest import TEST_AUDIO, TEST_AUDIO_ALT, requires_fpcalc
+from tests.conftest import FPCALC, TEST_AUDIO, TEST_AUDIO_ALT, requires_fpcalc
 
 
 def run_fpcalc(path: str, raw: bool = False) -> dict:
-    cmd = ["fpcalc"] + (["-raw"] if raw else []) + [path]
+    cmd = [FPCALC] + (["-raw"] if raw else []) + [path]
     out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, check=True).stdout
     parsed = {}
     for line in out.splitlines():
