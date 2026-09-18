@@ -31,10 +31,14 @@ const RISK_TEXT = {
   LOW: 'THẤP', CONDITIONAL: 'CÓ ĐIỀU KIỆN', HIGH: 'CAO', UNKNOWN: 'CHƯA XÁC ĐỊNH',
 };
 
+// Khớp audio_service.VIDEO_EXTENSIONS: các đuôi này phải qua FFmpeg để tách tiếng
+const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.mov', '.webm', '.avi', '.flv', '.wmv', '.m4v'];
+
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-const state = { file: null, jobId: null, result: null, timer: null };
+// videoSupported: null = chưa biết (health chưa về / lỗi), true/false theo /health
+const state = { file: null, jobId: null, result: null, timer: null, videoSupported: null };
 
 /* ─────────────────────────── Tiện ích ─────────────────────────── */
 
@@ -126,12 +130,19 @@ async function checkHealth() {
       `DB ${c.database}`,
       `FAISS ${c.faiss.status} (${c.faiss.total_recordings} bản ghi)`,
       `Chromaprint ${c.chromaprint.status}`,
+      // Thiếu FFmpeg thì file video (.mp4/.mov) không tách được tiếng — người dùng
+      // cần biết TRƯỚC khi tải lên, không phải sau khi nhận lỗi
+      `FFmpeg ${c.ffmpeg === 'AVAILABLE' ? 'AVAILABLE' : 'MISSING — chỉ nhận file audio'}`,
+      ...(c.cover ? [`Cover ${c.cover.status}`] : []),
       `Rule Engine ${c.rule_engine.version || c.rule_engine.status}`,
-      `τFP=${health.thresholds.fingerprint} τMERT=${health.thresholds.embedding}`,
+      `τFP=${health.thresholds.fingerprint} τMERT=${health.thresholds.embedding} `
+        + `τCover=${health.thresholds.cover}`,
     ];
     dot.className = `dot ${health.status === 'ONLINE' ? 'dot-ok' : 'dot-warn'}`;
     text.textContent = health.status === 'ONLINE' ? 'Hệ thống sẵn sàng' : 'Hoạt động hạn chế';
     box.title = bits.join('\n');
+    state.videoSupported = c.ffmpeg === 'AVAILABLE';
+    if (state.file) pickFile(state.file);   // file chọn trước khi health về: xét lại
   } catch (_) {
     dot.className = 'dot dot-bad';
     text.textContent = 'Không kết nối được máy chủ';
@@ -140,11 +151,25 @@ async function checkHealth() {
 
 /* ─────────────────────────── Màn 1: Upload ─────────────────────────── */
 
+/** Lý do chưa gửi được file (chuỗi) hoặc null. Máy chủ thiếu FFmpeg thì video chắc
+ *  chắn bị từ chối (MODEL_FAILURE) — báo ngay khi chọn file thay vì sau khi tải lên.
+ *  Chưa biết trạng thái FFmpeg (health lỗi) thì không chặn. */
+function uploadBlockedReason(file) {
+  if (!file || state.videoSupported !== false) return null;
+  const dot = file.name.lastIndexOf('.');
+  const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
+  if (!VIDEO_EXTENSIONS.includes(ext)) return null;
+  return 'Máy chủ hiện không có FFmpeg nên chưa tách được âm thanh từ video. '
+    + 'Hãy tải lên file audio (.mp3, .wav, …) hoặc chạy bản Docker (đã kèm FFmpeg).';
+}
+
 function pickFile(file) {
   state.file = file || null;
+  const blocked = uploadBlockedReason(state.file);
   $('#file-picked').hidden = !file;
-  $('#analyze').disabled = !file;
-  $('#upload-error').hidden = true;
+  $('#analyze').disabled = !file || Boolean(blocked);
+  $('#upload-error').textContent = blocked || '';
+  $('#upload-error').hidden = !blocked;
   if (file) {
     $('#file-name').textContent = file.name;
     $('#file-size').textContent = humanSize(file.size);
@@ -191,7 +216,7 @@ function initUpload() {
 
 async function submitAnalysis(event) {
   event.preventDefault();
-  if (!state.file) return;
+  if (!state.file || uploadBlockedReason(state.file)) return;
 
   const body = new FormData();
   body.append('file', state.file);
@@ -218,7 +243,7 @@ async function submitAnalysis(event) {
     box.textContent = err.message;
     box.hidden = false;
   } finally {
-    $('#analyze').disabled = !state.file;
+    $('#analyze').disabled = !state.file || Boolean(uploadBlockedReason(state.file));
   }
 }
 
@@ -339,6 +364,8 @@ async function loadResult() {
 function renderResult(result) {
   const { identity = {}, match = {}, rights = {}, assessment = {} } = result;
   const risk = assessment.risk || 'UNKNOWN';
+  const identification = (result.evidence || {}).identification || {};
+  const identified = Boolean(identity.recording_id);
 
   const banner = $('#risk-banner');
   banner.className = `risk-banner risk-${risk}`;
@@ -355,6 +382,10 @@ function renderResult(result) {
     }],
     ['Độ tin cậy nhận diện', match.confidence !== undefined && match.confidence !== null
       ? match.confidence.toFixed(4) : null],
+    // Điểm Chromaprint, cosine MERT và điểm Cover KHÔNG cùng thang: 0.938 là "không
+    // đạt" với MERT (τ 0.98) nhưng "đạt" với Cover (τ 0.90). Câu của chính cascade
+    // nêu điểm từng tầng so với ngưỡng của tầng đó, nên con số trên đọc được đúng.
+    ['Căn cứ nhận diện', identification.decision_reason],
     ['Tầng xử lý', match.pipeline_stage],
     ['recording_id', identity.recording_id, { mono: true }],
     ['composition_id', identity.composition_id, { mono: true }],
@@ -379,15 +410,19 @@ function renderResult(result) {
   $('#decision-reason').textContent = assessment.reason
     ? `Lý do quyết định: ${assessment.reason}` : '';
 
+  // Chưa định danh được thì identity_confidence là điểm cao nhất DƯỚI ngưỡng (backend
+  // cố ý giữ điểm thật, §2.3). Thanh đầy 94% cùng màu với một khớp thật sẽ đọc thành
+  // "khá chắc" — làm mờ và ghi rõ, không giấu con số.
   const confidences = [
-    ['Độ tin cậy nhận diện', assessment.identity_confidence],
-    ['Độ tin cậy dữ liệu quyền', assessment.rights_confidence],
-    ['Độ tin cậy quyết định', assessment.decision_confidence],
+    [identified ? 'Độ tin cậy nhận diện' : 'Độ tin cậy nhận diện (chưa định danh được)',
+      assessment.identity_confidence, !identified],
+    ['Độ tin cậy dữ liệu quyền', assessment.rights_confidence, false],
+    ['Độ tin cậy quyết định', assessment.decision_confidence, false],
   ];
-  $('#confidences').innerHTML = confidences.map(([label, value]) => {
+  $('#confidences').innerHTML = confidences.map(([label, value, below]) => {
     const v = Number(value || 0);
     return `<div class="conf-row"><span>${label}</span>
-      <span class="bar"><i style="width:${(v * 100).toFixed(0)}%"></i></span>
+      <span class="bar${below ? ' below' : ''}"><i style="width:${(v * 100).toFixed(0)}%"></i></span>
       <span class="mono">${v.toFixed(3)}</span></div>`;
   }).join('');
 
@@ -396,6 +431,45 @@ function renderResult(result) {
 }
 
 /* ─────────────────────────── Màn 4: Evidence ─────────────────────────── */
+
+const FULL_SCAN_REASON = {
+  NEAR_THRESHOLD: 'điểm sau lọc nằm sát ngưỡng',
+  QUERY_TOO_SHORT: 'truy vấn quá ngắn để lọc theo hash',
+  PREFILTER_DISABLED: 'bộ lọc đang tắt',
+};
+
+function describePrefilter(prefilter) {
+  if (!prefilter) return null;
+  if (prefilter.full_scan) {
+    const why = FULL_SCAN_REASON[prefilter.full_scan_reason] || prefilter.full_scan_reason;
+    return `Quét toàn bộ bảng fingerprint (${why})`;
+  }
+  return `Lọc theo hash trùng: chấm đầy đủ ${prefilter.candidates} bản ghi có nhiều hash `
+    + `trùng nhất (tối đa ${prefilter.top_k}); điểm cách xa ngưỡng nên không cần quét toàn bộ`;
+}
+
+/** Giống cover_service.describe_oti: OTI là số bán cung phải dịch truy vấn LÊN để
+ *  khớp, nên "OTI 11" là truy vấn CAO hơn bản gốc 1 bán cung — hiện "11 bán cung"
+ *  trần thì đọc thành lệch gần một quãng tám. */
+function describeOti(oti) {
+  if (oti === undefined || oti === null) return null;
+  const k = ((Number(oti) % 12) + 12) % 12;
+  if (k === 0) return 'OTI 0: cùng cao độ với bản gốc';
+  const shift = (12 - k) % 12;
+  if (shift === 6) return `OTI ${k}: lệch nửa quãng tám (6 bán cung, chroma không phân biệt được chiều)`;
+  const signed = shift > 6 ? shift - 12 : shift;
+  return `OTI ${k}: truy vấn ${signed > 0 ? 'cao' : 'thấp'} hơn bản gốc ${Math.abs(signed)} bán cung`;
+}
+
+/** Hệ số nhịp độ của đoạn cắt đã thắng ở tầng Cover (lưới COVER_TEMPO_FACTORS, không
+ *  phải nhịp đo được) — 0.9 nghĩa là truy vấn chậm hơn bản gốc khoảng 10%.
+ *  null: truy vấn ngắn hơn độ dài cần cắt nên đoạn cắt bị cụt, không gắn được hệ số. */
+function describeTempo(factor) {
+  if (factor === undefined) return null;
+  if (factor === null) return 'không suy ra được (truy vấn ngắn hơn độ dài cần cắt)';
+  if (Number(factor) === 1) return '×1.00 (đúng nhịp bản gốc)';
+  return `×${Number(factor).toFixed(2)} (truy vấn ${Number(factor) < 1 ? 'chậm' : 'nhanh'} hơn bản gốc)`;
+}
 
 function renderEvidence(result) {
   const evidence = result.evidence || {};
@@ -414,11 +488,21 @@ function renderEvidence(result) {
       ? 'không tính — tầng 1 không chạy'
       : (fingerprint.fingerprint_score != null
         ? Number(fingerprint.fingerprint_score).toFixed(4) : null)],
-    ['Ngưỡng τFP', fingerprint.threshold],
+    // Truy vấn ngắn dùng ngưỡng hiệu dụng cao hơn τFP (điểm nền của nhiễu tăng khi
+    // đoạn ngắn đi) — không ghi rõ thì con số này lệch với τFP ở thanh trạng thái.
+    ['Ngưỡng τFP', fingerprint.threshold == null ? null
+      : (fingerprint.threshold_raised_for_short_query
+        ? `${Number(fingerprint.threshold).toFixed(4)} (nâng từ ${fingerprint.threshold_base} vì truy vấn ngắn)`
+        : fingerprint.threshold)],
     ['Kết luận tầng 1', fingerprint.match_type],
     ...(fpRan ? [] : [['Lý do tầng 1 không chạy',
       [fingerprint.reason_code, fingerprint.message].filter(Boolean).join(' — ') || null]]),
-    ['Số fingerprint đã so', fingerprint.candidates_compared],
+    // Tầng 1 chỉ chấm đầy đủ vài chục bản ghi nhiều hash trùng nhất; hiện trần
+    // "đã so: 6" mà không nói cách dò thì người đọc tưởng CSDL chỉ có 6 fingerprint.
+    ...(fpRan ? [['Cách dò', describePrefilter(fingerprint.prefilter)]] : []),
+    ...(fpRan && fingerprint.prefilter && fingerprint.prefilter.best_hash_hits !== undefined
+      ? [['Số hash trùng nhiều nhất (một bản ghi)', fingerprint.prefilter.best_hash_hits]] : []),
+    ['Số fingerprint đã chấm đầy đủ', fingerprint.candidates_compared],
     ['Bỏ qua vì lệch độ dài', fingerprint.candidates_skipped_by_duration],
     ['Độ dài truy vấn (s)', fingerprint.query_duration
       ? Number(fingerprint.query_duration).toFixed(1) : null],
@@ -512,7 +596,8 @@ function renderEvidence(result) {
       dl($('#ev-cover'), [
         ['Khớp Cover/Phiên bản', cover.matched ? 'ĐÃ KHỚP' : 'Không đạt ngưỡng'],
         ['Điểm tương đồng CQT', topCand.similarity_score !== undefined ? Number(topCand.similarity_score).toFixed(4) : null],
-        ['Dịch cao độ (OTI)', topCand.oti !== undefined ? `${topCand.oti} bán cung` : null],
+        ['Lệch cao độ (OTI)', describeOti(topCand.oti)],
+        ['Hệ số nhịp của đoạn cắt thắng', describeTempo(topCand.tempo_factor)],
         ['Ngưỡng τCover', cover.threshold],
         // τCover hiệu chỉnh theo SỐ BÀI trong chỉ mục, nên thiếu con số này thì
         // điểm tương đồng ở trên không đọc được đúng

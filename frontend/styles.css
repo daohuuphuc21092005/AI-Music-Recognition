@@ -212,6 +212,8 @@ dd.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-s
 .conf-row { display: grid; grid-template-columns: 170px 1fr 52px; align-items: center; gap: 12px; font-size: 13px; }
 .bar { height: 7px; border-radius: 999px; background: var(--border); overflow: hidden; }
 .bar > i { display: block; height: 100%; background: var(--accent); }
+/* Điểm cao nhất nhưng dưới ngưỡng: vẫn hiện, nhưng không cùng màu với một khớp thật */
+.bar.below > i { background: var(--unknown); opacity: .55; }
 
 /* ── Bảng ───────────────────────────────────────────────── */
 .table-wrap { overflow-x: auto; margin-bottom: 14px; }

@@ -22,6 +22,7 @@ from backend.services.cover_service import (
     _resample_time,
     build_descriptor,
     cover_similarity,
+    describe_oti,
     extract_chroma,
     normalize_frames,
     search,
@@ -97,6 +98,28 @@ def test_oti_bat_dung_luong_dich_cao_do(reference_descriptor, semitones):
     # Xoay đúng phải khá hơn hẳn so với không xoay
     assert score > float(query @ reference_descriptor)
     assert score > 0.8
+
+
+@pytest.mark.parametrize("semitones", [1, 2, 3, -1, -2, 5, -5])
+def test_mo_ta_oti_dung_chieu_va_do_lon(reference_descriptor, semitones):
+    """
+    Câu giải thích hiện trên màn Result phải nói đúng điều đã xảy ra với truy vấn:
+    dịch LÊN 1 bán cung cho OTI 11, và câu phải là "cao hơn 1", không phải "11".
+    Neo vào tín hiệu thật (hợp âm đã dịch), không vào công thức, để hai phía cùng sai
+    dấu thì test vẫn bắt được.
+    """
+    query = build_descriptor(chord(semitones), CHROMA_SR)
+    _, oti = cover_similarity(query, reference_descriptor)
+
+    direction = "cao" if semitones > 0 else "thấp"
+    assert describe_oti(oti) == (
+        f"OTI {oti}: truy vấn {direction} hơn bản gốc {abs(semitones)} bán cung")
+
+
+def test_mo_ta_oti_khong_lech_va_nua_quang_tam():
+    assert describe_oti(0) == "OTI 0: cùng cao độ với bản gốc"
+    assert describe_oti(12) == "OTI 0: cùng cao độ với bản gốc"
+    assert "nửa quãng tám" in describe_oti(6)
 
 
 def test_transpositions_dong_dau_la_chinh_no(reference_descriptor):

@@ -236,6 +236,23 @@ def cover_similarity(query_descriptor: np.ndarray,
     return float(scores[best]), best
 
 
+def describe_oti(oti: int) -> str:
+    """
+    OTI thành câu đọc được. OTI là số bán cung phải dịch truy vấn LÊN để khớp, nên
+    truy vấn lệch so với bản gốc (−OTI) mod 12: OTI 11 là truy vấn CAO hơn 1 bán
+    cung, không phải lệch gần một quãng tám như con số trần gợi ra. Quy về −5..+6;
+    lệch 6 bán cung thì hai chiều như nhau trên chroma.
+    """
+    k = int(oti) % N_CHROMA
+    if k == 0:
+        return "OTI 0: cùng cao độ với bản gốc"
+    shift = (-k) % N_CHROMA
+    if shift == N_CHROMA // 2:
+        return f"OTI {k}: lệch nửa quãng tám (6 bán cung, chroma không phân biệt được chiều)"
+    signed = shift - N_CHROMA if shift > N_CHROMA // 2 else shift
+    return f"OTI {k}: truy vấn {'cao' if signed > 0 else 'thấp'} hơn bản gốc {abs(signed)} bán cung"
+
+
 def search(query_descriptor: np.ndarray, reference_matrix: np.ndarray,
            top_k: int = 5, excluded_columns: list = None) -> list:
     """

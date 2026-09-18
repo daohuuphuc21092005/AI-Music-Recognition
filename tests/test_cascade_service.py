@@ -153,7 +153,29 @@ def test_cascade_stage3_cover_match_unit(monkeypatch):
     assert result["score"] == 0.985
     assert result["identity_confidence"] == 0.985
     assert result["evidence"]["cover"]["matched"] is True
-    assert "dịch cao độ 3 bán cung" in result["evidence"]["decision_reason"]
+    # OTI 3 = phải dịch truy vấn LÊN 3 bán cung mới khớp, tức truy vấn THẤP hơn 3
+    assert "OTI 3: truy vấn thấp hơn bản gốc 3 bán cung" in result["evidence"]["decision_reason"]
+
+
+def test_ly_do_khop_chinh_xac_ghi_nguong_hieu_dung(monkeypatch):
+    """
+    Truy vấn ngắn bị nâng ngưỡng: câu giải thích (hiện ngay trên màn Result) phải ghi
+    ngưỡng đã THỰC SỰ chấm, không phải τFP cơ sở.
+    """
+    from backend.services import cascade_service
+
+    monkeypatch.setattr(cascade_service, "search_fingerprint", lambda db, path: {
+        "match_type": "EXACT_MATCH", "recording_id": "rec_1", "fingerprint_score": 0.95,
+        "threshold": 0.38049666, "threshold_raised_for_short_query": True,
+        "query_duration": 6.0,
+    })
+
+    result = process_music_query("mock_audio.wav", db=object(), vector_index=None)
+    reason = result["evidence"]["decision_reason"]
+
+    assert result["match_type"] == "EXACT_MATCH"
+    assert ">= ngưỡng 0.3805" in reason
+    assert f"nâng từ {config.FP_THRESHOLD} vì truy vấn chỉ 6.0s" in reason
 
 
 def test_cascade_stage3_cover_below_threshold_returns_unknown(monkeypatch):

@@ -129,9 +129,15 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
                 "embedding": None,
                 "thresholds": thresholds,
                 "timings_ms": timings,
+                # Ngưỡng HIỆU DỤNG, không phải τFP: truy vấn ngắn bị nâng ngưỡng, và câu
+                # này hiện ngay trên màn Result — ghi τFP ở đó là nói sai điều đã chấm.
                 "decision_reason": (
                     f"Chromaprint đạt {fp_result['fingerprint_score']:.4f} "
-                    f">= ngưỡng {config.FP_THRESHOLD} -> khớp chính xác."
+                    f">= ngưỡng {round(fp_result.get('threshold', config.FP_THRESHOLD), 4)}"
+                    + (f" (nâng từ {config.FP_THRESHOLD} vì truy vấn chỉ "
+                       f"{fp_result['query_duration']:.1f}s)"
+                       if fp_result.get("threshold_raised_for_short_query") else "")
+                    + " -> khớp chính xác."
                 ),
             },
         }
@@ -234,7 +240,7 @@ def process_music_query(audio_path: str, db: Session, vector_index=None,
                             "timings_ms": timings,
                             "decision_reason": (
                                 f"Chromaprint và MERT dưới ngưỡng; Cover/OTI đạt {matched_score:.4f} "
-                                f">= {config.COVER_THRESHOLD} (dịch cao độ {matched_oti} bán cung) "
+                                f">= {config.COVER_THRESHOLD} ({cover_service.describe_oti(matched_oti)}) "
                                 f"-> nhận diện phiên bản/cover qua CQT chroma."
                             ),
                         },

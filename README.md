@@ -212,10 +212,10 @@ Bốn màn hình theo §13:
 
 | Màn hình | Nội dung |
 |---|---|
-| **1. Upload** | Kéo–thả hoặc chọn file · Nền tảng · Mục đích (phi thương mại / thương mại) · Bật kiếm tiền. Ba tuỳ chọn này là **đầu vào thật của Rule Engine**, không phải trang trí. |
+| **1. Upload** | Kéo–thả hoặc chọn file · Nền tảng · Mục đích (phi thương mại / thương mại) · Bật kiếm tiền. Ba tuỳ chọn này là **đầu vào thật của Rule Engine**, không phải trang trí. Máy chủ thiếu FFmpeg (theo `/health`) thì chọn file video bị báo ngay và khoá nút phân tích, thay vì tải lên rồi mới nhận `MODEL_FAILURE`. |
 | **2. Processing** | Bảy bước THẬT của pipeline, tô sáng theo trường `stage` mà backend ghi vào bảng `jobs` — **không có thanh chờ giả, không có "AI is thinking"**. Xong bước nào hiện độ trễ đo được của bước đó. |
-| **3. Result** | Nhận diện · Quyền & giấy phép · Mức rủi ro 🟢/🟡/🔴/⚪ · Khuyến nghị · **ba thanh độ tin cậy tách biệt** (identity / rights / decision) · nút phản hồi Correct / Incorrect / Unsure. |
-| **4. Evidence** | Điểm fingerprint và ngưỡng · bảng Top-K của MERT · luật Rule Engine đã kích hoạt · nguồn metadata quyền và ngày xác minh · PD của tác phẩm và PD của bản thu **để riêng** (§2) · độ trễ từng bước · JSON gốc. |
+| **3. Result** | Nhận diện · **căn cứ nhận diện** (điểm từng tầng so với ngưỡng của CHÍNH tầng đó — điểm Chromaprint, cosine MERT và điểm Cover không cùng thang) · Quyền & giấy phép · Mức rủi ro 🟢/🟡/🔴/⚪ · Khuyến nghị · **ba thanh độ tin cậy tách biệt** (identity / rights / decision; chưa định danh được thì thanh identity mờ đi và ghi rõ, vì đó là điểm cao nhất DƯỚI ngưỡng) · nút phản hồi Correct / Incorrect / Unsure. |
+| **4. Evidence** | Điểm fingerprint và ngưỡng hiệu dụng (ghi rõ khi bị nâng cho truy vấn ngắn) · tầng 1 lọc theo hash hay quét toàn bộ, và vì sao · bảng Top-K của MERT · tầng Cover: lệch cao độ quy từ OTI (OTI 11 = truy vấn cao hơn 1 bán cung) và hệ số nhịp của đoạn cắt thắng · luật Rule Engine đã kích hoạt · nguồn metadata quyền và ngày xác minh · PD của tác phẩm và PD của bản thu **để riêng** (§2) · độ trễ từng bước · JSON gốc. |
 
 Để màn hình Processing hiển thị được tiến trình thật, backend có thêm cột
 `jobs.stage` và một callback `on_stage` chạy xuyên `analyze_audio` →
