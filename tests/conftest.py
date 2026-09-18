@@ -8,9 +8,14 @@ import os
 
 import pytest
 
-from backend import config
-from backend.database.session import SessionLocal, check_connection
-from backend.services.fingerprint_service import find_fpcalc
+# Trước MỌI import từ backend: TestClient chạy lifespan, và làm nóng sẽ kéo MERT lên
+# GPU + giải mã ~24.000 fingerprint (~25 s) trong mỗi phiên test. Test riêng của
+# phần làm nóng gọi thẳng `backend.main.warm_up`.
+os.environ.setdefault("WARMUP_ON_STARTUP", "false")
+
+from backend import config  # noqa: E402
+from backend.database.session import SessionLocal, check_connection  # noqa: E402
+from backend.services.fingerprint_service import find_fpcalc  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEST_AUDIO = os.path.join(ROOT, "test.mp3")

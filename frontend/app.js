@@ -11,6 +11,7 @@
 
 const API = '/api/v1';
 const POLL_MS = 800;
+const WARMUP_POLL_MS = 5000;
 
 // Thứ tự phải khớp <li data-stage> trong index.html
 const STAGE_ORDER = [
@@ -119,6 +120,17 @@ async function apiError(response) {
 
 /* ─────────────────────────── Health ─────────────────────────── */
 
+const WARMUP_STATUS = { RUNNING: 'đang chạy', DONE: 'xong', DISABLED: 'tắt' };
+
+function describeWarmup(warmup) {
+  if (!warmup || !warmup.status) return 'không rõ';
+  if (warmup.status === 'DISABLED') return 'tắt — truy vấn đầu tiên sẽ chậm hơn';
+  const steps = Object.entries(warmup.steps || {}).map(([name, step]) =>
+    `${name} ${step.status}${step.seconds !== undefined ? ` ${step.seconds} s` : ''}`);
+  return `${WARMUP_STATUS[warmup.status] || warmup.status}`
+    + (steps.length ? ` (${steps.join(', ')})` : '');
+}
+
 async function checkHealth() {
   const box = $('#health');
   const dot = box.querySelector('.dot');
@@ -137,12 +149,19 @@ async function checkHealth() {
       `Rule Engine ${c.rule_engine.version || c.rule_engine.status}`,
       `τFP=${health.thresholds.fingerprint} τMERT=${health.thresholds.embedding} `
         + `τCover=${health.thresholds.cover}`,
+      `Làm nóng: ${describeWarmup(health.warmup)}`,
     ];
-    dot.className = `dot ${health.status === 'ONLINE' ? 'dot-ok' : 'dot-warn'}`;
-    text.textContent = health.status === 'ONLINE' ? 'Hệ thống sẵn sàng' : 'Hoạt động hạn chế';
+    // Máy chủ vừa bật: vẫn nhận file, nhưng truy vấn gửi lúc này chờ bộ đệm nạp xong
+    // (~25 s) — nói trước để người dùng không tưởng hệ thống treo ở bước Chromaprint.
+    const warming = Boolean(health.warmup) && health.warmup.status === 'RUNNING';
+    const online = health.status === 'ONLINE';
+    dot.className = `dot ${online && !warming ? 'dot-ok' : 'dot-warn'}`;
+    text.textContent = !online ? 'Hoạt động hạn chế'
+      : (warming ? 'Sẵn sàng · đang nạp bộ đệm' : 'Hệ thống sẵn sàng');
     box.title = bits.join('\n');
     state.videoSupported = c.ffmpeg === 'AVAILABLE';
     if (state.file) pickFile(state.file);   // file chọn trước khi health về: xét lại
+    if (warming) setTimeout(checkHealth, WARMUP_POLL_MS);
   } catch (_) {
     dot.className = 'dot dot-bad';
     text.textContent = 'Không kết nối được máy chủ';

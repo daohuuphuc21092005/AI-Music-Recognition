@@ -40,6 +40,7 @@ tập truy vấn 30 giây KHÔNG chuyển thẳng sang truy vấn ngắn đượ
 """
 import os
 import shutil
+import threading
 from functools import lru_cache
 
 import acoustid
@@ -283,7 +284,10 @@ def min_score_for_duration(duration: float) -> float:
     return max(FP_THRESHOLD, floor * NOISE_FLOOR_MARGIN)
 
 
-_reference_cache = {"signature": None, "rows": [], "undecodable": 0}
+_reference_cache = {"signature": None, "data": ([], 0)}
+# Giải mã 24.375 fingerprint mất ~20 s. Không khoá thì luồng làm nóng lúc khởi động
+# và request đến sớm (hay hai request đầu cùng lúc) giải mã cả bảng song song.
+_reference_lock = threading.Lock()
 
 
 def _reference_fingerprints(db: Session) -> tuple:
@@ -298,22 +302,28 @@ def _reference_fingerprints(db: Session) -> tuple:
         "SELECT count(*), min(fingerprint_id::text), max(fingerprint_id::text) FROM fingerprints"
     )).fetchone())
     if _reference_cache["signature"] != signature:
-        rows = db.execute(
-            text("SELECT recording_id, fingerprint, duration FROM fingerprints")
-        ).fetchall()
-        decoded, undecodable = [], 0
-        for rec_id, db_fp, db_duration in rows:
-            try:
-                vector = np.asarray(decode_fingerprint(_as_bytes(db_fp))[0], dtype=np.uint32)
-            except (InvalidFingerprintError, ValueError):
-                undecodable += 1  # một dòng hỏng không được làm sập cả truy vấn
-                continue
-            decoded.append((str(rec_id), vector, db_duration))
-        _reference_cache.update(signature=signature, rows=decoded, undecodable=undecodable)
-    return _reference_cache["rows"], _reference_cache["undecodable"]
+        with _reference_lock:
+            if _reference_cache["signature"] != signature:   # luồng trước đã nạp xong?
+                rows = db.execute(
+                    text("SELECT recording_id, fingerprint, duration FROM fingerprints")
+                ).fetchall()
+                decoded, undecodable = [], 0
+                for rec_id, db_fp, db_duration in rows:
+                    try:
+                        vector = np.asarray(decode_fingerprint(_as_bytes(db_fp))[0],
+                                            dtype=np.uint32)
+                    except (InvalidFingerprintError, ValueError):
+                        undecodable += 1  # một dòng hỏng không được làm sập cả truy vấn
+                        continue
+                    decoded.append((str(rec_id), vector, db_duration))
+                # Một phép gán cho cả cặp: luồng khác không đọc được rows mới đi với
+                # số dòng hỏng của lần nạp cũ.
+                _reference_cache.update(signature=signature, data=(decoded, undecodable))
+    return _reference_cache["data"]
 
 
-_hash_index_cache = {"key": None, "hashes": None, "owners": None}
+_hash_index_cache = {"key": None, "data": (None, None)}
+_hash_index_lock = threading.Lock()
 
 
 def _hash_index(references: list) -> tuple:
@@ -326,17 +336,31 @@ def _hash_index(references: list) -> tuple:
     """
     key = (id(references), len(references))
     if _hash_index_cache["key"] != key:
-        if references:
-            hashes = np.concatenate([vector for _, vector, _ in references])
-            owners = np.concatenate([np.full(vector.size, position, dtype=np.int32)
-                                     for position, (_, vector, _) in enumerate(references)])
-            order = np.argsort(hashes, kind="stable")
-            hashes, owners = hashes[order], owners[order]
-        else:
-            hashes = np.empty(0, dtype=np.uint32)
-            owners = np.empty(0, dtype=np.int32)
-        _hash_index_cache.update(key=key, hashes=hashes, owners=owners)
-    return _hash_index_cache["hashes"], _hash_index_cache["owners"]
+        with _hash_index_lock:
+            if _hash_index_cache["key"] != key:
+                if references:
+                    hashes = np.concatenate([vector for _, vector, _ in references])
+                    owners = np.concatenate([
+                        np.full(vector.size, position, dtype=np.int32)
+                        for position, (_, vector, _) in enumerate(references)])
+                    order = np.argsort(hashes, kind="stable")
+                    hashes, owners = hashes[order], owners[order]
+                else:
+                    hashes = np.empty(0, dtype=np.uint32)
+                    owners = np.empty(0, dtype=np.int32)
+                _hash_index_cache.update(key=key, data=(hashes, owners))
+    return _hash_index_cache["data"]
+
+
+def warm_up(db: Session) -> dict:
+    """
+    Nạp + giải mã fingerprint tham chiếu và dựng chỉ mục hash TRƯỚC truy vấn đầu tiên.
+    Đo trên 24.375 bản ghi: ~20,5 s + ~0,6 s; không làm nóng thì truy vấn đầu tiên sau
+    mỗi lần bật server gánh trọn khoản này ở bước "Chromaprint".
+    """
+    references, undecodable = _reference_fingerprints(db)
+    _hash_index(references)
+    return {"references": len(references), "undecodable": undecodable}
 
 
 def hash_hits(query_vec: np.ndarray, hashes: np.ndarray, owners: np.ndarray,

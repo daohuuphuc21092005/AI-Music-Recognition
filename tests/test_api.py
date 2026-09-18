@@ -24,6 +24,7 @@ def test_health_check_endpoint(client):
     assert components["chromaprint"]["status"] in ("AVAILABLE", "MISSING")
     assert components["rule_engine"]["status"] in ("READY", "UNAVAILABLE")
     assert "thresholds" in body
+    assert body["warmup"]["status"] in ("DISABLED", "RUNNING", "DONE")
 
 
 def test_dinh_dang_khong_ho_tro_tra_ma_loi_chuan(client):

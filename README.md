@@ -129,6 +129,13 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 
 Swagger UI: <http://localhost:8000/docs> · Health: <http://localhost:8000/health>
 
+**Làm nóng lúc khởi động** (`WARMUP_ON_STARTUP`, mặc định bật): server trả lời ngay,
+một luồng nền giải mã fingerprint tham chiếu, nạp MERT + suy luận thử và nạp chỉ mục
+Cover; `/health` báo tiến độ ở khoá `warmup`. Đo 2026-09-18 (24.375 bản ghi, GTX 1650):
+làm nóng ~24 s (fingerprint 19,7 s · MERT 3,1 s · Cover 1,5 s), sau đó truy vấn khớp
+tầng 1 đầu tiên mất **112 ms thay vì 21,1 s**, MERT lần đầu 1,1 s thay vì 4,6 s. Truy
+vấn gửi TRONG lúc làm nóng chờ bộ đệm đang nạp (có khoá) chứ không nạp lần hai.
+
 ### Chạy bằng Docker (backend + CSDL)
 
 `.env` trên máy host cần `POSTGRES_PASSWORD` và `AUDIO_ROOT` (thư mục audio corpus,
@@ -163,7 +170,9 @@ context 98 KB; trong image không có `.env`, `data/`, `.git`; tiến trình ch�
 container. `/health` ONLINE (CSDL qua hostname `db`, FAISS 48.750 vector, fpcalc,
 ffmpeg, Rule Engine, chỉ mục Cover). Truy vấn tempo 0.90 qua `POST /api/v1/search`:
 `COVER_MATCH` đúng bài nguồn, `tempo_factor` 0.9, 2,4 s. Truy vấn **đầu tiên** mất ~2
-phút vì tải MERT (đúng revision ghim) và dựng bộ đệm fingerprint.
+phút vì tải MERT (đúng revision ghim) và dựng bộ đệm fingerprint — đo TRƯỚC khi có làm
+nóng lúc khởi động; container chưa được đo lại (lần tải MERT đầu tiên vẫn mất thời
+gian, nhưng nay nằm trong luồng làm nóng thay vì trong truy vấn của người dùng).
 
 ---
 
@@ -171,7 +180,7 @@ phút vì tải MERT (đúng revision ghim) và dựng bộ đệm fingerprint.
 
 | Method | Endpoint | Mô tả |
 |---|---|---|
-| `GET` | `/health` | Trạng thái từng thành phần: database, faiss, chromaprint, ffmpeg, mert, rule_engine |
+| `GET` | `/health` | Trạng thái từng thành phần: database, faiss, chromaprint, ffmpeg, mert, rule_engine, cover · tiến độ làm nóng (`warmup`) |
 | `POST` | `/api/v1/analyze` | Upload + `platform` / `commercial_use` / `monetization` → trả `job_id` (202) |
 | `GET` | `/api/v1/jobs/{job_id}` | `QUEUED` / `PROCESSING` / `DONE` / `FAILED` |
 | `GET` | `/api/v1/results/{job_id}` | Kết quả đầy đủ: identity, match, rights, assessment, evidence |

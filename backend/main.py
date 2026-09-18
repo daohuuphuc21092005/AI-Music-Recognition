@@ -13,6 +13,8 @@ Những gì đã sửa ở Giai đoạn 0:
 """
 import logging
 import os
+import threading
+import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -22,8 +24,13 @@ from fastapi.staticfiles import StaticFiles
 
 from backend import config
 from backend.api.routes import router
-from backend.database.session import check_connection
-from backend.services import audio_service, embedding_service, fingerprint_service
+from backend.database.session import SessionLocal, check_connection
+from backend.services import (
+    audio_service,
+    cover_service,
+    embedding_service,
+    fingerprint_service,
+)
 from backend.services.decision_service import load_rules
 from backend.services.retrieval_service import load_index
 
@@ -32,6 +39,50 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
 )
 logger = logging.getLogger("music_rights_ai")
+
+
+def _warm_fingerprints() -> dict:
+    db = SessionLocal()
+    try:
+        return fingerprint_service.warm_up(db)
+    finally:
+        db.close()
+
+
+# lambda: tra hàm lúc CHẠY, không phải lúc import (để test thay được từng bước)
+WARMUP_STEPS = (
+    ("fingerprint", lambda: _warm_fingerprints()),
+    ("mert", lambda: embedding_service.warm_up()),
+    ("cover", lambda: cover_service.warm_up()),
+)
+
+
+def warm_up(report: dict, plan: dict) -> None:
+    """
+    Nạp trước các bộ đệm lười để truy vấn ĐẦU TIÊN không phải gánh chúng. Đo
+    2026-09-18 (24.375 bản ghi, GTX 1650): Chromaprint ~21 s, MERT ~4,4 s, Cover
+    ~0,7 s ở lần đầu, so với ~40 ms / ~0,8 s / ~0,2–1,4 s ở các lần sau.
+
+    Chạy trong luồng nền nên server trả lời ngay; request đến giữa chừng chờ trên
+    khoá của bộ đệm đang nạp chứ không nạp lần hai. Một bước hỏng chỉ ghi log — bộ
+    đệm đó vẫn nạp lười ở truy vấn đầu tiên như trước.
+    """
+    for name, step in WARMUP_STEPS:
+        if not plan.get(name):
+            report["steps"][name] = {"status": "SKIPPED"}
+            continue
+        started = time.perf_counter()
+        try:
+            step()
+            status = "READY"
+        except Exception:
+            # Nội dung lỗi có thể chứa đường dẫn máy chủ; /health là công khai -> log
+            logger.exception("Lam nong '%s' that bai", name)
+            status = "FAILED"
+        report["steps"][name] = {"status": status,
+                                 "seconds": round(time.perf_counter() - started, 1)}
+    report["status"] = "DONE"
+    logger.info("Lam nong xong: %s", report["steps"])
 
 
 @asynccontextmanager
@@ -85,6 +136,19 @@ async def lifespan(app: FastAPI):
         logger.warning(
             "FFmpeg khong kha dung -> chi xu ly duoc file audio, khong xu ly video."
         )
+
+    # Sau FAISS/rules/CSDL: chỉ làm nóng tầng sẽ thật sự chạy. Không có chỉ mục FAISS
+    # thì cascade báo MODEL_FAILURE trước khi gọi MERT; thiếu fpcalc thì bỏ tầng 1.
+    app.state.warmup = {"status": "DISABLED", "steps": {}}
+    if config.WARMUP_ON_STARTUP:
+        app.state.warmup = {"status": "RUNNING", "steps": {}}
+        plan = {
+            "fingerprint": db_ok and fingerprint_service.is_available(),
+            "mert": app.state.vector_index is not None,
+            "cover": config.COVER_ENABLED,
+        }
+        threading.Thread(target=warm_up, args=(app.state.warmup, plan),
+                         name="warmup", daemon=True).start()
 
     yield
 
@@ -176,9 +240,13 @@ def health_check():
         },
     }
     degraded = (not db_ok) or vector_index is None or app.state.rules_error is not None
+    warmup = getattr(app.state, "warmup", None) or {"status": "DISABLED", "steps": {}}
     return {
         "status": "DEGRADED" if degraded else "ONLINE",
         "components": components,
+        # Bản sao: luồng làm nóng vẫn đang ghi vào dict gốc trong lúc response
+        # được tuần tự hoá. Chỉ trạng thái + số giây, không có nội dung lỗi.
+        "warmup": {"status": warmup["status"], "steps": dict(warmup["steps"])},
         "thresholds": {
             "fingerprint": config.FP_THRESHOLD,
             "embedding": config.MERT_THRESHOLD,

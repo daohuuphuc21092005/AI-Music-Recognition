@@ -57,6 +57,7 @@ Mọi logic nghiệp vụ phải được tổ chức trong các service độc 
 - **Lỗi FILE và lỗi MÁY CHỦ phải ra hai mã khác nhau**: `embedding_service` ném `EmbeddingAudioError` (file không giải mã được → `NO_AUDIO`) hoặc `EmbeddingModelError` (không nạp/chạy được MERT → `MODEL_FAILURE`); không còn trả `None`. `fpcalc` không đọc được file (`AudioFingerprintError`) → `NO_AUDIO`.
 - **Không đưa nội dung ngoại lệ ra response**: stderr của FFmpeg và lỗi tầng Cover chỉ ghi log; evidence của Cover chỉ mang mã `COVER_STAGE_FAILED`.
 - **`/health` là endpoint công khai**: không trả `fpcalc_path` hay nội dung lỗi nạp index/rules — chỉ mã `INDEX_LOAD_FAILED` / `RULES_LOAD_FAILED`.
+- **Làm nóng lúc khởi động** (`backend/main.py::warm_up`, `WARMUP_ON_STARTUP`): luồng nền nạp bộ đệm fingerprint tham chiếu, MERT, chỉ mục Cover. `/health.warmup` = `{status: DISABLED|RUNNING|DONE, steps: {fingerprint|mert|cover: {status: READY|FAILED|SKIPPED, seconds}}}` — chỉ trạng thái và số giây, lỗi của từng bước chỉ vào log. Ba bộ đệm có khoá (double-checked) để request đến giữa lúc làm nóng chờ chứ không nạp lần hai (MERT hai bản trên GPU 4 GB). Bộ test tắt làm nóng trong `tests/conftest.py`.
 - **Ghi FAILED không được làm hỏng luồng lỗi** (`routes.safe_mark_failed`): CSDL sập thì ghi log, không ném tiếp.
 - **Không có mật khẩu CSDL mặc định trong mã nguồn**: thiếu `DATABASE_URL` thì kết nối thất bại, log khởi động báo rõ và `/health` ra `DEGRADED`.
 - Endpoint gọi mã chặn (`/analyze`, `/search`) khai báo `def` chứ không `async def`, để FastAPI đẩy sang threadpool thay vì chặn event loop.

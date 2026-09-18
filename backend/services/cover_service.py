@@ -21,6 +21,7 @@ Ngưỡng chấp nhận τCover phải hiệu chỉnh bằng EXP-07, không đư
 """
 import json
 import os
+import threading
 
 import librosa
 import numpy as np
@@ -52,6 +53,7 @@ class CoverIndex:
 
 _default_cover_index = None
 _index_loaded = False
+_index_lock = threading.Lock()
 
 
 def load_cover_index(matrix_path: str = None, id_map_path: str = None) -> CoverIndex | None:
@@ -72,12 +74,25 @@ def load_cover_index(matrix_path: str = None, id_map_path: str = None) -> CoverI
 
 
 def get_default_cover_index() -> CoverIndex | None:
-    """Lazy-load chỉ mục cover mặc định."""
+    """Lazy-load chỉ mục cover mặc định (an toàn khi gọi từ nhiều luồng)."""
     global _default_cover_index, _index_loaded
     if not _index_loaded:
-        _default_cover_index = load_cover_index()
-        _index_loaded = True
+        with _index_lock:
+            if not _index_loaded:
+                _default_cover_index = load_cover_index()
+                _index_loaded = True
     return _default_cover_index
+
+
+def warm_up() -> dict:
+    """
+    Nạp chỉ mục cover rồi tính thử descriptor của 2 giây hợp âm: lần tính CQT đầu
+    tiên của tiến trình chậm hơn các lần sau (~0,6 s đo trên máy dev).
+    """
+    index = get_default_cover_index()
+    t = np.arange(2 * CHROMA_SR, dtype=np.float32) / CHROMA_SR
+    build_descriptor(np.sin(2 * np.pi * 440.0 * t), CHROMA_SR)
+    return {"items": index.n_items if index else 0}
 
 
 class CoverFeatureError(RuntimeError):

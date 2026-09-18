@@ -9,6 +9,7 @@ dụng sập ngay từ khâu import.
 import gc
 import os
 import sys
+import threading
 
 # Xử lý tương thích môi trường: nếu torchvision bị lỗi nhị phân C++ (ví dụ: operator torchvision::nms does not exist),
 # cô lập torchvision để transformers không bị crash khi nạp dynamic module (audio retrieval không cần torchvision).
@@ -19,6 +20,7 @@ if "torchvision" not in sys.modules:
         sys.modules["torchvision"] = None
 
 import librosa
+import numpy as np
 import torch
 from transformers import AutoModel, Wav2Vec2FeatureExtractor
 
@@ -29,6 +31,9 @@ MODEL_NAME = config.MERT_MODEL
 _processor = None
 _model = None
 _device = None
+# Hai luồng cùng thấy _model là None (luồng làm nóng lúc khởi động + request đến
+# sớm) sẽ nạp model HAI lần lên GPU 4 GB. Khoá để luồng sau chờ luồng trước.
+_load_lock = threading.Lock()
 
 
 def is_loaded() -> bool:
@@ -57,17 +62,37 @@ def get_device() -> str:
 
 
 def load_model():
-    """Nạp processor + model (idempotent). Gọi lúc startup để 'làm nóng'."""
+    """Nạp processor + model (idempotent, an toàn khi gọi từ nhiều luồng)."""
     global _processor, _model
     if _model is None:
-        revision = config.MERT_MODEL_REVISION or None
-        _processor = Wav2Vec2FeatureExtractor.from_pretrained(
-            MODEL_NAME, trust_remote_code=True, revision=revision
-        )
-        _model = AutoModel.from_pretrained(MODEL_NAME, trust_remote_code=True, revision=revision)
-        _model.eval()
-        _model.to(get_device())
+        with _load_lock:
+            if _model is None:
+                revision = config.MERT_MODEL_REVISION or None
+                processor = Wav2Vec2FeatureExtractor.from_pretrained(
+                    MODEL_NAME, trust_remote_code=True, revision=revision
+                )
+                model = AutoModel.from_pretrained(MODEL_NAME, trust_remote_code=True,
+                                                  revision=revision)
+                model.eval()
+                model.to(get_device())
+                # Gán SAU CÙNG: bản cũ gán _model trước .to(device), nên luồng khác
+                # thấy _model khác None có thể lấy model còn nằm ở CPU.
+                _processor, _model = processor, model
     return _processor, _model
+
+
+def warm_up() -> None:
+    """
+    Nạp model rồi suy luận thử 1 giây im lặng. Đo trên GTX 1650: nạp ~3,0 s, và lần
+    suy luận ĐẦU TIÊN chậm hơn các lần sau ~1,4 s (khởi tạo CUDA) — nạp thôi thì
+    truy vấn đầu tiên vẫn gánh khoản sau.
+    """
+    processor, model = load_model()
+    sr = config.MERT_SAMPLE_RATE
+    inputs = processor(np.zeros(sr, dtype=np.float32), sampling_rate=sr,
+                       return_tensors="pt").to(get_device())
+    with torch.inference_mode():
+        model(**inputs)
 
 
 class EmbeddingModelError(RuntimeError):

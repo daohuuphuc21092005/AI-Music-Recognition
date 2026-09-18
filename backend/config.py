@@ -236,6 +236,12 @@ MERT_SAMPLE_RATE = _get_int("MERT_SAMPLE_RATE", 24000)
 MERT_MAX_DURATION = _get_float("MERT_MAX_DURATION", 30.0)
 EMBEDDING_DIM = _get_int("EMBEDDING_DIM", 768)
 
+# Làm nóng lúc khởi động (luồng nền, server trả lời ngay): giải mã fingerprint tham
+# chiếu (~20 s ở 24.375 bản ghi), nạp MERT + suy luận thử (~4 s), nạp chỉ mục Cover.
+# Tắt thì truy vấn ĐẦU TIÊN sau mỗi lần bật server gánh ~27 s thay vì ~2 s. Bộ test
+# tắt mục này (tests/conftest.py) để TestClient không kéo MERT lên GPU.
+WARMUP_ON_STARTUP = _get("WARMUP_ON_STARTUP", "true").lower() in ("true", "1", "yes")
+
 MAX_UPLOAD_MB = _get_int("MAX_UPLOAD_MB", 100)
 ALLOWED_EXTENSIONS = tuple(
     e.strip().lower()
