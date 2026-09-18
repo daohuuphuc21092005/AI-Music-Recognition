@@ -53,7 +53,7 @@ Tài liệu này đóng vai trò là **bộ nhớ ngữ cảnh liên tục** (Pe
   - [x] `train_license_classifier.py --sweep` trên 24.375 mẫu → C=100. Xong 2026-09-16, nhưng vẫn dưới baseline (xem nhật ký).
   - [ ] **Nới lưới sweep license (C=300, 1000)**: tổng lỗi vẫn giảm tới rìa lưới C=100 nên chưa biết điểm tối ưu nằm ở đâu.
   - [ ] **Dịch cao độ còn 71% ở cascade** (EXP-05): Cover luôn xếp đúng bài trong top-5 (1.000) nhưng điểm nhiều truy vấn dưới τCover 0.90 — hướng tiếp theo nếu cần, KHÔNG hạ τ khi chưa đo lại FMR.
-  - [ ] **Python 3.12 bị gỡ khỏi máy lúc 10:40 ngày 2026-09-18** (không do Claude; nhiều khả năng lúc dọn ổ C): mất `python.exe`/DLL/mục đăng ký, còn `Lib/` 4,1 GB gói pip. Đây là trình thông dịch chạy mọi test + thí nghiệm (torch 2.13.0+cu130, transformers 5.15.1). Chờ chủ dự án quyết cài lại hay chuyển sang môi trường khác.
+  - [x] **Python 3.12 hệ thống bị gỡ khỏi máy lúc 10:40 ngày 2026-09-18** (không do Claude; nhiều khả năng lúc dọn ổ C): mất `python.exe`/DLL, còn `...\Programs\Python\Python312\Lib\` 4,1 GB gói pip. **Từ nay dùng `C:\Users\daohu\anaconda3\envs\music-ai\python.exe`** (Python 3.12.13, torch 2.13.0+cu130 thấy GPU, transformers 4.57.6): 255 test pass / 2 skip, và embedding tính lại cho 20 đoạn trùng khít vector trong chỉ mục (cosine nhỏ nhất 1.000000) — chỉ mục dựng bằng transformers 5.15.1 vẫn dùng được. `requirements.txt` (ghim 5.15.1, dùng cho Docker) vẫn đúng: đã kiểm trong container.
   - [ ] Đánh giá và tối ưu hóa UI/UX Frontend trên trình duyệt.
   - [ ] (chưa làm) 3 nguồn dataset ngoài FMA/Jamendo: YouTube Audio Library, Public Domain, Cover dataset thật (SecondHandSongs subset).
 
