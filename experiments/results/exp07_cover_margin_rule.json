@@ -1,0 +1,498 @@
+{
+  "experiment_id": "exp07_cover_margin_rule",
+  "date": "2026-09-18T22:19:19",
+  "git_commit": "f146fe2",
+  "git_dirty": true,
+  "dataset_version": {
+    "metadata_master.csv": {
+      "bytes": 41673661,
+      "mtime": "2026-09-16T22:06:30"
+    },
+    "rights_master.csv": {
+      "bytes": 61585559,
+      "mtime": "2026-09-16T22:06:32"
+    },
+    "fingerprints_master.csv": {
+      "bytes": 22719740,
+      "mtime": "2026-09-15T21:59:11"
+    },
+    "embeddings_master.csv": {
+      "bytes": 803900847,
+      "mtime": "2026-09-16T16:55:30"
+    }
+  },
+  "model": {
+    "name": "m-a-p/MERT-v1-95M",
+    "version": "MERT-v1-95M",
+    "embedding_dim": 768,
+    "pooling": "mean",
+    "sample_rate": 24000
+  },
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "parameters": {
+    "tau_cover_production": 0.9,
+    "cover_tempo_factors": [
+      0.9,
+      0.95,
+      1.0,
+      1.05,
+      1.1
+    ],
+    "cover_index_items": 24375,
+    "queries": 1900,
+    "sources_selected": 100,
+    "grid": {
+      "tau_abs": [
+        0.9,
+        null
+      ],
+      "tau_low": [
+        0.6,
+        0.65,
+        0.7,
+        0.75,
+        0.8,
+        0.85,
+        0.9
+      ],
+      "delta": [
+        0.0,
+        0.01,
+        0.02,
+        0.03,
+        0.04,
+        0.05,
+        0.06,
+        0.07,
+        0.08,
+        0.09,
+        0.1,
+        0.11,
+        0.12,
+        0.13,
+        0.14,
+        0.15,
+        0.16,
+        0.17,
+        0.18,
+        0.19,
+        0.2
+      ],
+      "variants": [
+        "any",
+        "dedup"
+      ]
+    },
+    "selection": "nhiễu 0 -> FMR <= 0.005 (không có thì 0.05) -> recall -> precision -> luật chặt hơn",
+    "cross_validation": "2 nửa theo bài nguồn (thứ tự sắp xếp recording_id, chẵn/lẻ)",
+    "held_out_exclusions": {
+      "near_duplicate_min_score": 0.1,
+      "neighbour_floor": 0.05,
+      "sources": 100,
+      "sources_with_exact_duplicates": 0,
+      "sources_with_near_duplicates": 3,
+      "near_duplicates": {
+        "a40c38ef-ebd7-40eb-8fee-54e2433d6ece": [
+          [
+            "1734e102-f967-413e-917c-49252bdf4da3",
+            0.1855
+          ]
+        ],
+        "b46b4470-cef5-470d-83d4-8f3321413278": [
+          [
+            "d262695b-bace-430a-aa69-95db70558233",
+            0.267
+          ]
+        ],
+        "56b9b622-8934-440c-8696-47685c474057": [
+          [
+            "d095922f-8b8c-4009-9c89-5a04b6410ecf",
+            0.1584
+          ]
+        ]
+      },
+      "overlay_pairs": 100
+    }
+  },
+  "metrics": {
+    "rule_comparison": {
+      "baseline": {
+        "rule_text": "s1 ≥ 0.9 (production)",
+        "precision": 0.9952,
+        "recall": 0.7663,
+        "f1": 0.8659,
+        "accepted": 1463,
+        "correct": 1456,
+        "queries": 1900,
+        "false_match_rate": 0.0011,
+        "false_matches": 2,
+        "noise_matches": 0,
+        "per_family_recall": {
+          "Dịch cao độ": {
+            "n": 400,
+            "recall": 0.71
+          },
+          "Đổi tốc độ": {
+            "n": 400,
+            "recall": 0.795
+          },
+          "Cắt đoạn": {
+            "n": 300,
+            "recall": 0.3333
+          },
+          "Nén codec": {
+            "n": 200,
+            "recall": 1.0
+          },
+          "Nhiễu": {
+            "n": 300,
+            "recall": 0.99
+          },
+          "Biên độ / EQ": {
+            "n": 200,
+            "recall": 1.0
+          },
+          "Chồng âm": {
+            "n": 100,
+            "recall": 0.57
+          }
+        },
+        "wrong_accepts": {
+          "audio_overlay": 5,
+          "crop_10s": 1,
+          "crop_15s": 1
+        },
+        "overlay_wrong_is_mixed_in_song": 5,
+        "held_out_false_matches": {
+          "crop_10s": 1,
+          "crop_15s": 1
+        }
+      },
+      "conservative": {
+        "rule_text": "s1 ≥ 0.9 hoặc (s1 ≥ 0.7 và s1 − s2[any] ≥ 0.08)",
+        "precision": 0.9905,
+        "recall": 0.8821,
+        "f1": 0.9332,
+        "accepted": 1692,
+        "correct": 1676,
+        "queries": 1900,
+        "false_match_rate": 0.0011,
+        "false_matches": 2,
+        "noise_matches": 0,
+        "per_family_recall": {
+          "Dịch cao độ": {
+            "n": 400,
+            "recall": 0.995
+          },
+          "Đổi tốc độ": {
+            "n": 400,
+            "recall": 1.0
+          },
+          "Cắt đoạn": {
+            "n": 300,
+            "recall": 0.3333
+          },
+          "Nén codec": {
+            "n": 200,
+            "recall": 1.0
+          },
+          "Nhiễu": {
+            "n": 300,
+            "recall": 1.0
+          },
+          "Biên độ / EQ": {
+            "n": 200,
+            "recall": 1.0
+          },
+          "Chồng âm": {
+            "n": 100,
+            "recall": 0.78
+          }
+        },
+        "wrong_accepts": {
+          "audio_overlay": 14,
+          "crop_10s": 1,
+          "crop_15s": 1
+        },
+        "overlay_wrong_is_mixed_in_song": 14,
+        "held_out_false_matches": {
+          "crop_10s": 1,
+          "crop_15s": 1
+        }
+      },
+      "best_in_sample": {
+        "rule_text": "(s1 ≥ 0.7 và s1 − s2[any] ≥ 0.05)",
+        "precision": 0.99,
+        "recall": 0.8832,
+        "f1": 0.9335,
+        "accepted": 1695,
+        "correct": 1678,
+        "queries": 1900,
+        "false_match_rate": 0.0021,
+        "false_matches": 4,
+        "noise_matches": 0,
+        "per_family_recall": {
+          "Dịch cao độ": {
+            "n": 400,
+            "recall": 0.995
+          },
+          "Đổi tốc độ": {
+            "n": 400,
+            "recall": 1.0
+          },
+          "Cắt đoạn": {
+            "n": 300,
+            "recall": 0.3333
+          },
+          "Nén codec": {
+            "n": 200,
+            "recall": 1.0
+          },
+          "Nhiễu": {
+            "n": 300,
+            "recall": 1.0
+          },
+          "Biên độ / EQ": {
+            "n": 200,
+            "recall": 1.0
+          },
+          "Chồng âm": {
+            "n": 100,
+            "recall": 0.8
+          }
+        },
+        "wrong_accepts": {
+          "audio_overlay": 15,
+          "crop_10s": 2
+        },
+        "overlay_wrong_is_mixed_in_song": 15,
+        "held_out_false_matches": {
+          "crop_10s": 2,
+          "pitch_plus_2": 1,
+          "tempo_0_95": 1
+        }
+      }
+    },
+    "baseline": {
+      "rule": "s1 ≥ 0.9 (production)",
+      "precision": 0.9952,
+      "recall": 0.7663,
+      "f1": 0.8659,
+      "accepted": 1463,
+      "correct": 1456,
+      "queries": 1900,
+      "false_match_rate": 0.0011,
+      "false_matches": 2,
+      "noise_matches": 0,
+      "per_family_recall": {
+        "Dịch cao độ": {
+          "n": 400,
+          "recall": 0.71
+        },
+        "Đổi tốc độ": {
+          "n": 400,
+          "recall": 0.795
+        },
+        "Cắt đoạn": {
+          "n": 300,
+          "recall": 0.3333
+        },
+        "Nén codec": {
+          "n": 200,
+          "recall": 1.0
+        },
+        "Nhiễu": {
+          "n": 300,
+          "recall": 0.99
+        },
+        "Biên độ / EQ": {
+          "n": 200,
+          "recall": 1.0
+        },
+        "Chồng âm": {
+          "n": 100,
+          "recall": 0.57
+        }
+      }
+    },
+    "best_in_sample": {
+      "rule": {
+        "tau_abs": null,
+        "tau_low": 0.7,
+        "delta": 0.05,
+        "variant": "any"
+      },
+      "rule_text": "(s1 ≥ 0.7 và s1 − s2[any] ≥ 0.05)",
+      "fmr_bound": 0.005,
+      "precision": 0.99,
+      "recall": 0.8832,
+      "f1": 0.9335,
+      "accepted": 1695,
+      "correct": 1678,
+      "queries": 1900,
+      "false_match_rate": 0.0021,
+      "false_matches": 4,
+      "noise_matches": 0,
+      "per_family_recall": {
+        "Dịch cao độ": {
+          "n": 400,
+          "recall": 0.995
+        },
+        "Đổi tốc độ": {
+          "n": 400,
+          "recall": 1.0
+        },
+        "Cắt đoạn": {
+          "n": 300,
+          "recall": 0.3333
+        },
+        "Nén codec": {
+          "n": 200,
+          "recall": 1.0
+        },
+        "Nhiễu": {
+          "n": 300,
+          "recall": 1.0
+        },
+        "Biên độ / EQ": {
+          "n": 200,
+          "recall": 1.0
+        },
+        "Chồng âm": {
+          "n": 100,
+          "recall": 0.8
+        }
+      }
+    },
+    "cross_validated": [
+      {
+        "fold": 0,
+        "tune_queries": 950,
+        "test_queries": 950,
+        "rule": {
+          "tau_abs": 0.9,
+          "tau_low": 0.7,
+          "delta": 0.08,
+          "variant": "any"
+        },
+        "bound": 0.005,
+        "test": {
+          "precision": 0.9893,
+          "recall": 0.8779,
+          "f1": 0.9303,
+          "accepted": 843,
+          "correct": 834,
+          "queries": 950,
+          "false_match_rate": 0.0,
+          "false_matches": 0,
+          "noise_matches": 0
+        },
+        "test_baseline": {
+          "precision": 0.9944,
+          "recall": 0.7432,
+          "f1": 0.8506,
+          "accepted": 710,
+          "correct": 706,
+          "queries": 950,
+          "false_match_rate": 0.0,
+          "false_matches": 0,
+          "noise_matches": 0
+        }
+      },
+      {
+        "fold": 1,
+        "tune_queries": 950,
+        "test_queries": 950,
+        "rule": {
+          "tau_abs": 0.9,
+          "tau_low": 0.7,
+          "delta": 0.05,
+          "variant": "any"
+        },
+        "bound": 0.005,
+        "test": {
+          "precision": 0.9894,
+          "recall": 0.8863,
+          "f1": 0.935,
+          "accepted": 851,
+          "correct": 842,
+          "queries": 950,
+          "false_match_rate": 0.0053,
+          "false_matches": 5,
+          "noise_matches": 0
+        },
+        "test_baseline": {
+          "precision": 0.996,
+          "recall": 0.7895,
+          "f1": 0.8808,
+          "accepted": 753,
+          "correct": 750,
+          "queries": 950,
+          "false_match_rate": 0.0021,
+          "false_matches": 2,
+          "noise_matches": 0
+        }
+      }
+    ],
+    "margin_distribution": {
+      "any": {
+        "known_correct_below_tau": {
+          "count": 232,
+          "p05": 0.0905,
+          "p25": 0.2252,
+          "p50": 0.3151,
+          "p75": 0.4068,
+          "p95": 0.4671
+        },
+        "held_out_top1": {
+          "count": 1900,
+          "p05": 0.0006,
+          "p25": 0.0034,
+          "p50": 0.0087,
+          "p75": 0.0186,
+          "p95": 0.0436
+        },
+        "held_out_top1_s1_ge_0.80": {
+          "count": 104,
+          "p05": 0.0003,
+          "p25": 0.0035,
+          "p50": 0.0068,
+          "p75": 0.0164,
+          "p95": 0.0314
+        }
+      },
+      "dedup": {
+        "known_correct_below_tau": {
+          "count": 232,
+          "p05": 0.0905,
+          "p25": 0.2252,
+          "p50": 0.3151,
+          "p75": 0.4068,
+          "p95": 0.4671
+        },
+        "held_out_top1": {
+          "count": 1900,
+          "p05": 0.0007,
+          "p25": 0.0034,
+          "p50": 0.0088,
+          "p75": 0.0187,
+          "p95": 0.0436
+        },
+        "held_out_top1_s1_ge_0.80": {
+          "count": 104,
+          "p05": 0.0003,
+          "p25": 0.0035,
+          "p50": 0.0068,
+          "p75": 0.0164,
+          "p95": 0.0314
+        }
+      }
+    },
+    "noise_max_s1": 0.7347,
+    "rules_evaluated": 588
+  },
+  "notes": "Chỉ đo, production vẫn dùng s1 >= tauCover. Số đọc chính là cross_validated.test: luật chọn trên một nửa bài nguồn, chấm trên nửa kia."
+}

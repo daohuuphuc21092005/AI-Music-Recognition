@@ -496,6 +496,32 @@ nhận truy vấn pitch nào. Không mâu thuẫn — ở đây chấm **xếp h
 đúng nhưng bị từ chối. **Điểm mù đó đến từ ngưỡng, không phải từ năng lực model** —
 mà ngưỡng buộc phải chặt để giữ FMR ≤ 5%.
 
+#### EXP-07b — Luật chấp nhận theo khoảng cách hạng 1 – hạng 2 (chỉ đo, CHƯA bật)
+
+Tầng Cover cũng gặp đúng chuyện đó: trên chỉ mục 24.375 bài, nó xếp đúng bài ở hạng 1
+cho **400/400** truy vấn dịch cao độ và 400/400 đổi nhịp (EXP-04), nhưng 116 và 82
+truy vấn bị loại vì điểm tuyệt đối < τCover 0.90. Khoảng cách giữa hạng 1 và hạng 2
+tách hai nhóm rất rõ: bài có trong CSDL mà điểm dưới τ có khoảng cách trung vị
+**0.315** (5% thấp nhất 0.09), còn bài lạ (held-out) chỉ **0.009** (95% dưới 0.044).
+`python experiments/exp07_cover/margin_rule.py --sources 100` (~25 phút, cùng điều kiện
+server với EXP-07) đo luật `s1 ≥ τ_abs HOẶC (s1 ≥ τ_low VÀ s1 − s2 ≥ δ)`:
+
+| Luật (1.900 truy vấn) | Precision | Recall | Nhận nhầm bài lạ | Nhiễu | Dịch cao độ | Đổi nhịp | Chồng âm |
+|---|---|---|---|---|---|---|---|
+| Production: `s1 ≥ 0.90` | 0.9952 | 0.7663 | 2 (0,11%) | 0 | 71% | 79,5% | 57% |
+| `s1 ≥ 0.90` hoặc `(s1 ≥ 0.70` và `s1 − s2 ≥ 0.08)` | 0.9905 | **0.8821** | **2 (0,11%)** | 0 | **99,5%** | **100%** | 78% |
+
+Hai lượt nhận nhầm ở cả hai dòng là **cùng** hai đoạn cắt 10/15 giây mà luật hiện
+tại vốn đã nhận nhầm — nhánh khoảng cách không thêm lượt nào trên 1.900 truy vấn
+held-out. Precision giảm vì nhóm chồng âm: cả 14 lần "nhận sai bài" đều là nhận ra
+**bài bị trộn chồng** (có thật trong audio và trong CSDL; pipeline chỉ báo một bài
+mỗi truy vấn). Số đọc chính là **kiểm tra chéo** — chọn luật trên một nửa bài nguồn,
+chấm trên nửa kia: recall 0.7432 → **0.8779** (nhận nhầm 0 → 0) và 0.7895 → **0.8863**
+(0,21% → 0,53%, 5/950 — nửa này bộ chọn lấy δ 0.05 chứ không phải 0.08). δ = 0.08
+là lựa chọn SAU KHI đã thấy số, nên bảng trên không phải ước lượng khách quan.
+**Production chưa đổi**: như τFP, đổi luật chấp nhận là quyết định của chủ dự án, và
+bật thì phải chạy lại EXP-04/05/08.
+
 
 ### EXP-09 — Bản quyền có học được từ âm thanh không?
 
