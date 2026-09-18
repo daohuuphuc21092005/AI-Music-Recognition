@@ -58,7 +58,11 @@ SEED = 42
 DEFAULT_C = 1.0
 # C nhỏ ép trọng số về 0: mô hình đơn giản, lỗi độ chênh cao. C lớn để mô hình bám
 # sát tập train: lỗi phương sai cao. Thang log vì hiệu ứng của C là theo bậc độ lớn.
-COMPLEXITY_GRID = (0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0)
+# Nới tới 3000 (2026-09-18): lưới cũ dừng ở 100 trong khi tổng lỗi vẫn giảm tới đúng
+# mức đó, nên "chọn C = 100" có thể chỉ là giới hạn của lưới chứ không phải tối ưu.
+COMPLEXITY_GRID = (0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0, 10.0, 30.0, 100.0,
+                   300.0, 1000.0, 3000.0)
+MAX_ITER = 2000
 SWEEP_EXPERIMENT_ID = "exp09_license_complexity_sweep"
 # Nhãn từ các nguồn này không phải giấy phép thật — học từ chúng là học nhiễu.
 UNTRUSTED_LABEL_SOURCES = ("SIMULATED", "PREDICTED")
@@ -117,7 +121,7 @@ def load_dataset(target: str):
 
 
 def build_model(C: float = DEFAULT_C):
-    return LogisticRegression(max_iter=2000, C=C,
+    return LogisticRegression(max_iter=MAX_ITER, C=C,
                               class_weight="balanced", random_state=SEED)
 
 
@@ -135,10 +139,11 @@ def validate_by_artist(X, y, groups, C: float = DEFAULT_C) -> dict:
 
     splitter = StratifiedGroupKFold(FOLDS, shuffle=True, random_state=SEED)
     true_all, pred_all = [], []
-    train_accuracy, train_macro_f1 = [], []
+    train_accuracy, train_macro_f1, iterations = [], [], []
     for train_idx, test_idx in splitter.split(X, y, groups):
         model = build_model(C)
         model.fit(X[train_idx], y[train_idx])
+        iterations.append(int(np.max(model.n_iter_)))
         fitted = model.predict(X[train_idx])
         train_accuracy.append(accuracy_score(y[train_idx], fitted))
         train_macro_f1.append(f1_score(y[train_idx], fitted, average="macro", zero_division=0))
@@ -165,6 +170,10 @@ def validate_by_artist(X, y, groups, C: float = DEFAULT_C) -> dict:
         "accuracy_vs_baseline": round(accuracy - majority, 4),
         "beats_baseline": bool(accuracy > majority),
         "macro_f1_beats_baseline": bool(macro_f1 > baseline_macro_f1),
+        # Chạm trần vòng lặp thì con số là của một mô hình CHƯA hội tụ — thường gặp ở
+        # C lớn (regularization yếu). Ghi lại để không đọc nhầm thành tối ưu thật.
+        "max_iterations_used": max(iterations),
+        "converged": bool(max(iterations) < MAX_ITER),
     }
 
 
@@ -188,10 +197,15 @@ def complexity_sweep(X, y, groups) -> dict:
                      "total_error": round(total, 4)})
         print(f"  C={C:<7g} train_f1={result['train_macro_f1']:.4f}  "
               f"val_f1={result['macro_f1']:.4f}  lỗi độ chênh={bias:.4f}  "
-              f"lỗi phương sai={total - bias:.4f}  tổng lỗi={total:.4f}", flush=True)
+              f"lỗi phương sai={total - bias:.4f}  tổng lỗi={total:.4f}"
+              f"{'' if result['converged'] else '  (CHƯA hội tụ)'}", flush=True)
     # Hoà điểm thì chọn C nhỏ hơn: cùng lỗi thì mô hình đơn giản hơn an toàn hơn.
     selected = min(grid, key=lambda row: (row["total_error"], row["C"]))
-    return {"grid": grid, "selected": selected}
+    at_edge = selected["C"] == max(row["C"] for row in grid)
+    if at_edge:
+        print(f"⚠️  C được chọn ({selected['C']:g}) nằm ở RÌA lưới — tổng lỗi có thể còn giảm "
+              f"tiếp; nới lưới trước khi tin đây là tối ưu.")
+    return {"grid": grid, "selected": selected, "selected_at_grid_edge": at_edge}
 
 
 def main() -> int:
@@ -233,6 +247,7 @@ def main() -> int:
                 "label_sources": "loại nhãn có source SIMULATED/PREDICTED",
             },
             metrics={"selected_C": validation["C"], "selected": validation,
+                     "selected_at_grid_edge": sweep["selected_at_grid_edge"],
                      "grid": sweep["grid"]},
             notes=("Lỗi độ chênh ≈ 1 − macro-F1 trên tập train; lỗi phương sai ≈ khoảng "
                    "cách train↔kiểm định; tổng lỗi = 1 − macro-F1 kiểm định với nghệ sĩ "
