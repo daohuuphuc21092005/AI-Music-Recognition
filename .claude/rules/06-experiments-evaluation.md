@@ -104,8 +104,9 @@ Mỗi thí nghiệm phải ghi nhận vào file cấu hình (CSV/JSON, không b�
   - Kiểm định "giấy phép có đoán được từ embedding MERT không" bằng split theo **nghệ sĩ** (nghệ sĩ trong test là mới) — đúng tình huống bài ngoài cơ sở dữ liệu.
   - Kết quả gốc: accuracy 0.382 < baseline lớp phổ biến 0.569. Bộ phân loại chỉ sinh quyền `PREDICTED`, và cổng dữ liệu quyền (`rights_gate`) hạ mọi kết luận từ nguồn này về `UNKNOWN`.
 - **License Complexity Sweep** (`python scripts/train_license_classifier.py --sweep` → `experiments/results/exp09_license_complexity_sweep.json`):
-  - Quét `C` của LogisticRegression trên thang log (0.001 → 100), cùng giao thức split theo nghệ sĩ; chỉ dùng nhãn từ nguồn thật (loại `SIMULATED`/`PREDICTED`).
-  - Mỗi mức ghi: lỗi độ chênh ≈ 1 − macro-F1 train, lỗi phương sai ≈ khoảng cách train↔kiểm định, tổng lỗi = 1 − macro-F1 kiểm định. Chọn C có tổng lỗi thấp nhất (hoà → C nhỏ hơn).
+  - Quét `C` của LogisticRegression trên thang log (0.001 → 3000), cùng giao thức split theo nghệ sĩ; chỉ dùng nhãn từ nguồn thật (loại `SIMULATED`/`PREDICTED`).
+  - Mỗi mức ghi: lỗi độ chênh ≈ 1 − macro-F1 train, lỗi phương sai ≈ khoảng cách train↔kiểm định, tổng lỗi = 1 − macro-F1 kiểm định, và `converged` (số vòng lặp < `MAX_ITER`). Chọn C có tổng lỗi thấp nhất (hoà → C nhỏ hơn); **C được chọn nằm ở rìa lưới (`selected_at_grid_edge`) thì phải nới lưới trước khi tin** — lưới cũ dừng ở 100 và đã chọn đúng 100.
+  - Kết quả hiện tại (24.375 mẫu, 2026-09-18): tổng lỗi hình chữ U, thấp nhất ở **C = 300** (0.8158; C = 1000: 0.8160, C = 3000: 0.8177), mọi mức hội tụ. Vẫn **dưới baseline accuracy** (0.3007 so với 0.4153); chỉ macro-F1 vượt baseline (0.1842 so với 0.0838).
   - Luôn báo cáo kèm baseline accuracy và baseline macro-F1. Chạy lại mỗi khi tập bản ghi có audio + nhãn thật đổi quy mô.
 
 ---
