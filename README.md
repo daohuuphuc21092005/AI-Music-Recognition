@@ -2,6 +2,17 @@
 
 > Hệ thống AI nhận diện âm nhạc đa tầng (Hybrid Cascade) kết hợp Audio Fingerprinting và Deep Retrieval 768 chiều, phục vụ tra cứu bản quyền tự động.
 
+**Cách đọc README này (rà lại ngày 2026-09-19):**
+
+- Mọi số liệu thí nghiệm dẫn nguồn là một file trong `experiments/results/`. Số của một
+  lượt chạy CŨ được trích kèm commit, ví dụ
+  `git show 577f189:experiments/results/exp08_end_to_end.json`.
+- Số đếm dữ liệu lấy từ các CSV được theo dõi trong `data/processed/`.
+- `[unverified]` = chưa kiểm chứng được trong lần rà này: số đo tay không có file kết
+  quả đi kèm, hoặc lệnh không được chạy lại vì sẽ ghi đè dữ liệu/môi trường.
+- `§n` là mục trong `.claude/CLAUDE.md` (tài liệu định hướng); `ĐC §n` là mục trong
+  `docs/DE_CUONG.md` (đề cương). Hai tài liệu đánh số mục khác nhau.
+
 ---
 
 ## 📌 Tổng quan kiến trúc
@@ -19,7 +30,10 @@ INPUT (audio/video)
   `backend/services/chromaprint_codec.py` (thuần Python, không cần thư viện native)
   và so khớp bằng thuật toán bit-error của Chromaprint đã vector hoá bằng numpy.
   Chỉ chấm đầy đủ 50 bản ghi có nhiều hash trùng nhất (quay về quét toàn bộ khi
-  điểm sát ngưỡng): đối chứng 1.900 truy vấn 0 lệch quyết định, ~110 ms thay vì ~4,5 s.
+  điểm sát ngưỡng): trên 1.900 truy vấn của EXP-04, tầng 1 trung bình 147 ms (P50 41 ms,
+  `experiments/results/exp04_hybrid_cascade.json`), so với 4,6 s khi quét toàn bộ ở
+  EXP-01 (`experiments/results/exp01_fingerprint_baseline.json`). Phép đối chứng "0 lệch
+  quyết định so với quét toàn bộ" `[unverified]` — script đối chứng không nằm trong repo.
 - **Tầng 2 (Deep Retrieval):** MERT-v1-95M + FAISS `IndexFlatIP` trên vector đã
   chuẩn hoá L2. Điểm được **gộp theo `recording_id`** nên Top-K là K bản ghi khác
   nhau, không phải K đoạn của cùng một bài.
@@ -35,38 +49,49 @@ INPUT (audio/video)
 > Ba ngưỡng dưới đây hiệu chỉnh trên **corpus 24.375 bản ghi có audio thật
 > (48.750 vector MERT), 1.900 truy vấn biến đổi từ 100 bài nguồn**.
 >
-> **τFP = 0.30** — EXP-01: trên 800 truy vấn không làm biến dạng trục thời gian/cao
-> độ (cắt đoạn, nén MP3, nhiễu SNR 20, gain, EQ) **Precision = Recall = 1.0**; toàn
-> tập Precision 0.9981, nhận nhầm bài ngoài CSDL **0/1.900** (`HeldOutProtocol`).
-> Quy tắc "F1 cao nhất trong nhóm giữ FPR ≤ 0.005" nay đề xuất 0.10, nhưng **giữ
-> 0.30** theo quyết định của chủ dự án: ở cấp hệ thống F1 chỉ +0.0016 mà nhận sai
-> tăng 5 → 8 và bộ lọc hash phải quét toàn bộ 44% truy vấn (xem mục Nghiệm thu §13).
+> **τFP = 0.30** — EXP-01 (`experiments/results/exp01_fingerprint_baseline.json`): trên
+> 800 truy vấn không làm biến dạng trục thời gian/cao độ (30 s gốc, cắt 10/15 s, nén MP3
+> 128k/64k, nhiễu SNR 20, gain, EQ) **Precision = Recall = 1.0**; toàn tập Precision 0.9981, nhận nhầm
+> bài ngoài CSDL **0/1.900** (`HeldOutProtocol`). Quy tắc "F1 cao nhất trong nhóm giữ
+> FPR ≤ 0.005" nay đề xuất 0.10, nhưng **giữ 0.30** theo quyết định của chủ dự án
+> (xem mục Nghiệm thu §13 bên dưới; phần mô phỏng cấp hệ thống là `[unverified]`).
 >
-> **τMERT = 0.98** — EXP-06: False Match Rate **2,65%** (≤ 5% của §13). Chính τ = 0.97
-> cũ cho FMR 6,12% ở quy mô này, dù chỉ 4,40% khi corpus còn 4.000 bản ghi.
+> **τMERT = 0.98** — EXP-06 (`experiments/results/exp06_unknown_detection.json`): False
+> Match Rate **2,65%** (≤ 5% của §13). Chính τ = 0.97 cũ cho FMR 6,12% ở quy mô này, dù
+> chỉ 4,4% khi corpus còn 4.000 bản ghi
+> (`git show f4cc43f:experiments/results/exp06_unknown_detection.json`).
 >
-> **τCover = 0.90** — EXP-07 đúng điều kiện server (cắt truy vấn theo từng hệ số nhịp
-> độ 0.90–1.10, tìm trên cả 24.375 bài): Precision 0.9952, Recall 0.7663, FMR 0,11%,
-> không nhận mẫu nhiễu nào (nhiễu cao nhất 0.7347).
+> **τCover = 0.90** — EXP-07 đúng điều kiện server (`experiments/results/exp07_cover.json`,
+> `metrics.runtime_protocol`; cắt truy vấn theo từng hệ số nhịp độ 0.90–1.10, tìm trên
+> cả 24.375 bài): Precision 0.9952, Recall 0.7663, FMR 0,11%, không nhận mẫu nhiễu nào
+> (nhiễu cao nhất 0.7347).
 >
-> ⚠️ **Cả ba ngưỡng phụ thuộc QUY MÔ reference.** Cùng bộ truy vấn, τCover = 0.70
-> cho FMR 4,9% trên 100 bài nhưng 17,4% trên 24.375 bài. **Mở rộng dữ liệu ⇒ bắt
-> buộc hiệu chỉnh lại**, và phải sửa đồng thời `.env` lẫn `configs/rules_v1.yaml`
-> — `scripts/run_all_experiments.py` dừng lại nếu hai nơi lệch nhau.
+> ⚠️ **Cả ba ngưỡng phụ thuộc QUY MÔ reference.** Cùng bộ truy vấn, τCover = 0.70 cho
+> FMR 5,2% khi reference chỉ có 100 bài nguồn (giao thức cấp cửa sổ) nhưng 18,6% trên
+> chỉ mục 24.375 bài (điều kiện server) — cùng file `experiments/results/exp07_cover.json`. **Mở rộng dữ
+> liệu ⇒ bắt buộc hiệu chỉnh lại**, và phải sửa đồng thời `.env` lẫn
+> `configs/rules_v1.yaml` — `scripts/run_all_experiments.py` dừng lại nếu hai nơi lệch nhau.
 >
 > ⚠️ **τFP còn phụ thuộc ĐỘ DÀI truy vấn.** Đoạn ngắn có ít offset để dò nên dễ gặp
-> một offset "may mắn" — nhiễu trắng 8 giây từng đạt ~0.26. `min_score_for_duration()`
-> tự nâng ngưỡng cho truy vấn ngắn (chỉ nâng, không bao giờ hạ dưới τFP).
+> một offset "may mắn" — nhiễu trắng 8 giây từng đạt ~0.26 `[unverified]`.
+> `min_score_for_duration()` tự nâng ngưỡng cho truy vấn ngắn (chỉ nâng, không bao giờ
+> hạ dưới τFP).
 >
 > **Cổng định danh của Rule Engine tách ngưỡng theo TỪNG TẦNG** (`EXACT_MATCH: 0.30`,
-> `NEAR_MATCH: 0.98`, `COVER_MATCH: 0.90`) chứ không dùng một con số chung — điểm
-> Chromaprint, cosine MERT và cosine chroma **không cùng thang đo**.
+> `NEAR_MATCH: 0.98`, `COVER_MATCH: 0.90`, `LICENSE_PREDICTED: 0.0` — khoá
+> `identity_gate.min_identity_confidence_by_match_type` trong `configs/rules_v1.yaml`)
+> chứ không dùng một con số chung — điểm Chromaprint, cosine MERT và cosine chroma
+> **không cùng thang đo**.
 
 ---
 
 ## 🚀 Cài đặt
 
-### 1. Môi trường Python
+Lần rà 2026-09-19 chạy thật các lệnh không làm thay đổi dữ liệu (ghi "đã chạy" kèm kết
+quả). Lệnh gắn `[unverified]` không được chạy lại vì sẽ tạo/ghi đè môi trường, `.env`,
+CSDL, chỉ mục hoặc image; môi trường dùng khi rà là Windows 11, Python 3.12.
+
+### 1. Môi trường Python `[unverified]`
 
 ```bash
 python -m venv .venv
@@ -84,7 +109,7 @@ pip install -r requirements.txt
   *conda-forge không có gói `chromaprint` cho win-64.*
 - **Linux/Docker:** `apt-get install -y libchromaprint-tools` (đã có sẵn trong Dockerfile).
 
-Kiểm tra: `fpcalc -version`
+Kiểm tra: `fpcalc -version` (đã chạy: `fpcalc version 1.5.1`).
 
 ### 3. FFmpeg — chỉ cần khi xử lý VIDEO
 
@@ -95,7 +120,7 @@ và hệ thống từ chối file video bằng mã lỗi rõ ràng.
 ### 4. Cấu hình `.env`
 
 ```bash
-copy .env.example .env      # Windows
+copy .env.example .env      # Windows — [unverified]: không chạy vì sẽ ghi đè .env đang dùng
 ```
 
 Mở `.env` và chọn một profile:
@@ -115,26 +140,30 @@ DATABASE_URL=postgresql://postgres:<MAT_KHAU>@localhost:5432/music_rights_ai
 
 ```bash
 # 1. Dựng lại FAISS index + bản đồ ID từ embeddings_master.csv
+#    [unverified]: ghi đè index; embeddings_master.csv (~800 MB) không nằm trong repo
 python scripts/rebuild_faiss_index.py
 
-# 2. Tạo bảng và nạp dữ liệu tham chiếu vào PostgreSQL
+# 2. Tạo 9 bảng và nạp dữ liệu tham chiếu vào PostgreSQL
+#    [unverified]: init_db.py TRUNCATE từng bảng trước khi nạp lại CSV
 python init_db.py
 
 # 3. Kiểm tra toàn vẹn dữ liệu (khoá ngoại, số chiều vector, khớp index/ID map)
+#    đã chạy: 17 PASS / 2 WARN / 0 FAIL
 python scripts/check_data_integrity.py
 
-# 4. Chạy server
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+# 4. Chạy server — đã chạy: /health ONLINE, /docs và / trả 200
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Swagger UI: <http://localhost:8000/docs> · Health: <http://localhost:8000/health>
 
 **Làm nóng lúc khởi động** (`WARMUP_ON_STARTUP`, mặc định bật): server trả lời ngay,
 một luồng nền giải mã fingerprint tham chiếu, nạp MERT + suy luận thử và nạp chỉ mục
-Cover; `/health` báo tiến độ ở khoá `warmup`. Đo 2026-09-18 (24.375 bản ghi, GTX 1650):
-làm nóng ~24 s (fingerprint 19,7 s · MERT 3,1 s · Cover 1,5 s), sau đó truy vấn khớp
-tầng 1 đầu tiên mất **112 ms thay vì 21,1 s**, MERT lần đầu 1,1 s thay vì 4,6 s. Truy
-vấn gửi TRONG lúc làm nóng chờ bộ đệm đang nạp (có khoá) chứ không nạp lần hai.
+Cover; `/health` báo tiến độ ở khoá `warmup`. Số đo tay 2026-09-18 trên GTX 1650, không
+có file kết quả `[unverified]`: làm nóng ~24 s (fingerprint 19,7 s · MERT 3,1 s · Cover
+1,5 s), sau đó truy vấn khớp tầng 1 đầu tiên mất 112 ms thay vì 21,1 s, MERT lần đầu
+1,1 s thay vì 4,6 s. Truy vấn gửi TRONG lúc làm nóng chờ bộ đệm đang nạp (có khoá) chứ
+không nạp lần hai — hành vi này có test: `tests/test_warmup.py`.
 
 ### Chạy bằng Docker (backend + CSDL)
 
@@ -142,17 +171,21 @@ vấn gửi TRONG lúc làm nóng chờ bộ đệm đang nạp (có khoá) ch�
 đường dẫn tuyệt đối) — compose dừng ngay nếu thiếu, không có mật khẩu mặc định.
 
 ```bash
-docker compose up -d --build        # API: http://127.0.0.1:8000 · CSDL: 127.0.0.1:5433
+docker compose up -d --build        # [unverified] — API: http://127.0.0.1:8000 · CSDL: 127.0.0.1:5433
 docker compose ps                   # backend chuyển "healthy" khi /health báo ONLINE
 ```
 
+`docker compose ps` đã chạy (2026-09-19): `music_rights_db` healthy trên
+`127.0.0.1:5433`; image backend chưa được build lại theo mã hiện tại nên chưa kiểm.
+
 Khi volume CSDL còn rỗng (máy mới), nạp dữ liệu tham chiếu từ `data/processed/`:
-`docker compose run --rm backend python init_db.py`.
+`docker compose run --rm backend python init_db.py` `[unverified]`.
 
 - **Không có gì nhạy cảm trong image**: `.dockerignore` loại `.env*`, `data/`, audio
   test. `data/` mount chỉ đọc; audio corpus mount từ `AUDIO_ROOT` vào `/audio`.
 - **Chạy bằng user thường** (`app`, uid 10001); mã nguồn thuộc root, chỉ
-  `temp_uploads/` và cache model ghi được. Cổng API và CSDL chỉ mở trên `127.0.0.1`.
+  thư mục tạm `temp_uploads/` (sinh khi chạy, bị gitignore) và cache model ghi được.
+  Cổng API và CSDL chỉ mở trên `127.0.0.1`.
 - **GPU**: torch trên PyPI cho Linux là bản CUDA nên image nặng vài GB; compose xin
   một GPU NVIDIA (`deploy.resources`). Máy không có GPU thì xoá khối `deploy` —
   `DEVICE=auto` tự chạy CPU.
@@ -164,7 +197,7 @@ Khi volume CSDL còn rỗng (máy mới), nạp dữ liệu tham chiếu từ `d
   tạo với `restart: always`, nên lần `docker compose up` đầy đủ đầu tiên sẽ tạo lại nó
   (dữ liệu nằm trong volume, không mất); chỉ bật backend thì dùng `--no-deps`.
 
-**Đã kiểm chứng (2026-09-17, GTX 1650):** image `music-rights-ai-backend` 9,7 GB, build
+**Kiểm tay 2026-09-17, GTX 1650 — không có log trong repo `[unverified]`:** image `music-rights-ai-backend` 9,7 GB, build
 context 98 KB; trong image không có `.env`, `data/`, `.git`; tiến trình chạy bằng `app`
 (uid 10001), không ghi được vào mã nguồn; `torch.cuda.is_available()` = True trong
 container. `/health` ONLINE (CSDL qua hostname `db`, FAISS 48.750 vector, fpcalc,
@@ -181,7 +214,7 @@ gian, nhưng nay nằm trong luồng làm nóng thay vì trong truy vấn của 
 | Method | Endpoint | Mô tả |
 |---|---|---|
 | `GET` | `/health` | Trạng thái từng thành phần: database, faiss, chromaprint, ffmpeg, mert, rule_engine, cover · tiến độ làm nóng (`warmup`) |
-| `POST` | `/api/v1/analyze` | Upload + `platform` / `commercial_use` / `monetization` → trả `job_id` (202) |
+| `POST` | `/api/v1/analyze` | Upload (form) + `platform` (`YOUTUBE` mặc định / `FACEBOOK` / `TIKTOK` / `OTHER`) · `commercial_use` · `monetization` (bool, mặc định `false`) → trả `job_id` (202) |
 | `GET` | `/api/v1/jobs/{job_id}` | `QUEUED` / `PROCESSING` / `DONE` / `FAILED` |
 | `GET` | `/api/v1/results/{job_id}` | Kết quả đầy đủ: identity, match, rights, assessment, evidence |
 | `GET` | `/api/v1/tracks/{recording_id}` | Tra cứu bản ghi + quyền |
@@ -205,9 +238,31 @@ Audio Library → Creator Music → Content ID → Creative Commons → Public D
 Trước đó là **cổng định danh**: chưa nhận diện đủ tin cậy thì không có quyền nào
 để xét, phải trả `UNKNOWN` + `HUMAN_REVIEW_REQUIRED` — không bao giờ ép thành
 `LOW` hay `HIGH`. Ngưỡng của cổng này lấy **theo tầng đã sinh ra kết quả**
-(`min_identity_confidence_by_match_type` trong `rules_v1.yaml`), đúng bằng τFP và
-τMERT, để cascade và Rule Engine không nói hai chuyện khác nhau. Mỗi kết quả kèm **ba loại độ tin cậy tách biệt**:
-`identity_confidence`, `rights_confidence`, `decision_confidence`.
+(`identity_gate.min_identity_confidence_by_match_type` trong `configs/rules_v1.yaml`:
+EXACT_MATCH 0.30, NEAR_MATCH 0.98, COVER_MATCH 0.90 — đúng bằng τFP, τMERT, τCover —
+và LICENSE_PREDICTED 0.0), để cascade và Rule Engine không nói hai chuyện khác nhau. Mỗi
+kết quả kèm **ba loại độ tin cậy tách biệt**: `identity_confidence`, `rights_confidence`,
+`decision_confidence`.
+
+#### Ba đầu vào "Mục đích sử dụng" đi vào Rule Engine như thế nào
+
+Giao diện gửi ba trường form cùng file (`frontend/app.js`, hàm `submitAnalysis`);
+`backend/api/routes.py` nhận chúng ở `analyze` và `search_music`. Hàm
+`build_facts()` trong `backend/services/decision_service.py` đưa chúng vào dữ kiện luật
+dưới tên `context.platform`, `context.commercial_use`, `context.monetization`, và mọi
+kết quả ghi lại cả ba ở `evidence.rule_engine.usage_context`. Luật thực sự dùng chúng
+(`rule_id` đúng như hệ thống in ra):
+
+| Đầu vào | Luật trong `configs/rules_v1.yaml` | Điều kiện `when` | Kết quả |
+|---|---|---|---|
+| `commercial_use` | `CREATIVE_COMMONS.rule[0]` | `commercial_use_allowed: false` và `context.commercial_use: true` | HIGH · `NON_COMMERCIAL_VIOLATION` |
+| `monetization` | `CREATIVE_COMMONS.rule[1]` | `monetization_allowed: false` và `context.monetization: true` | HIGH · `MONETIZATION_NOT_PERMITTED` |
+| `commercial_use` | `PUBLIC_DOMAIN.rule[1]` | tác phẩm PD `verified`, bản thu không PD, `context.commercial_use: true` | HIGH · `RECORDING_PERMISSION_REQUIRED` |
+| `platform` | **chưa có luật nào** | — | chỉ được ghi vào evidence |
+
+`platform` được nhận, kiểm giá trị và lưu lại, nhưng hiện **không làm thay đổi** mức rủi
+ro: không luật nào trong `configs/rules_v1.yaml` tham chiếu `context.platform`
+(`tests/test_decision_rules.py` chỉ kiểm dữ kiện này có mặt).
 
 ---
 
@@ -217,18 +272,19 @@ Mở <http://localhost:8000/> sau khi chạy server — frontend được **Fast
 tĩnh** từ thư mục `frontend/`, không cần web server riêng và **không có bước build**
 (dự án chỉ build Python; thêm bundler chỉ để tô màu là cái giá không đáng trả).
 
-Bốn màn hình theo §13:
+Bốn màn hình theo ĐC §13 (tương ứng §15):
 
 | Màn hình | Nội dung |
 |---|---|
-| **1. Upload** | Kéo–thả hoặc chọn file · Nền tảng · Mục đích (phi thương mại / thương mại) · Bật kiếm tiền. Ba tuỳ chọn này là **đầu vào thật của Rule Engine**, không phải trang trí. Máy chủ thiếu FFmpeg (theo `/health`) thì chọn file video bị báo ngay và khoá nút phân tích, thay vì tải lên rồi mới nhận `MODEL_FAILURE`. |
+| **1. Upload** | Kéo–thả hoặc chọn file · Nền tảng · Mục đích (phi thương mại / thương mại) · Bật kiếm tiền. Cả ba được gửi tới Rule Engine; **Mục đích và Kiếm tiền có trong điều kiện luật, Nền tảng hiện chỉ được ghi vào evidence** (xem mục Rule Engine). Máy chủ thiếu FFmpeg (theo `/health`) thì chọn file video bị báo ngay và khoá nút phân tích, thay vì tải lên rồi mới nhận `MODEL_FAILURE`. |
 | **2. Processing** | Bảy bước THẬT của pipeline, tô sáng theo trường `stage` mà backend ghi vào bảng `jobs` — **không có thanh chờ giả, không có "AI is thinking"**. Xong bước nào hiện độ trễ đo được của bước đó. |
 | **3. Result** | Nhận diện · **căn cứ nhận diện** (điểm từng tầng so với ngưỡng của CHÍNH tầng đó — điểm Chromaprint, cosine MERT và điểm Cover không cùng thang) · Quyền & giấy phép (giấy phép do mô hình **suy đoán** hiện trong thẻ viền nét đứt, mỗi giá trị kèm "(suy đoán)", không tô xanh/đỏ như quyền tra được) · Mức rủi ro 🟢/🟡/🔴/⚪ · Khuyến nghị · **ba thanh độ tin cậy tách biệt** (identity / rights / decision; chưa định danh được thì thanh identity mờ đi và ghi rõ, vì đó là điểm cao nhất DƯỚI ngưỡng) · nút phản hồi Correct / Incorrect / Unsure. |
 | **4. Evidence** | Điểm fingerprint và ngưỡng hiệu dụng (ghi rõ khi bị nâng cho truy vấn ngắn) · tầng 1 lọc theo hash hay quét toàn bộ, và vì sao · bảng Top-K của MERT · tầng Cover: lệch cao độ quy từ OTI (OTI 11 = truy vấn cao hơn 1 bán cung) và hệ số nhịp của đoạn cắt thắng · luật Rule Engine đã kích hoạt · nguồn metadata quyền và ngày xác minh · PD của tác phẩm và PD của bản thu **để riêng** (§2) · độ trễ từng bước · JSON gốc. |
 
 Đã kiểm bằng ảnh chụp Chrome headless trên server thật (2026-09-18): desktop 1280 px,
 điện thoại 390 px (không tràn ngang; nhãn nằm trên giá trị, bảng Top-K vẫn thấy cột
-Similarity) và chế độ tối (chữ trên nút màu nhấn đạt tương phản ~7:1).
+Similarity) và chế độ tối (chữ trên nút màu nhấn đạt tương phản ~7:1) — `[unverified]`:
+ảnh chụp và script chụp không nằm trong repo.
 
 Để màn hình Processing hiển thị được tiến trình thật, backend có thêm cột
 `jobs.stage` và một callback `on_stage` chạy xuyên `analyze_audio` →
@@ -239,6 +295,9 @@ Nếu CSDL đã tạo từ trước, chạy lại `python init_db.py` (hoặc
 ---
 
 ## 🔬 Thí nghiệm
+
+Các lệnh dưới đây **không được chạy lại** trong lần rà README 2026-09-19 (mỗi lệnh mất từ
+vài phút tới vài giờ); mọi số liệu trong mục này đọc từ file JSON đã lưu.
 
 ```bash
 python experiments/exp02_mert/run.py          # Retrieval: Recall@K, MRR, mAP
@@ -279,9 +338,9 @@ file checkpoint — đổi ngưỡng hay đổi tập truy vấn thì checkpoint
 không trộn kết quả của hai cấu hình vào một bảng.
 
 Kết quả lưu ở `experiments/results/*.json` kèm `git_commit`, phiên bản dữ liệu,
-tham số và ngưỡng (§14).
+tham số và ngưỡng (ĐC §14).
 
-### Trạng thái 9 thí nghiệm (§15 yêu cầu 8; EXP-09 phát sinh từ một câu hỏi thiết kế)
+### Trạng thái 9 thí nghiệm (ĐC §15 yêu cầu 8; EXP-09 phát sinh từ một câu hỏi thiết kế)
 
 Số liệu EXP-01 → EXP-08 đo trên **corpus FMA thật ở quy mô hiện tại**: 24.375 bản
 ghi có audio, 48.750 vector MERT, chỉ mục cover 24.375 bài; 1.900 truy vấn biến
@@ -289,26 +348,27 @@ ghi có audio, 48.750 vector MERT, chỉ mục cover 24.375 bài; 1.900 truy v�
 hình server: τFP 0.30 · τMERT 0.98 · τCover 0.90; Tầng 1 lọc ứng viên theo hash,
 tầng Cover cắt truy vấn theo hệ số nhịp độ 0.90–1.10.
 
-| # | Thí nghiệm | Kết quả chính |
-|---|---|---|
-| EXP-01 | Fingerprint Baseline | **τFP = 0.30**: 800 truy vấn sạch P = R = 1.000; cả 1.900 truy vấn P 0.9981 · nhận nhầm held-out 0,00% |
-| EXP-02 | MERT Retrieval | Recall@1 0.8787 · Recall@5 0.9374 · MRR 0.9059 (leave-one-out, truy vấn chưa biến đổi) |
-| EXP-03 | Pooling Strategy | `mean+std` chỉ +1,13pp Recall@1 nhưng index ×2 → **giữ `mean`** |
-| EXP-04 | FP vs MERT vs Cover vs Cascade | **Cascade production F1 0.9352** (R 0.8805) > Cover 0.8659 > FP→MERT 0.7278 > FP 0.7140 > MERT 0.3915 |
-| EXP-05 | Robustness | Nhờ tầng Cover: dịch cao độ 0,25% → **71%**, đổi nhịp 0% → **81%**; còn yếu nhất: chồng âm 65% |
-| EXP-06 | Unknown Detection | → chốt **τMERT = 0.98** (FMR 2,65%) |
-| EXP-07 | Cover Identification | → chốt **τCover = 0.90** (P 0.9952 · R 0.7663 · FMR 0,11%); dịch cao độ và đổi nhịp 0.90–1.10 đúng @1 100% |
-| EXP-08 | End-to-End | Macro-F1 **0.9518** · FMR held-out **0,00%** · nhận đúng bài có trong CSDL 87,9% |
-| EXP-09 | Học bản quyền từ âm thanh? | Tín hiệu rất yếu, không dùng được (đo ở corpus 4.000) |
+| # | Thí nghiệm | Kết quả chính | File kết quả |
+|---|---|---|---|
+| EXP-01 | Fingerprint Baseline | **τFP = 0.30**: 800 truy vấn sạch P = R = 1.000; cả 1.900 truy vấn P 0.9981 · nhận nhầm held-out 0,00% | [`experiments/results/exp01_fingerprint_baseline.json`](experiments/results/exp01_fingerprint_baseline.json) |
+| EXP-02 | MERT Retrieval | Recall@1 0.8787 · Recall@5 0.9374 · MRR 0.9059 (leave-one-out, truy vấn chưa biến đổi) | [`experiments/results/exp02_mert_retrieval.json`](experiments/results/exp02_mert_retrieval.json) |
+| EXP-03 | Pooling Strategy | `mean+std` chỉ +1,13pp Recall@1 (0.8421 → 0.8534) nhưng vector 768 → 1.536 chiều → **giữ `mean`** | [`experiments/results/exp03_pooling.json`](experiments/results/exp03_pooling.json) |
+| EXP-04 | FP vs MERT vs Cover vs Cascade | **Cascade production F1 0.9352** (R 0.8805) > Cover 0.8659 > FP→MERT 0.7278 > FP 0.7140 > MERT 0.3915 | [`experiments/results/exp04_hybrid_cascade.json`](experiments/results/exp04_hybrid_cascade.json) |
+| EXP-05 | Robustness | Cascade chưa có → có tầng Cover: dịch cao độ 0,25% → **71%**, đổi nhịp 7,75% → **81%**; còn yếu nhất: chồng âm 65% | [`experiments/results/exp05_robustness.json`](experiments/results/exp05_robustness.json) |
+| EXP-06 | Unknown Detection | → chốt **τMERT = 0.98** (FMR 2,65%) | [`experiments/results/exp06_unknown_detection.json`](experiments/results/exp06_unknown_detection.json) |
+| EXP-07 | Cover Identification | → chốt **τCover = 0.90** (P 0.9952 · R 0.7663 · FMR 0,11%); dịch cao độ và đổi nhịp 0.90–1.10 đúng @1 100% | [`experiments/results/exp07_cover.json`](experiments/results/exp07_cover.json) |
+| EXP-07b | Luật khoảng cách hạng 1 – hạng 2 (chỉ đo, chưa bật) | Kiểm tra chéo theo bài nguồn: recall 0.7432 → 0.8779 và 0.7895 → 0.8863 | [`experiments/results/exp07_cover_margin_rule.json`](experiments/results/exp07_cover_margin_rule.json) |
+| EXP-08 | End-to-End | Macro-F1 **0.9518** · FMR held-out **0,00%** · nhận đúng bài có trong CSDL 87,9% | [`experiments/results/exp08_end_to_end.json`](experiments/results/exp08_end_to_end.json) |
+| EXP-09 | Học bản quyền từ âm thanh? | Tín hiệu rất yếu, không dùng được (đo ở corpus 4.000); quét C trên 24.375 mẫu: accuracy 0.3007 < baseline 0.4153 | [`experiments/results/exp09_license_learnability.json`](experiments/results/exp09_license_learnability.json) · [`experiments/results/exp09_license_complexity_sweep.json`](experiments/results/exp09_license_complexity_sweep.json) |
 
 ### Nghiệm thu §13 — đạt cả bốn tiêu chí
 
 | Tiêu chí | Mục tiêu | Đo được | Nguồn | |
 |---|---|---|---|---|
-| Clean exact-match | P ≥ 0.95, R ≥ 0.90 | **P 1.000 · R 1.000** trên 800 truy vấn (30 s, cắt 10/15 s, MP3 128k/64k, EQ, gain, nhiễu SNR 20) | EXP-01 | ✅ |
-| Robust retrieval | Recall@5 ≥ 0.80 | **0.9937** cấp hệ thống (MERT ∪ Cover) · MERT đơn lẻ 0.7921 · Cover đơn lẻ 0.8947 | EXP-04 | ✅ |
-| Unknown FMR | ≤ 5% | Chromaprint 0,00% · MERT 2,65% · Cover 0,11% · **cả pipeline 0,00%** (760 lượt held-out) | EXP-01/06/07/08 | ✅ |
-| End-to-end | Macro-F1 ≥ 0.80 | **0.9518**, đủ 4 lớp có mẫu (LOW 114 · CONDITIONAL 475 · HIGH 171 · UNKNOWN 760) | EXP-08 | ✅ |
+| Clean exact-match | P ≥ 0.95, R ≥ 0.90 | **P 1.000 · R 1.000** trên 800 truy vấn (30 s, cắt 10/15 s, MP3 128k/64k, EQ, gain, nhiễu SNR 20) | `experiments/results/exp01_fingerprint_baseline.json` | ✅ |
+| Robust retrieval | Recall@5 ≥ 0.80 | **0.9937** cấp hệ thống (MERT ∪ Cover) · MERT đơn lẻ 0.7921 · Cover đơn lẻ 0.8947 | `experiments/results/exp04_hybrid_cascade.json` (`retrieval_recall_at_k`) | ✅ |
+| Unknown FMR | ≤ 5% | Chromaprint 0,00% · MERT 2,65% · Cover 0,11% · **cả pipeline 0,00%** (760 lượt held-out) | `experiments/results/exp01_fingerprint_baseline.json` · `experiments/results/exp06_unknown_detection.json` · `experiments/results/exp07_cover.json` · `experiments/results/exp08_end_to_end.json` | ✅ |
+| End-to-end | Macro-F1 ≥ 0.80 | **0.9518**, đủ 4 lớp có mẫu (LOW 114 · CONDITIONAL 475 · HIGH 171 · UNKNOWN 760) | `experiments/results/exp08_end_to_end.json` | ✅ |
 
 **Robust retrieval chấm ở cấp hệ thống — và vì sao phải nói rõ điều này.** MERT đơn
 lẻ đạt 0.7921, thiếu 0.008; toàn bộ phần thiếu đến từ dịch cao độ (MERT mã hoá cao
@@ -322,8 +382,11 @@ trượt, nên con số MERT đơn lẻ luôn được báo cạnh bên (biên b
 **Giữ τFP = 0.30 dù quy tắc hiệu chỉnh đề xuất 0.10.** EXP-01 đo lại dưới
 `HeldOutProtocol` cho tỉ lệ nhận nhầm của tầng 1 là 0,37% / 0,11% / 0 ở τ 0.10 / 0.15 /
 ≥ 0.20 (giao thức cũ đếm cả việc nhận ra bài bị trộn chồng là nhận nhầm: 2,26% / 1,63%
-/ 0,68%). Quy tắc chỉ nhìn F1 của tầng 1 nên ra 0.10. Mô phỏng cả cascade (điểm quét
-đầy đủ của EXP-01 + quyết định MERT/Cover của EXP-04, tái lập đúng EXP-04 ở 0.30):
+/ 0,68%) — cả hai bộ số trong `experiments/results/exp01_fingerprint_baseline.json`
+(`metrics.sweep`, cột `false_positive_rate` và `false_positive_rate_exact_only`). Quy tắc
+chỉ nhìn F1 của tầng 1 nên ra 0.10. Mô phỏng cả cascade (điểm quét đầy đủ của EXP-01 +
+quyết định MERT/Cover của EXP-04, tái lập đúng EXP-04 ở 0.30) — `[unverified]`: script mô
+phỏng chạy một lần, không nằm trong repo; chỉ dòng 0.30 khớp EXP-04:
 
 | τFP | F1 cascade | Nhận sai | Nhận nhầm bài lạ | Bộ lọc hash quét toàn bộ |
 |---|---|---|---|---|
@@ -340,7 +403,9 @@ và tốc độ lấy vài truy vấn. `scripts/apply_calibrated_thresholds.py` 
 380 truy vấn từ 20 bài nguồn chọn phân tầng theo giấy phép (3 bài mỗi loại; tập
 truy vấn chỉ có 2 bài CC_BY_ND; bài CC0 lấy từ 10 bài sinh thêm), mỗi truy vấn chạy
 2 điều kiện (`known`, `held_out`) × 2 ngữ cảnh (phi thương mại, thương mại) =
-**1.520 lượt**, đúng đường chạy production.
+**1.520 lượt**, đúng đường chạy production. Mọi số trong mục này:
+`experiments/results/exp08_end_to_end.json` (`metrics.overall`, `metrics.by_condition`,
+`metrics.identification`, `metrics.latency_ms`; phân bố thất bại đếm từ `raw_results`).
 
 | Mức rủi ro | Precision | Recall | F1 | Số mẫu |
 |---|---|---|---|---|
@@ -366,11 +431,12 @@ truy vấn chỉ có 2 bài CC_BY_ND; bài CC0 lấy từ 10 bài sinh thêm), m
   kiện held-out luôn đi hết ba tầng. Chromaprint P50 41 ms; tra quyền 1,6 ms; Rule
   Engine 0,1 ms.
 
-So với lượt trước trên cùng bộ truy vấn (cắt Cover cố định 30 s, Tầng 1 quét toàn bộ):
-Macro-F1 0.9091 → **0.9518**, nhận đúng bài có trong CSDL 80,3% → **87,9%**, số lần
-thất bại vì tempo chậm 70 → 12, độ trễ trung bình 5,8 s → **1,4 s**. Lượt này dừng một
-lần ở truy vấn 338/380 vì lỗi GPU nhất thời (`CUDA error: an illegal memory access`,
-backend trả đúng `MODEL_FAILURE`) và chạy tiếp từ checkpoint.
+So với lượt trước trên cùng bộ truy vấn (cắt Cover cố định 30 s, Tầng 1 quét toàn bộ;
+`git show 577f189:experiments/results/exp08_end_to_end.json`): Macro-F1 0.9091 →
+**0.9518**, nhận đúng bài có trong CSDL 80,3% → **87,9%**, số lần thất bại vì tempo chậm
+(0.90/0.95) 70 → 12, độ trễ trung bình 5,8 s → **1,4 s**. Lượt này dừng một lần ở truy
+vấn 338/380 vì lỗi GPU nhất thời (`CUDA error: an illegal memory access`, backend trả
+đúng `MODEL_FAILURE`) và chạy tiếp từ checkpoint `[unverified]` — chỉ có trong log chạy.
 
 **Phạm vi — đọc trước khi trích dẫn con số.** Chỉ nhóm CREATIVE_COMMONS và nhánh
 fallback đi được bằng audio thật (FMA). AUDIO_LIBRARY, CREATOR_MUSIC,
@@ -385,15 +451,22 @@ Cùng bộ truy vấn, **cùng một ngưỡng**, chỉ đổi số bản ghi tr
 theo giao thức held-out CŨ — chỉ loại bản trùng hệt — vì các cột 1.000/4.000 đo như vậy;
 đo theo `HeldOutProtocol` thì ở 24.375 bài τFP 0.10 chỉ còn 0.0037, 0.15 còn 0.0011):
 
-| Ngưỡng | Chỉ số | @1.000 | @4.000 | @24.375 |
+| Ngưỡng | Chỉ số | @1.000 `[unverified]` | @4.000 | @24.375 |
 |---|---|---|---|---|
 | τFP = 0.10 | FPR (EXP-01) | 0.0044 | 0.0095 | **0.0226** |
 | τFP = 0.15 | FPR (EXP-01) | — | 0.0032 | **0.0163** |
 | τMERT = 0.97 | FMR (EXP-06) | 3,35% | 4,4% | **6,12%** — vượt trần 5% |
 | — | Recall@1 (EXP-02) | 0.9515 | 0.9195 | 0.8787 |
 
-Tầng Cover cũng vậy: τ = 0.70 cho FMR 4,9% khi chỉ tìm trong 100 bài nguồn nhưng
-**17,4%** khi tìm trên chỉ mục 24.375 bài.
+Nguồn: cột @24.375 là các file hiện tại `experiments/results/exp01_fingerprint_baseline.json`,
+`experiments/results/exp06_unknown_detection.json`, `experiments/results/exp02_mert_retrieval.json` trong `experiments/results/`;
+cột @4.000 là cùng các file ở commit `f4cc43f` (vd.
+`git show f4cc43f:experiments/results/exp01_fingerprint_baseline.json`); cột @1.000 đo
+trước commit đầu tiên, không còn file kết quả.
+
+Tầng Cover cũng vậy: τ = 0.70 cho FMR 5,2% khi reference chỉ có 100 bài nguồn (giao thức
+cấp cửa sổ) nhưng **18,6%** trên chỉ mục 24.375 bài (điều kiện server) —
+`experiments/results/exp07_cover.json`.
 
 Nên cả ba ngưỡng đã hiệu chỉnh lại ở 24.375 bài: τFP **0.15 → 0.30**, τMERT
 **0.97 → 0.98**; τCover chốt **0.90** trên đúng điều kiện server (giảm so với 0.97
@@ -406,7 +479,10 @@ corpus thêm nữa thì **bắt buộc** hiệu chỉnh lại.
 
 Điểm Chromaprint là tỉ lệ bit trùng ở offset căn chỉnh tốt nhất. Đoạn càng ngắn
 thì càng ít offset để dò, nên càng dễ gặp một offset "may mắn". Đo bằng nhiễu
-trắng (chắc chắn không có trong CSDL) trên reference 4.000, 10 seed mỗi độ dài:
+trắng (chắc chắn không có trong CSDL) trên reference 4.000, 10 seed mỗi độ dài. Cột
+"Max" chính là hằng số `NOISE_FLOOR_BY_DURATION` và cột "Ngưỡng áp dụng" là đầu ra của
+`min_score_for_duration()`, cả hai trong `backend/services/fingerprint_service.py`; cột
+"Điểm nền TB" là số đo tay không có file kết quả `[unverified]`:
 
 | Độ dài | Điểm nền TB | Max | Ngưỡng áp dụng (τFP 0.30) |
 |---|---|---|---|
@@ -428,8 +504,8 @@ và response mang cờ `threshold_raised_for_short_query` để việc này khô
 Hai điều cần biết: τFP = 0.30 hiệu chỉnh bằng EXP-01 trên tập truy vấn 10–30 giây,
 nên **không chuyển thẳng sang truy vấn ngắn hơn được**; và bảng nhiễu nền trên đo với
 reference 4.000 bản ghi. Đo lại trên 24.375 bài (cùng 10 seed) cho đúng các giá trị
-lớn nhất đó ở 30 s (0.0814) và 20 s (0.1286) — reference lớn gấp 6 lần không làm điểm
-nền của nhiễu cao lên.
+lớn nhất đó ở 30 s (0.0814) và 20 s (0.1286) `[unverified]` — reference lớn gấp 6 lần
+không làm điểm nền của nhiễu cao lên.
 
 ### EXP-07 — tầng cover lấp đúng điểm mù
 
@@ -446,11 +522,15 @@ sổ của 100 bài nguồn, đúng bộ mà EXP-03 dùng cho MERT nên so thẳ
 | Biên độ / EQ | 686 | 69% | **99%** | 92% |
 | Chồng âm | 343 | 59% | **78%** | 86% |
 
+Nguồn: cột Chroma@1 và OTI gộp từ `experiments/results/exp07_cover.json`
+(`metrics.per_transformation`); cột MERT@1 gộp từ `experiments/results/exp03_pooling.json`
+(`metrics.mean.per_transformation`, `accuracy@1`).
+
 Chroma/OTI **thắng MERT ở đúng nhóm dịch cao độ** — chính là điểm mù mà cả
 Chromaprint lẫn MERT đều bó tay. Đây là căn cứ bằng số cho việc nối tầng cover vào
 cascade, chứ không phải suy đoán.
 
-**Điều kiện server** (`metrics.runtime_protocol`) — 1.900 file truy vấn, tìm trên toàn
+**Điều kiện server** (`experiments/results/exp07_cover.json`, `metrics.runtime_protocol`) — 1.900 file truy vấn, tìm trên toàn
 chỉ mục cover 24.375 bài, held-out theo `HeldOutProtocol`: đúng ở vị trí 1 **88,8%**.
 τCover = **0.90** cho Precision 0.9952, Recall 0.7663, nhận nhầm bài ngoài CSDL
 **0,11%**, mẫu nhiễu cao nhất chỉ 0.7347.
@@ -467,7 +547,8 @@ reference. Bản chậm 0.90 chứa nó trong 33,3 giây đầu; server trước
 giây nên mất 10% nội dung cuối. Nay `cover_service` cắt theo từng hệ số trong
 `COVER_TEMPO_FACTORS` (0.90–1.10, dải biến đổi nhịp độ của §11) và lấy điểm cao nhất.
 Kiểm lại trên 100 bài nguồn, chỉ đổi đúng cách cắt
-(`python experiments/exp07_cover/query_span_check.py --off-grid`, ~17 phút):
+(`python experiments/exp07_cover/query_span_check.py --off-grid`) — `[unverified]`: script
+chỉ in bảng ra màn hình, không lưu file kết quả:
 
 | Truy vấn | Cắt cố định 30 s (cũ) | Nhiều hệ số (hiện tại) |
 |---|---|---|
@@ -484,27 +565,34 @@ nhịp bằng `librosa.effects.time_stretch`) nằm giữa hai hệ số mà v�
 Thử nhiều độ dài cũng là thêm cơ hội nhận nhầm, nên τCover được hiệu chỉnh lại chứ
 không giữ nguyên theo quán tính: ngưỡng vẫn ra 0.90, Recall 0.6837 → **0.7663**, nhận
 nhầm 0,37% → 0,11% (lần cũ đo trước `HeldOutProtocol` nên là cận trên — không so
-thẳng được), mẫu nhiễu cao nhất 0.7278 → 0.7347.
+thẳng được), mẫu nhiễu cao nhất 0.7278 → 0.7347. Số của lần cũ:
+`git show b948285:experiments/results/exp07_cover.json`.
 
-Đoạn cắt 10/15 giây vẫn trượt vì lệch trục thời gian thuần tuý: so với reference cắt
-**cùng khoảng** thì điểm 1.000 (thấp nhất 0.984), so với reference 30 giây chỉ 0.40.
-Nhóm này Chromaprint đã bắt 100% nên không phải điểm mù của cascade.
+Đoạn cắt 10/15 giây vẫn trượt vì lệch trục thời gian thuần tuý (đúng @1 chỉ 2% ở bảng
+trên). Theo `experiments/exp07_cover/query_span_check.py`, so với reference cắt **cùng khoảng** thì điểm 1.000
+(thấp nhất 0.984), so với reference 30 giây chỉ 0.40 `[unverified]`. Nhóm này
+Chromaprint đã bắt 100% nên không phải điểm mù của cascade.
 
 Một điểm dễ đọc nhầm: MERT@1 nhóm pitch = 49% mà trong cascade MERT gần như không
 nhận truy vấn pitch nào. Không mâu thuẫn — ở đây chấm **xếp hạng**, còn cascade áp
-**ngưỡng τMERT = 0.98**: truy vấn dịch cao độ có điểm MERT khoảng 0.87–0.92, xếp
+**ngưỡng τMERT = 0.98**: truy vấn dịch cao độ có điểm MERT trung vị 0.928, 90% nằm
+trong 0.889–0.957 (`experiments/results/exp04_hybrid_cascade.json`, `raw_results`), xếp
 đúng nhưng bị từ chối. **Điểm mù đó đến từ ngưỡng, không phải từ năng lực model** —
 mà ngưỡng buộc phải chặt để giữ FMR ≤ 5%.
 
 #### EXP-07b — Luật chấp nhận theo khoảng cách hạng 1 – hạng 2 (chỉ đo, CHƯA bật)
 
 Tầng Cover cũng gặp đúng chuyện đó: trên chỉ mục 24.375 bài, nó xếp đúng bài ở hạng 1
-cho **400/400** truy vấn dịch cao độ và 400/400 đổi nhịp (EXP-04), nhưng 116 và 82
-truy vấn bị loại vì điểm tuyệt đối < τCover 0.90. Khoảng cách giữa hạng 1 và hạng 2
-tách hai nhóm rất rõ: bài có trong CSDL mà điểm dưới τ có khoảng cách trung vị
-**0.315** (5% thấp nhất 0.09), còn bài lạ (held-out) chỉ **0.009** (95% dưới 0.044).
-`python experiments/exp07_cover/margin_rule.py --sources 100` (~25 phút, cùng điều kiện
-server với EXP-07) đo luật `s1 ≥ τ_abs HOẶC (s1 ≥ τ_low VÀ s1 − s2 ≥ δ)`:
+cho **400/400** truy vấn dịch cao độ và 400/400 đổi nhịp, nhưng 116 và 82 truy vấn bị
+loại vì điểm tuyệt đối < τCover 0.90 (đếm từ `raw_results` của
+`experiments/results/exp04_hybrid_cascade.json`, hạng 1 là `cover.top_k[0]`). Khoảng
+cách giữa hạng 1 và hạng 2 tách hai nhóm rất rõ: bài có trong CSDL mà điểm dưới τ có
+khoảng cách trung vị **0.315** (5% thấp nhất 0.09), còn bài lạ (held-out) chỉ **0.009**
+(95% dưới 0.044). `python experiments/exp07_cover/margin_rule.py --sources 100` (~25 phút
+`[unverified]`, cùng điều kiện server với EXP-07) đo luật
+`s1 ≥ τ_abs HOẶC (s1 ≥ τ_low VÀ s1 − s2 ≥ δ)`; mọi số dưới đây trong
+`experiments/results/exp07_cover_margin_rule.json` (`margin_distribution`,
+`rule_comparison`, `cross_validated`):
 
 | Luật (1.900 truy vấn) | Precision | Recall | Nhận nhầm bài lạ | Nhiễu | Dịch cao độ | Đổi nhịp | Chồng âm |
 |---|---|---|---|---|---|---|---|
@@ -525,13 +613,14 @@ bật thì phải chạy lại EXP-04/05/08.
 
 ### EXP-09 — Bản quyền có học được từ âm thanh không?
 
-Thí nghiệm này không nằm trong §15. Nó phát sinh từ một câu hỏi thiết kế đáng giá:
+Thí nghiệm này không nằm trong ĐC §15. Nó phát sinh từ một câu hỏi thiết kế đáng giá:
 *nếu gắn nhãn bản quyền vào đặc trưng rồi train, hệ thống có đoán được bài chưa
 từng thấy không?* §2 đã bác bỏ bằng lập luận ("license không phải một acoustic
 class"); đây là lần đầu nó được **đo**.
 
 Ba giao thức, khác nhau ở đúng một chỗ — cách chia dữ liệu. Số liệu trên corpus
-4.000 bản ghi / 1.387 nghệ sĩ:
+4.000 bản ghi / 1.387 nghệ sĩ (`experiments/results/exp09_license_learnability.json`,
+chạy 2026-09-07 — trước khi corpus có audio lên 24.375 bài):
 
 | Bài toán | Model | C. Baseline | A. Ngẫu nhiên | B. Theo nghệ sĩ | Rò rỉ (A−B) | B vượt baseline |
 |---|---|---|---|---|---|---|
@@ -544,7 +633,8 @@ Ba giao thức, khác nhau ở đúng một chỗ — cách chia dữ liệu. S�
 *(accuracy / macro-F1; B = nghệ sĩ trong test chưa từng xuất hiện lúc train)*
 
 **Kết luận, và nó thay đổi so với lần chạy trên corpus 1.000.** Ở quy mô nhỏ,
-không model nào vượt baseline. Với 4.000 bản ghi, MLP **vượt baseline 2,5 điểm
+không model nào vượt baseline `[unverified]` — lần chạy 1.000 bản ghi không còn file kết
+quả. Với 4.000 bản ghi, MLP **vượt baseline 2,5 điểm
 accuracy và 6,5 điểm macro-F1** ở giao thức B. Sai số chuẩn ở cỡ mẫu này khoảng
 0,008 nên mức đó vào khoảng 3σ — là tín hiệu thật, không phải nhiễu.
 
@@ -564,11 +654,19 @@ quyền sử dụng là hai bài toán khác nhau, và cái thứ hai không gi�
 thứ nhất. Giấy phép là thuộc tính pháp lý gắn với hợp đồng — cùng một file WAV có
 thể là CC-BY hôm nay và độc quyền thương mại tháng sau mà không đổi một bit.
 
+Đo lại ở quy mô hiện tại bằng `python scripts/train_license_classifier.py --sweep`
+(`experiments/results/exp09_license_complexity_sweep.json`, 24.375 mẫu, chia theo nghệ
+sĩ): C của LogisticRegression chọn được là 300, accuracy **0.3007 < baseline 0.4153**;
+chỉ macro-F1 vượt baseline (0.1842 so với 0.0838). Kết luận không đổi.
 
-### Bộ phân loại giấy phép — được tích hợp, kèm cảnh báo
 
-Theo yêu cầu của chủ dự án sau khi đã xem số liệu EXP-09, bộ phân loại vẫn được
-train và **tham gia quyết định mức rủi ro** cho bài ngoài cơ sở dữ liệu:
+### Bộ phân loại giấy phép — được tích hợp, nhưng bị cổng quyền chặn
+
+Theo yêu cầu của chủ dự án sau khi đã xem số liệu EXP-09, bộ phân loại
+(`models/license/license_clf_v1__license_type.joblib`,
+`backend/services/license_classifier_service.py`) vẫn chạy cho bài **ngoài** cơ sở dữ
+liệu, và giấy phép nó đoán đi qua Rule Engine như thường. Bảng dưới là **kết luận tạm**
+Rule Engine rút ra từ giấy phép dự đoán:
 
 | Giấy phép dự đoán | Phi thương mại | Thương mại |
 |---|---|---|
@@ -576,12 +674,15 @@ train và **tham gia quyết định mức rủi ro** cho bài ngoài cơ sở d
 | CC_BY | CONDITIONAL | CONDITIONAL |
 | CC_BY_NC_SA | CONDITIONAL | **HIGH** |
 
-Ba chốt an toàn được giữ, và người đọc báo cáo cần biết chúng tồn tại:
+Kết luận tạm đó **không phải kết quả cuối** — ba chốt an toàn:
 
 1. `identity_confidence` vẫn là điểm MERT thật, **không** thay bằng xác suất của
    classifier — §2 cấm gộp hai loại độ tin cậy.
-2. `rights_confidence` bị trừ **0.60** cho nguồn `PREDICTED` (nặng hơn cả metadata
-   mô phỏng), nên `decision_confidence` của mọi dự đoán chỉ còn **0.2**.
+2. `rights_confidence` bị trừ **0.60** cho nguồn `PREDICTED` và **0.20** vì thiếu
+   `verified_at` (khoá `predicted_source`, `unverified` trong `configs/rules_v1.yaml`),
+   còn **0.20** < `rights_gate.min_rights_confidence` 0.50. Vì vậy kết quả cuối là
+   `UNKNOWN` + `HUMAN_REVIEW_REQUIRED` với `decision_confidence` 0.0; kết luận tạm nằm ở
+   `evidence.rule_engine.provisional_decision` để người thẩm định tham khảo.
 3. Response mang cờ `rights.predicted = true`, để giao diện không hiển thị quyền
    suy đoán giống quyền tra được từ nguồn thật.
 
@@ -600,8 +701,9 @@ Ba chốt an toàn được giữ, và người đọc báo cáo cần biết ch
 | `dynamic_range_db` | Chênh lệch độ to theo thời gian |
 | `clipping_ratio` | Tỉ lệ mẫu chạm trần — dấu vết limiter đẩy kịch |
 
-Đo trên corpus: `00_0003.mp3` (RMS −22,0 / crest 20,6) → 0.162 *"giống bản thu
-mộc"*; `00_0001.mp3` (RMS −15,4 / crest 11,3) → 0.601 *"không kết luận được"*.
+Đo tay trên corpus `[unverified]` (không có file kết quả): `00_0003.mp3` (RMS −22,0 /
+crest 20,6) → 0.162 *"giống bản thu mộc"*; `00_0001.mp3` (RMS −15,4 / crest 11,3) →
+0.601 *"không kết luận được"*. Cách tính: `backend/services/production_features_service.py`.
 
 **Nó KHÔNG phải chỉ báo bản quyền và không được phép đổi mức rủi ro** — nhạc
 Creative Commons cũng master chuyên nghiệp, còn nhiều bản thu thương mại (cổ điển,
@@ -627,8 +729,10 @@ fingerprint, 100 mẫu mỗi biến đổi)
 Đây là câu trả lời bằng số cho "*Fingerprint thất bại ở đâu?*": mọi biến đổi giữ
 nguyên trục thời gian và cao độ đều đạt **99–100%**; toàn bộ nhóm pitch và tempo
 sụp về **0%** với điểm ~0.01–0.04. Đó là giới hạn bản chất của fingerprinting, và
-chính là lý do tồn tại của tầng MERT và tầng Cover. Độ trễ trung bình **4,5 giây**
-mỗi truy vấn — phần lớn là so với toàn bảng 24.375 fingerprint.
+chính là lý do tồn tại của tầng MERT và tầng Cover. Độ trễ trung bình **4,6 giây**
+mỗi truy vấn — EXP-01 luôn so với toàn bảng 24.375 fingerprint, không dùng bộ lọc hash.
+Nguồn: `experiments/results/exp01_fingerprint_baseline.json` (`metrics.per_transformation`,
+`metrics.mean_latency_ms`).
 
 **EXP-02 — MERT Retrieval** (leave-one-out trên 48.750 vector, 1,19 tỉ cặp khác bản
 ghi, tính theo khối)
@@ -642,7 +746,8 @@ Recall@5 = 0.9374 là **cận trên**; tiêu chí "Robust retrieval" của §13 
 bằng EXP-04 trên truy vấn đã biến đổi. Similarity cùng bản ghi 0.9645 so với khác
 bản ghi 0.7771. Ở τMERT = 0.98 vẫn còn 1.196 cặp khác bản ghi vượt ngưỡng (1,0 phần
 triệu), trong đó 283 cặp ≥ 0.999 — mức chỉ gặp khi hai bản ghi gần như cùng một
-audio.
+audio. Nguồn: `experiments/results/exp02_mert_retrieval.json`
+(`metrics.similarity_distribution`, `metrics.current_threshold_flags`).
 
 **EXP-04 — Năm hệ thống trên cùng 1.900 truy vấn** (thí nghiệm chính; τFP 0.30 ·
 τMERT 0.98 · τCover 0.90 — đúng cấu hình server, kể cả bộ lọc hash ở Tầng 1 và cách
@@ -668,7 +773,12 @@ cắt truy vấn theo nhịp độ ở tầng Cover)
   điểm sát ngưỡng. Lượt trước quét toàn bộ mọi truy vấn: Tầng 1 mất ~4,8 s, cascade
   trung bình 5.411 ms.
 
-So với lượt trước (Tầng 1 quét toàn bộ, Cover cắt cố định 30 s): Recall cascade 0.8047
+Nguồn: `experiments/results/exp04_hybrid_cascade.json` — `metrics.systems`,
+`metrics.cascade_stage_distribution`, `metrics.fingerprint_full_scans`; P50/P95 tính từ
+`raw_results[*].cascade.latency_ms` và `raw_results[*].fingerprint.latency_ms`.
+
+So với lượt trước (Tầng 1 quét toàn bộ, Cover cắt cố định 30 s;
+`git show 577f189:experiments/results/exp04_hybrid_cascade.json`): Recall cascade 0.8047
 → 0.8805, F1 0.8905 → 0.9352; từng biến đổi đổi nhịp của cascade 8/10/79/82% →
 **83/79/79/82%** (tempo 0.90/0.95/1.05/1.10).
 
@@ -685,7 +795,9 @@ ngưỡng:
 
 MERT đơn lẻ thiếu 0.008 so với mục tiêu 0.80, toàn bộ do dịch cao độ (MERT mã hoá cao
 độ tuyệt đối; bỏ nhóm đó ra thì 0.954). Cover trượt ở chiều ngược lại — đoạn cắt 10/15
-giây (0.06) — và ở đó MERT bắt đủ. Hai tầng bù đúng điểm mù của nhau.
+giây (0.06) — và ở đó MERT bắt đủ. Hai tầng bù đúng điểm mù của nhau. Nguồn:
+`experiments/results/exp04_hybrid_cascade.json` (`metrics.retrieval_recall_at_k`; hàng
+theo nhóm là trung bình các phép biến đổi, mỗi phép 100 truy vấn).
 
 **EXP-05 — Độ bền theo nhóm biến đổi** (tổng hợp lại từ EXP-01 và EXP-04; mỗi ô là
 tỉ lệ nhận ĐÚNG sau khi áp ngưỡng)
@@ -700,13 +812,18 @@ tỉ lệ nhận ĐÚNG sau khi áp ngưỡng)
 | Dịch cao độ | 400 | 0% | 0,25% | 71% | **71%** | −0.992 |
 | Chồng âm | 100 | 57% | 17% | 57% | **65%** | −0.538 |
 
+Nguồn: `experiments/results/exp05_robustness.json` (`metrics.by_family`; cột "Suy giảm
+điểm FP" = `fingerprint_mean_score` − 1.0).
+
 - **Dịch cao độ và đổi tốc độ** từng là điểm mù của cả Chromaprint lẫn MERT; tầng Cover
   đưa cascade lên **71%** và **81%** (đổi tốc độ từ 45% trước khi cắt truy vấn theo
-  nhịp độ).
+  nhịp độ — `git show 577f189:experiments/results/exp05_robustness.json`).
 - **Còn yếu nhất: chồng âm (65%) và dịch cao độ (71%)** — với dịch cao độ, Cover luôn
   xếp đúng bài ở top-5 (1.000) nhưng điểm nhiều truy vấn rơi dưới τCover = 0.90.
-- Cột MERT thấp không phải vì MERT xếp hạng kém: điểm MERT chỉ giảm 0.03–0.06 khi
-  biến đổi, nhưng thế là đủ rơi dưới τMERT = 0.98.
+- Cột MERT thấp không phải vì MERT xếp hạng kém: điểm MERT trung bình của truy vấn gốc
+  30 s là 0.9798 và các nhóm biến đổi chỉ giảm 0–0.053 (nhiều nhất ở dịch cao độ:
+  0.9266), nhưng τMERT = 0.98 nằm ngay trên mức đó (`mert_mean_score` trong
+  `experiments/results/exp05_robustness.json` và `experiments/results/exp04_hybrid_cascade.json`).
 
 
 ## 🧪 Kiểm thử
@@ -715,26 +832,37 @@ tỉ lệ nhận ĐÚNG sau khi áp ngưỡng)
 python -m pytest -q -rs
 ```
 
+Kết quả lần rà 2026-09-19 (`python -m pytest tests -q -rs`, CSDL và `fpcalc` có sẵn):
+**272 passed, 2 skipped**, 1 warning, 103,5 giây. Hai test bỏ qua là do dữ liệu, không
+phải do thiếu phụ thuộc: truy vấn khớp ngay ở tầng 1 nên không có Top-K
+(`tests/test_cascade_service.py`), và fingerprint quá ngắn để cắt phần giữa
+(`tests/test_fingerprint_match.py`). **Coverage: chưa đo** — môi trường chưa cài
+`pytest-cov`.
+
 Test cần PostgreSQL hoặc `fpcalc` sẽ **skip kèm lý do** thay vì báo đỏ.
-Hai bộ test đáng chú ý:
+Các bộ test đáng chú ý:
 
 - `tests/test_chromaprint_codec.py` — chứng minh bộ giải nén thuần Python cho ra
   đúng từng phần tử so với `fpcalc -raw`.
 - `tests/test_fingerprint_match.py` — chứng minh bản so khớp vector hoá cho điểm
   giống hệt `acoustid._match_fingerprints` khi giới hạn cùng dải offset.
-- `tests/test_decision_rules.py` — 65 case phủ mọi nhánh Rule Engine (§9).
-- `tests/test_cover_service.py` — 19 case, trong đó phần cốt lõi chứng minh dịch
+- `tests/test_decision_rules.py` — 65 case phủ mọi nhánh Rule Engine (ĐC §9).
+- `tests/test_honest_labels.py` — 5 case giữ nhãn dữ liệu trung thực (xem mục dữ liệu).
+- `tests/test_cover_service.py` — 37 case, trong đó phần cốt lõi chứng minh dịch
   cao độ k bán cung cho OTI đúng bằng `(-k) mod 12`, dùng hợp âm tổng hợp có tần
   số biết trước nên kết quả là xác định, không phụ thuộc phase vocoder.
 
 ### Một phát hiện quan trọng về Chromaprint
 
-`acoustid._match_fingerprints` chỉ dò lệch **±120 item ≈ ±15 giây**, nên một đoạn
-cắt từ giữa bài **không thể khớp**. EXP-01 đo được trên cùng một cặp fingerprint:
-điểm **0.0498** với cửa sổ ±120 item, và **0.8688** khi dò toàn bộ offset (điểm
-khớp thật nằm ở offset −242 item = đúng giây 30 của bài). Vì vậy matcher của hệ
-thống mặc định dò toàn bộ offset (`FP_MAX_ALIGN_OFFSET=0`), cài đặt bằng phép
-cộng đường chéo với `np.bincount` nên vừa chính xác vừa nhanh (~1.4 ms/cặp).
+`acoustid._match_fingerprints` chỉ dò lệch **±120 item ≈ ±15 giây** (hằng số
+`MAX_ALIGN_OFFSET = 120` trong thư viện `acoustid`), nên một đoạn cắt từ giữa bài
+**không thể khớp**. Đo tay trên một cặp fingerprint `[unverified]`: điểm **0.0498** với
+cửa sổ ±120 item, và **0.8688** khi dò toàn bộ offset (điểm khớp thật nằm ở offset −242
+item = đúng giây 30 của bài). Vì vậy matcher của hệ thống mặc định dò toàn bộ offset
+(`FP_MAX_ALIGN_OFFSET=0`, `backend/config.py`), cài đặt bằng phép cộng đường chéo với
+`np.bincount` nên vừa chính xác vừa nhanh (~1.4 ms/cặp `[unverified]`).
+`tests/test_fingerprint_match.py` kiểm điểm của bản vector hoá trùng acoustid khi cùng
+dải offset.
 
 ---
 
@@ -742,7 +870,7 @@ cộng đường chéo với `np.bincount` nên vừa chính xác vừa nhanh (~
 
 | Script | Công dụng |
 |---|---|
-| `scripts/rebuild_faiss_index.py` | Dựng lại FAISS index + `faiss_id_map.json` từ CSV |
+| `scripts/rebuild_faiss_index.py` | Dựng lại FAISS index + bản đồ ID `data/processed/faiss_id_map.json` từ `data/processed/embeddings_master.csv` — cả ba file đều sinh ra, bị gitignore |
 | `scripts/check_data_integrity.py` | Kiểm tra khoá ngoại, số chiều vector, khớp index/ID map |
 | `scripts/add_test_track.py` | Nạp một file nhạc thật vào CSDL để thử end-to-end |
 | `scripts/check_fingerprint.py` | Chạy thử riêng tầng 1 trên một file |
@@ -752,6 +880,12 @@ cộng đường chéo với `np.bincount` nên vừa chính xác vừa nhanh (~
 | `scripts/build_embeddings.py` | Sinh embedding MERT từ audio thật và nạp vào reference |
 | `scripts/augment_audio.py` | Dựng tập truy vấn biến đổi (crop/nén/nhiễu/pitch/tempo) |
 | `scripts/enrich_rights_metadata.py` | Sinh rights phủ đủ 5 nhóm Rule Engine (metadata mô phỏng) |
+| `scripts/relabel_simulated_sources.py` | Gắn nhãn trung thực cho dữ liệu mô phỏng trong `data/processed/*_master.csv` |
+| `scripts/fetch_fma.py` · `scripts/ingest_corpus.py` | Tải corpus FMA kèm giấy phép thật · nạp audio thật vào các file master |
+| `scripts/build_cover_index.py` | Dựng chỉ mục Cover (CQT chroma) cho mọi bản ghi có audio thật |
+| `scripts/run_all_experiments.py` | Chạy toàn bộ thí nghiệm đúng thứ tự phụ thuộc |
+| `scripts/apply_calibrated_thresholds.py` | Ghi ngưỡng đã hiệu chỉnh vào `.env` (chỉ tự siết; nới cần `--allow-loosen`) |
+| `scripts/train_license_classifier.py` | Train bộ phân loại giấy phép; `--sweep` quét C (EXP-09) |
 
 ---
 
@@ -768,6 +902,32 @@ Cơ sở dữ liệu có **158.117 bản ghi**, nhưng chỉ **24.375** trong đ
 | Spotify Web API | 3.361 | ❌ | ❌ | COMMERCIAL | chưa xác minh hãng phát hành |
 | YouTube Audio Library | 400 | ❌ | ❌ | AUDIO_LIBRARY | `SIMULATED` (có `verified_at`) |
 | Creator Music | 100 | ❌ | ❌ | CREATOR_MUSIC | `SIMULATED` (có `verified_at`) |
+
+Nguồn số: cột "Bản ghi" đếm theo `source_dataset` trong `data/processed/metadata_master.csv`;
+trong `data/processed/rights_master.csv` (158.117 dòng) cột `source` có tiền tố `FMA`
+24.375 dòng, `SIMULATED` 130.381 dòng, `Spotify` 3.361 dòng; fingerprint trong
+`data/processed/fingerprints_master.csv`. Vector MERT (48.750) và chỉ mục FAISS/Cover không
+nằm trong repo (sinh lại được, xem mục Khởi chạy).
+
+**Nhãn nào thật, nhãn nào mô phỏng — và bằng chứng trong repo:**
+
+- **Thật:** 24.375 bài FMA có audio, fingerprint `fpcalc` thật và giấy phép Creative
+  Commons do FMA công bố; chỉ nhóm này có `metadata_verified = TRUE`.
+- **Mô phỏng:** 130.381 dòng quyền mang nguồn `SIMULATED` (dataset_G nhạc Việt 100.000,
+  MTG-Jamendo 29.881, YouTube Audio Library 400, Creator Music 100) — không có audio,
+  không phải giấy phép tra từ nguồn thật; Spotify Web API 3.361 dòng có hãng phát hành
+  chưa xác minh.
+- **Suy đoán:** giấy phép do bộ phân loại đoán cho bài ngoài CSDL mang nguồn `PREDICTED`
+  và luôn bị `rights_gate` hạ về `UNKNOWN` (mục Bộ phân loại giấy phép).
+- `scripts/relabel_simulated_sources.py` là script đã gắn lại nhãn trung thực cho phần mô
+  phỏng (đổi `source` của dataset_G sang nhãn `SIMULATED`, bỏ `verified_at`, hạ các bản
+  thu "public domain" phát hành quá gần đây), mặc định chỉ xem trước, ghi thật cần
+  `--write`. `tests/test_honest_labels.py` (5 test) giữ các quy tắc gắn nhãn đó: chỉ FMA
+  là metadata đã xác minh, bản thu mới phát hành không thể là PD, cờ Creator Music loại
+  trừ nhau, `NaN` không bị đọc thành "có chia doanh thu", nhãn Spotify không còn `NaN`.
+- Lưu ý: mục "Ghi chú về tình trạng dữ liệu hiện tại" ở cuối
+  `data/metadata/data_dictionary.md` mô tả trạng thái **cũ** (trước khi nạp FMA medium) —
+  ở đó ghi toàn bộ quyền là mô phỏng và chỉ 116 bản ghi có embedding; số đúng là ở đây.
 
 Mọi thí nghiệm nhận diện (EXP-01 → EXP-08) chỉ chạm tới 24.375 bài FMA. Audio thật
 **không nằm trong repo** — đặt ở `AUDIO_ROOT`, dựng lại bằng `scripts/fetch_fma.py`
@@ -796,9 +956,13 @@ nhánh Rule Engine có dữ liệu tra cứu, nhưng:
   đối chứng độc lập với bốn cờ FMA tự tách sẵn (`allow_commercial_use`,
   `allow_derivatives`, `require_attribution`, `require_share_alike`).
 - Tập truy vấn: **2.090 truy vấn** — 1.900 từ 100 bài nguồn × 19 phép biến đổi, cộng
-  190 từ 10 bài CC0 cho EXP-08.
+  190 từ 10 bài CC0 cho EXP-08. Thư mục `data/test_queries/` **không nằm trong repo**
+  (bị gitignore), dựng lại bằng `python scripts/augment_audio.py --from-db`; tham số của
+  `experiments/results/exp04_hybrid_cascade.json` (`queries: 1900`) và `experiments/results/exp08_end_to_end.json` (`queries: 380`,
+  110 bài nguồn trong `held_out_exclusions`) ghi lại quy mô đã dùng.
 
-Phân bố giấy phép của 24.375 bài FMA:
+Phân bố giấy phép của 24.375 bài FMA (dòng có `source` bắt đầu bằng `FMA` trong
+`data/processed/rights_master.csv`):
 
 | Giấy phép | Số lượng | Giấy phép | Số lượng |
 |---|---|---|---|
@@ -817,20 +981,60 @@ Phân bố giấy phép của 24.375 bài FMA:
   nhóm 5 chỉ để bảng thống kê đủ 5 nhóm.**
 - **Chưa có bản thu cover nào**, nên EXP-07 vẫn là thí nghiệm bất biến cao độ/nhịp độ
   trên chính bản thu gốc, không phải cover identification đúng nghĩa. Cần subset
-  SecondHandSongs (§8).
+  SecondHandSongs (ĐC §8).
+- **`platform` chưa có luật nào dùng** — xem mục Rule Engine.
 - 10.032 dòng `COVER_MECHANICAL_LICENSE` (dataset_G) không thuộc nhóm nào → nhánh
   `uncategorized`, `UNKNOWN` kèm lý do nêu đích danh loại giấy phép.
 
-Chạy `python scripts/check_data_integrity.py` để xem báo cáo cập nhật
-(hiện tại: **17 PASS / 2 WARN / 0 FAIL**).
+Chạy `python scripts/check_data_integrity.py` để xem báo cáo cập nhật (chạy lại
+2026-09-19: **17 PASS / 2 WARN / 0 FAIL**; hai WARN là 24.375 fingerprint chỉ có 24.299
+giá trị duy nhất, và chỉ 24.375/158.117 bản ghi có embedding).
 
 ---
 
 
 ## 📂 Cấu trúc dự án
 
+Chỉ gồm các file được git theo dõi (đối chiếu `git ls-files`, 2026-09-19). Audio, vector
+MERT, chỉ mục FAISS/Cover, tập truy vấn và `.env` không nằm trong repo.
+
+```text
+.
+├── backend/
+│   ├── main.py                  # FastAPI: lifespan (nạp FAISS/rules, làm nóng), /health, mount frontend
+│   ├── config.py                # đọc .env: ngưỡng, đường dẫn, model
+│   ├── api/routes.py            # /api/v1: analyze, jobs, results, tracks, feedback, search
+│   ├── database/session.py      # kết nối PostgreSQL qua DATABASE_URL
+│   ├── schemas/analysis.py      # schema request/response
+│   └── services/                # 14 file: analysis_pipeline, audio, cascade, chromaprint_codec,
+│                                #   cover, decision, embedding, fingerprint, job, license_classifier,
+│                                #   license_mapping, production_features, retrieval, rights
+├── configs/rules_v1.yaml        # luật Rule Engine: identity_gate, 5 nhóm, rights_gate, uncategorized
+├── frontend/                    # index.html, app.js, styles.css — phục vụ tĩnh ở /
+├── experiments/
+│   ├── common.py                # giao thức dùng chung (HeldOutProtocol, manifest, lưu kết quả)
+│   ├── exp01_fingerprint/ … exp09_license_learnability/   # mỗi thư mục một run.py
+│   │                            #   exp07_cover/ có thêm margin_rule.py, query_span_check.py
+│   └── results/                 # 11 file JSON kết quả
+├── scripts/                     # 22 script dữ liệu, chỉ mục, thí nghiệm
+├── tests/                       # 20 file test + conftest.py
+├── models/license/              # bộ phân loại giấy phép: .joblib + .json metadata
+├── data/
+│   ├── metadata/data_dictionary.md
+│   └── processed/               # 7 CSV: compositions/metadata/rights/fingerprints/test_queries_master, corpus_fma*
+├── docs/DE_CUONG.md             # đề cương (ĐC §n)
+├── .claude/                     # CLAUDE.md (§n), rules/, skills/, agents/, hooks/, memory.md, settings.json
+├── .github/workflows/generate_readme.yml
+├── Dockerfile · docker-compose.yml · .dockerignore
+├── init_db.py · requirements.txt · pytest.ini · .env.example
+├── CLAUDE.md                    # file rỗng — tài liệu định hướng nằm ở .claude/CLAUDE.md
+└── ĐỀ CƯƠNG AI nhận diện bản quyền âm nhạc.docx
+```
+
 <!-- TREE:START -->
 <!-- TREE:END -->
 
 ---
-*Phần cấu trúc thư mục ở trên được GitHub Action cập nhật tự động.*
+*Khối giữa hai marker `TREE` do workflow `.github/workflows/generate_readme.yml` tự điền
+khi push lên `main`. Lần chạy duy nhất trên GitHub (commit `37e9c6a`) thất bại nên khối
+này đang trống; cây viết tay ở trên là bản đã đối chiếu với `git ls-files`.*
