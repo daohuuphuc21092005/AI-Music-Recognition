@@ -925,9 +925,8 @@ nằm trong repo (sinh lại được, xem mục Khởi chạy).
   `--write`. `tests/test_honest_labels.py` (5 test) giữ các quy tắc gắn nhãn đó: chỉ FMA
   là metadata đã xác minh, bản thu mới phát hành không thể là PD, cờ Creator Music loại
   trừ nhau, `NaN` không bị đọc thành "có chia doanh thu", nhãn Spotify không còn `NaN`.
-- Lưu ý: mục "Ghi chú về tình trạng dữ liệu hiện tại" ở cuối
-  `data/metadata/data_dictionary.md` mô tả trạng thái **cũ** (trước khi nạp FMA medium) —
-  ở đó ghi toàn bộ quyền là mô phỏng và chỉ 116 bản ghi có embedding; số đúng là ở đây.
+- Cùng các số này, theo từng bảng: mục "Ghi chú về tình trạng dữ liệu hiện tại" trong
+  `data/metadata/data_dictionary.md`.
 
 Mọi thí nghiệm nhận diện (EXP-01 → EXP-08) chỉ chạm tới 24.375 bài FMA. Audio thật
 **không nằm trong repo** — đặt ở `AUDIO_ROOT`, dựng lại bằng `scripts/fetch_fma.py`
@@ -1024,17 +1023,7 @@ MERT, chỉ mục FAISS/Cover, tập truy vấn và `.env` không nằm trong re
 │   └── processed/               # 7 CSV: compositions/metadata/rights/fingerprints/test_queries_master, corpus_fma*
 ├── docs/DE_CUONG.md             # đề cương (ĐC §n)
 ├── .claude/                     # CLAUDE.md (§n), rules/, skills/, agents/, hooks/, memory.md, settings.json
-├── .github/workflows/generate_readme.yml
 ├── Dockerfile · docker-compose.yml · .dockerignore
 ├── init_db.py · requirements.txt · pytest.ini · .env.example
-├── CLAUDE.md                    # file rỗng — tài liệu định hướng nằm ở .claude/CLAUDE.md
 └── ĐỀ CƯƠNG AI nhận diện bản quyền âm nhạc.docx
 ```
-
-<!-- TREE:START -->
-<!-- TREE:END -->
-
----
-*Khối giữa hai marker `TREE` do workflow `.github/workflows/generate_readme.yml` tự điền
-khi push lên `main`. Lần chạy duy nhất trên GitHub (commit `37e9c6a`) thất bại nên khối
-này đang trống; cây viết tay ở trên là bản đã đối chiếu với `git ls-files`.*

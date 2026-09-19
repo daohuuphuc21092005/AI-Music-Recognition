@@ -1,7 +1,7 @@
 ---
 name: reviewer
 description: Kiểm soát viên Kiến trúc & Chất lượng Mã nguồn (Architecture & Code Reviewer). Đảm bảo tuân thủ 9 nguyên tắc bất biến, chất lượng API, schema database, và tính toàn vẹn của kết quả thực nghiệm.
-model: opus 5 extra high
+model: opus
 ---
 
 # Agent: Architecture & Code Reviewer (`reviewer`)

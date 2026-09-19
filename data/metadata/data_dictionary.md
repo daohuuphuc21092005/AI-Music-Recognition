@@ -160,7 +160,20 @@ Thứ tự dòng của `embeddings_master.csv` **khớp 1-1** với thứ tự v
 
 ## Ghi chú về tình trạng dữ liệu hiện tại
 
-- Toàn bộ `rights` là **metadata mô phỏng** (`source` bắt đầu bằng `SIMULATED`),
-  sinh tiền định bằng `scripts/enrich_rights_metadata.py`. Không phải giấy phép thật.
-- Chỉ **116/2750** bản ghi có embedding (114 từ dataset + 2 track có audio thật).
-- `audio_path` chưa trỏ tới file thật ⇒ chưa dựng được truy vấn biến đổi thật.
+Cập nhật 2026-09-19, đếm từ các CSV trong `data/processed/` (158.117 dòng mỗi bảng
+`compositions` / `recordings` / `rights`):
+
+- **Dữ liệu thật — 24.375 bản ghi FMA:** `audio_path` là đường dẫn tương đối tới file
+  audio thật (vd. `fma/000002.mp3`, gốc là `AUDIO_ROOT`), giấy phép Creative Commons do
+  FMA công bố (`rights.source` bắt đầu bằng `FMA`), `metadata_verified = TRUE` — nhóm
+  duy nhất có cờ này. Cả 24.375 bản ghi có fingerprint thật của `fpcalc` và 2 vector MERT
+  (48.750 vector, file `embeddings_master.csv` không nằm trong repo).
+- **Metadata mô phỏng — 130.381 dòng `rights.source` bắt đầu bằng `SIMULATED`:**
+  dataset_G nhạc Việt 100.000 và MTG-Jamendo 29.881 (`audio_path` là URL, không có
+  audio), YouTube Audio Library 400 và Creator Music 100 (`audio_path` trống). Sinh bằng
+  `scripts/enrich_rights_metadata.py`, gắn lại nhãn trung thực bằng
+  `scripts/relabel_simulated_sources.py`; quy tắc gắn nhãn có test trong
+  `tests/test_honest_labels.py`.
+- **Spotify Web API — 3.361 dòng:** `audio_path` là URL, hãng phát hành chưa xác minh.
+- Không bản ghi nào ngoài FMA có fingerprint hay embedding; `rights_gate` của Rule Engine
+  hạ mọi kết luận dựa trên metadata mô phỏng chưa có `verified_at` về `UNKNOWN`.

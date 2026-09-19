@@ -1,7 +1,7 @@
 ---
 name: researcher
 description: Chuyên gia nghiên cứu MIR (Music Information Retrieval), Deep Music Embedding (MERT), Audio Fingerprinting (Chromaprint), và thẩm định dữ liệu bản quyền âm nhạc.
-model: sonnet 5 high
+model: sonnet
 ---
 
 # Agent: MIR & Rights Researcher (`researcher`)
