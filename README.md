@@ -106,8 +106,9 @@ pip install -r requirements.txt
 - **Windows:** tải `chromaprint-fpcalc-*-windows-x86_64.zip` tại
   <https://github.com/acoustid/chromaprint/releases>, giải nén và đặt `fpcalc.exe`
   vào một thư mục nằm trong `PATH` (ví dụ `%USERPROFILE%\bin`).
-  *conda-forge không có gói `chromaprint` cho win-64.*
-- **Linux/Docker:** `apt-get install -y libchromaprint-tools` (đã có sẵn trong Dockerfile).
+  *conda-forge không có gói `chromaprint` cho win-64* `[unverified]`.
+- **Linux/Docker:** `apt-get install -y libchromaprint-tools` `[unverified]` — lệnh này đã
+  nằm sẵn trong `Dockerfile`, nhưng image chưa được build lại trong lần rà này.
 
 Kiểm tra: `fpcalc -version` (đã chạy: `fpcalc version 1.5.1`).
 
@@ -262,7 +263,9 @@ kết quả ghi lại cả ba ở `evidence.rule_engine.usage_context`. Luật t
 
 `platform` được nhận, kiểm giá trị và lưu lại, nhưng hiện **không làm thay đổi** mức rủi
 ro: không luật nào trong `configs/rules_v1.yaml` tham chiếu `context.platform`
-(`tests/test_decision_rules.py` chỉ kiểm dữ kiện này có mặt).
+(`tests/test_decision_rules.py` chỉ kiểm dữ kiện này có mặt). Dữ liệu cũng chưa có gì để
+luật đó dùng: cả 158.117 dòng trong `data/processed/rights_master.csv` đều có
+`platform = ALL` và `territory = GLOBAL`, tức chưa có giấy phép nào giới hạn theo nền tảng.
 
 ---
 
@@ -277,7 +280,7 @@ Bốn màn hình theo ĐC §13 (tương ứng §15):
 | Màn hình | Nội dung |
 |---|---|
 | **1. Upload** | Kéo–thả hoặc chọn file · Nền tảng · Mục đích (phi thương mại / thương mại) · Bật kiếm tiền. Cả ba được gửi tới Rule Engine; **Mục đích và Kiếm tiền có trong điều kiện luật, Nền tảng hiện chỉ được ghi vào evidence** (xem mục Rule Engine). Máy chủ thiếu FFmpeg (theo `/health`) thì chọn file video bị báo ngay và khoá nút phân tích, thay vì tải lên rồi mới nhận `MODEL_FAILURE`. |
-| **2. Processing** | Bảy bước THẬT của pipeline, tô sáng theo trường `stage` mà backend ghi vào bảng `jobs` — **không có thanh chờ giả, không có "AI is thinking"**. Xong bước nào hiện độ trễ đo được của bước đó. |
+| **2. Processing** | Tám bước THẬT của pipeline (`VALIDATING` → `EXTRACTING_AUDIO` → `FINGERPRINTING` → `EMBEDDING` → `VECTOR_SEARCH` → `COVER_SEARCH` → `RIGHTS_LOOKUP` → `RULE_ENGINE`, khớp `STAGE_ORDER` trong `frontend/app.js`), tô sáng theo trường `stage` mà backend ghi vào bảng `jobs` — **không có thanh chờ giả, không có "AI is thinking"**. Xong bước nào hiện độ trễ đo được của bước đó. |
 | **3. Result** | Nhận diện · **căn cứ nhận diện** (điểm từng tầng so với ngưỡng của CHÍNH tầng đó — điểm Chromaprint, cosine MERT và điểm Cover không cùng thang) · Quyền & giấy phép (giấy phép do mô hình **suy đoán** hiện trong thẻ viền nét đứt, mỗi giá trị kèm "(suy đoán)", không tô xanh/đỏ như quyền tra được) · Mức rủi ro 🟢/🟡/🔴/⚪ · Khuyến nghị · **ba thanh độ tin cậy tách biệt** (identity / rights / decision; chưa định danh được thì thanh identity mờ đi và ghi rõ, vì đó là điểm cao nhất DƯỚI ngưỡng) · nút phản hồi Correct / Incorrect / Unsure. |
 | **4. Evidence** | Điểm fingerprint và ngưỡng hiệu dụng (ghi rõ khi bị nâng cho truy vấn ngắn) · tầng 1 lọc theo hash hay quét toàn bộ, và vì sao · bảng Top-K của MERT · tầng Cover: lệch cao độ quy từ OTI (OTI 11 = truy vấn cao hơn 1 bán cung) và hệ số nhịp của đoạn cắt thắng · luật Rule Engine đã kích hoạt · nguồn metadata quyền và ngày xác minh · PD của tác phẩm và PD của bản thu **để riêng** (§2) · độ trễ từng bước · JSON gốc. |
 
@@ -381,8 +384,8 @@ trượt, nên con số MERT đơn lẻ luôn được báo cạnh bên (biên b
 
 **Giữ τFP = 0.30 dù quy tắc hiệu chỉnh đề xuất 0.10.** EXP-01 đo lại dưới
 `HeldOutProtocol` cho tỉ lệ nhận nhầm của tầng 1 là 0,37% / 0,11% / 0 ở τ 0.10 / 0.15 /
-≥ 0.20 (giao thức cũ đếm cả việc nhận ra bài bị trộn chồng là nhận nhầm: 2,26% / 1,63%
-/ 0,68%) — cả hai bộ số trong `experiments/results/exp01_fingerprint_baseline.json`
+0.20 (và 0 ở mọi τ cao hơn); giao thức cũ đếm cả việc nhận ra bài bị trộn chồng là nhận
+nhầm nên cho 2,26% / 1,63% / 0,68% ở cùng ba mức τ — cả hai bộ số trong `experiments/results/exp01_fingerprint_baseline.json`
 (`metrics.sweep`, cột `false_positive_rate` và `false_positive_rate_exact_only`). Quy tắc
 chỉ nhìn F1 của tầng 1 nên ra 0.10. Mô phỏng cả cascade (điểm quét đầy đủ của EXP-01 +
 quyết định MERT/Cover của EXP-04, tái lập đúng EXP-04 ở 0.30) — `[unverified]`: script mô
@@ -727,7 +730,8 @@ fingerprint, 100 mẫu mỗi biến đổi)
 | noise SNR 5 dB | 99/100 | 0.822 | voice overlay | 57/100 | 0.467 |
 
 Đây là câu trả lời bằng số cho "*Fingerprint thất bại ở đâu?*": mọi biến đổi giữ
-nguyên trục thời gian và cao độ đều đạt **99–100%**; toàn bộ nhóm pitch và tempo
+nguyên trục thời gian và cao độ đều đạt **99–100%**, trừ chồng âm (57% — bài thứ hai
+trộn vào làm lệch fingerprint); toàn bộ nhóm pitch và tempo
 sụp về **0%** với điểm ~0.01–0.04. Đó là giới hạn bản chất của fingerprinting, và
 chính là lý do tồn tại của tầng MERT và tầng Cover. Độ trễ trung bình **4,6 giây**
 mỗi truy vấn — EXP-01 luôn so với toàn bảng 24.375 fingerprint, không dùng bộ lọc hash.
@@ -821,8 +825,8 @@ Nguồn: `experiments/results/exp05_robustness.json` (`metrics.by_family`; cột
 - **Còn yếu nhất: chồng âm (65%) và dịch cao độ (71%)** — với dịch cao độ, Cover luôn
   xếp đúng bài ở top-5 (1.000) nhưng điểm nhiều truy vấn rơi dưới τCover = 0.90.
 - Cột MERT thấp không phải vì MERT xếp hạng kém: điểm MERT trung bình của truy vấn gốc
-  30 s là 0.9798 và các nhóm biến đổi chỉ giảm 0–0.053 (nhiều nhất ở dịch cao độ:
-  0.9266), nhưng τMERT = 0.98 nằm ngay trên mức đó (`mert_mean_score` trong
+  30 s là 0.9798; trung bình theo nhóm biến đổi chỉ lệch từ +0.007 (cắt đoạn, 0.9869)
+  tới −0.053 (dịch cao độ, 0.9266), nhưng τMERT = 0.98 nằm ngay trên mức đó (`mert_mean_score` trong
   `experiments/results/exp05_robustness.json` và `experiments/results/exp04_hybrid_cascade.json`).
 
 
@@ -833,7 +837,8 @@ python -m pytest -q -rs
 ```
 
 Kết quả lần rà 2026-09-19 (`python -m pytest tests -q -rs`, CSDL và `fpcalc` có sẵn):
-**272 passed, 2 skipped**, 1 warning, 103,5 giây. Hai test bỏ qua là do dữ liệu, không
+**272 passed, 2 skipped**, 1 warning (thời gian chạy dao động giữa các lần, khoảng 1,5
+phút trên máy dev). Hai test bỏ qua là do dữ liệu, không
 phải do thiếu phụ thuộc: truy vấn khớp ngay ở tầng 1 nên không có Top-K
 (`tests/test_cascade_service.py`), và fingerprint quá ngắn để cắt phần giữa
 (`tests/test_fingerprint_match.py`). **Coverage: chưa đo** — môi trường chưa cài
@@ -1025,5 +1030,5 @@ MERT, chỉ mục FAISS/Cover, tập truy vấn và `.env` không nằm trong re
 ├── .claude/                     # CLAUDE.md (§n), rules/, skills/, agents/, hooks/, memory.md, settings.json
 ├── Dockerfile · docker-compose.yml · .dockerignore
 ├── init_db.py · requirements.txt · pytest.ini · .env.example
-└── ĐỀ CƯƠNG AI nhận diện bản quyền âm nhạc.docx
+└── ĐỀ CƯƠNG AI nhận điện bản quyền âm nhạc.docx   # đề cương bản Word (tên file gốc giữ nguyên)
 ```
