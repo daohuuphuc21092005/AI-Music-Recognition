@@ -8,6 +8,8 @@ Trước Giai đoạn 2, `decision_service` (Rule Engine) không hề được g
 API tự sinh khuyến nghị bằng một chuỗi if/else riêng trong `rights_service`.
 Nay chỉ có MỘT nơi ra quyết định.
 """
+import logging
+import os
 import time
 
 from sqlalchemy.orm import Session
@@ -21,6 +23,9 @@ from backend.services.rights_service import (
     generate_rights_recommendation,
     get_full_music_rights,
 )
+from backend.services.window_scan import get_audio_duration, plan_windows, slice_audio
+
+logger = logging.getLogger("music_rights_ai")
 
 
 def _label_candidates(db: Session, *candidate_lists) -> None:
@@ -36,7 +41,7 @@ def _label_candidates(db: Session, *candidate_lists) -> None:
 
     ids = {str(c["recording_id"]) for lst in candidate_lists for c in (lst or [])
            if isinstance(c, dict) and c.get("recording_id")}
-    if not ids:
+    if not ids or db is None:
         return
     try:
         # recording_id là UUID trong CSDL còn ứng viên mang chuỗi -> ép về text,
@@ -59,8 +64,9 @@ def _label_candidates(db: Session, *candidate_lists) -> None:
                 candidate["artist"] = artist
 
 
-def analyze_audio(audio_path: str, filename: str, db: Session,
-                  vector_index, usage_context: dict, on_stage=None) -> dict:
+def analyze_audio(audio_path: str, filename: str = None, db: Session = None,
+                  vector_index=None, usage_context: dict = None, on_stage=None,
+                  exclude_recording_ids=None) -> dict:
     """
     Chạy trọn pipeline cho một file. Ném AudioProcessingError / PipelineError
     với mã lỗi chuẩn hoá để tầng API map sang HTTP response.
@@ -70,6 +76,8 @@ def analyze_audio(audio_path: str, filename: str, db: Session,
     """
     start = time.time()
     report = on_stage or (lambda _stage: None)
+    filename = filename or os.path.basename(audio_path)
+    usage_context = usage_context or {"platform": "OTHER", "commercial_use": False, "monetization": False}
 
     report("VALIDATING")
     audio_service.validate_upload(audio_path, filename)
@@ -78,18 +86,153 @@ def analyze_audio(audio_path: str, filename: str, db: Session,
     report("EXTRACTING_AUDIO")
     mert_path, temp_to_cleanup = audio_service.prepare_for_embedding(audio_path, filename)
 
+    source_for_scan = mert_path if (mert_path and os.path.exists(mert_path)) else audio_path
+    total_duration = get_audio_duration(source_for_scan)
+
     try:
-        cascade = process_music_query(
-            audio_path=audio_path,
-            db=db,
-            vector_index=vector_index,
-            top_k=config.TOP_K,
-            mert_audio_path=mert_path,
-            on_stage=report,
-        )
+        # File <= 30s hoặc SCAN_MODE=first: kết quả Y HỆT trước đây (cascade nhận file gốc)
+        if total_duration <= 30.0 or getattr(config, "SCAN_MODE", "multi") == "first":
+            cascade = process_music_query(
+                audio_path=audio_path,
+                db=db,
+                vector_index=vector_index,
+                top_k=config.TOP_K,
+                mert_audio_path=mert_path,
+                on_stage=report,
+                exclude_recording_ids=exclude_recording_ids,
+            )
+            if "evidence" not in cascade:
+                cascade["evidence"] = {}
+            score_val = round(float(cascade.get("identity_confidence") or cascade.get("score") or 0.0), 4)
+            cascade["evidence"]["windows"] = [{
+                "start_s": 0.0,
+                "end_s": round(total_duration, 2) if total_duration > 0 else 30.0,
+                "stage": cascade.get("pipeline_stage"),
+                "match_type": cascade.get("match_type"),
+                "score": score_val,
+            }]
+            cascade["evidence"]["windows_scanned"] = 1
+            cascade["evidence"]["stopped_early"] = False
+        else:
+            window_starts = plan_windows(
+                total_duration, window_s=30.0, max_windows=config.SCAN_MAX_WINDOWS
+            )
+            if len(window_starts) <= 1:
+                cascade = process_music_query(
+                    audio_path=audio_path,
+                    db=db,
+                    vector_index=vector_index,
+                    top_k=config.TOP_K,
+                    mert_audio_path=mert_path,
+                    on_stage=report,
+                    exclude_recording_ids=exclude_recording_ids,
+                )
+                if "evidence" not in cascade:
+                    cascade["evidence"] = {}
+                score_val = round(float(cascade.get("identity_confidence") or cascade.get("score") or 0.0), 4)
+                cascade["evidence"]["windows"] = [{
+                    "start_s": 0.0,
+                    "end_s": round(total_duration, 2),
+                    "stage": cascade.get("pipeline_stage"),
+                    "match_type": cascade.get("match_type"),
+                    "score": score_val,
+                }]
+                cascade["evidence"]["windows_scanned"] = 1
+                cascade["evidence"]["stopped_early"] = False
+            else:
+                scan_budget = getattr(config, "SCAN_TIME_BUDGET_S", 60.0)
+                scan_start = time.time()
+                window_records = []
+                window_results = []
+                windows_skipped = 0
+
+                for idx, start_s in enumerate(window_starts):
+                    # Kiểm tra ngân sách thời gian
+                    if idx > 0 and (time.time() - scan_start) >= scan_budget:
+                        windows_skipped = len(window_starts) - idx
+                        logger.info(
+                            "Het ngan sach thoi gian quet cua so (%.1fs). Bo qua %s cua so con lai.",
+                            scan_budget, windows_skipped,
+                        )
+                        break
+
+                    # Cắt lát 30s
+                    slice_path = slice_audio(source_for_scan, start_s=start_s, duration_s=30.0)
+                    try:
+                        slice_res = process_music_query(
+                            audio_path=slice_path,
+                            db=db,
+                            vector_index=vector_index,
+                            top_k=config.TOP_K,
+                            mert_audio_path=slice_path,
+                            on_stage=report,
+                            exclude_recording_ids=exclude_recording_ids,
+                        )
+                    finally:
+                        if slice_path and os.path.exists(slice_path):
+                            try:
+                                os.remove(slice_path)
+                            except OSError:
+                                pass
+
+                    score_val = round(
+                        float(slice_res.get("identity_confidence") or slice_res.get("score") or 0.0), 4
+                    )
+                    end_s = round(min(start_s + 30.0, total_duration), 2)
+                    record = {
+                        "start_s": round(float(start_s), 2),
+                        "end_s": end_s,
+                        "stage": slice_res.get("pipeline_stage"),
+                        "match_type": slice_res.get("match_type"),
+                        "score": score_val,
+                    }
+                    window_records.append(record)
+                    window_results.append(slice_res)
+
+                    # Dừng sớm khi gặp EXACT_MATCH
+                    if slice_res.get("match_type") == "EXACT_MATCH":
+                        logger.info("Dung som tai cua so start=%.1fs (EXACT_MATCH)", start_s)
+                        break
+
+                # Tổng hợp kết quả:
+                # 1. Ưu tiên các cửa sổ khớp
+                matched_candidates = [
+                    (res, rec) for res, rec in zip(window_results, window_records)
+                    if res.get("match_type") in ("EXACT_MATCH", "COVER_MATCH", "NEAR_MATCH")
+                ]
+
+                priority = {"EXACT_MATCH": 3, "COVER_MATCH": 2, "NEAR_MATCH": 1}
+
+                if matched_candidates:
+                    # Chọn cửa sổ có identity_confidence cao nhất; hoà thì EXACT > COVER > NEAR
+                    best_candidate = max(
+                        matched_candidates,
+                        key=lambda item: (
+                            float(item[0].get("identity_confidence") or 0.0),
+                            priority.get(item[0].get("match_type"), 0),
+                        ),
+                    )
+                    cascade = best_candidate[0]
+                else:
+                    # Không cửa sổ nào khớp -> UNKNOWN với best_score cao nhất
+                    best_unknown = max(
+                        zip(window_results, window_records),
+                        key=lambda item: float(
+                            item[0].get("score") or item[0].get("identity_confidence") or 0.0
+                        ),
+                    )
+                    cascade = best_unknown[0]
+
+                if "evidence" not in cascade:
+                    cascade["evidence"] = {}
+                stopped_early = any(r.get("match_type") == "EXACT_MATCH" for r in window_records)
+                cascade["evidence"]["windows"] = window_records
+                cascade["evidence"]["windows_scanned"] = len(window_records)
+                cascade["evidence"]["stopped_early"] = stopped_early
+                if windows_skipped > 0:
+                    cascade["evidence"]["windows_skipped"] = windows_skipped
     finally:
         if temp_to_cleanup:
-            import os
             if os.path.exists(temp_to_cleanup):
                 try:
                     os.remove(temp_to_cleanup)
@@ -180,6 +323,49 @@ def analyze_audio(audio_path: str, filename: str, db: Session,
         usage_context=usage_context,
     )
 
+    # --- Đánh giá ngữ cảnh xấu nhất (Worst-Case Context) --------------------
+    # Ngữ cảnh xấu nhất: cùng nền tảng nhưng dùng thương mại và bật kiếm tiền
+    worst_case_context = {
+        "platform": usage_context.get("platform", "YOUTUBE"),
+        "commercial_use": True,
+        "monetization": True,
+    }
+    is_already_worst = (
+        bool(usage_context.get("commercial_use")) is True
+        and bool(usage_context.get("monetization")) is True
+    )
+
+    worst_case = None
+    if not is_already_worst:
+        worst_decision = evaluate_rights_and_risk(
+            rights_data=rights_data,
+            match_info={
+                "match_type": match_type,
+                "identity_confidence": cascade.get("identity_confidence", 0.0),
+            },
+            usage_context=worst_case_context,
+        )
+        if (worst_decision["risk_level"] != decision["risk_level"]
+                or worst_decision["condition"] != decision["condition"]):
+            worst_case = {
+                "risk": worst_decision["risk_level"],
+                "condition": worst_decision["condition"],
+                "rule_id": worst_decision["evidence"].get("rule_id"),
+            }
+
+    # --- Ghi chú nguồn gốc giấy phép (Rights Source Note) --------------------
+    source_val = (rights_data or {}).get("source") or ""
+    if not source_val:
+        rights_source_note = None
+    elif source_val == "fma_metadata":
+        rights_source_note = "Dữ liệu khai báo bởi nghệ sĩ trên Free Music Archive (không được xác minh độc lập)"
+    elif source_val == "jamendo_api":
+        rights_source_note = "Dữ liệu giấy phép từ Jamendo Licensing API"
+    elif source_val == "simulated":
+        rights_source_note = "Dữ liệu thử nghiệm nội bộ (giả lập)"
+    else:
+        rights_source_note = f"Dữ liệu từ nguồn: {source_val}"
+
     # Gắn tên bài cho ứng viên của tầng 2 và tầng 3 trước khi đóng gói evidence.
     # `top_candidate` của tầng Cover trỏ vào chính phần tử đầu của `candidates`
     # nên được gắn theo, không cần xử lý riêng.
@@ -193,16 +379,31 @@ def analyze_audio(audio_path: str, filename: str, db: Session,
 
     latency_ms = (time.time() - start) * 1000
 
+    evidence_dict = {
+        "identification": cascade.get("evidence", {}),
+        "candidates": cascade.get("candidates", []),
+        "rule_engine": decision["evidence"],
+        "composition": composition,
+        "rights_record": rights_data,
+        "license_prediction": predicted_license,
+        "production_features": production,
+        "windows": cascade_evidence.get("windows", []),
+        "windows_scanned": cascade_evidence.get("windows_scanned", len(cascade_evidence.get("windows", []))),
+        "stopped_early": cascade_evidence.get("stopped_early", False),
+    }
+    if "windows_skipped" in cascade_evidence:
+        evidence_dict["windows_skipped"] = cascade_evidence["windows_skipped"]
+
     return {
         "identity": {
             "track": track_metadata.get("recording_title"),
             "artist": track_metadata.get("artist"),
-            "recording_id": track_metadata.get("recording_id"),
+            "recording_id": track_metadata.get("recording_id") or cascade.get("recording_id"),
             "composition_id": composition.get("composition_id"),
         },
         "match": {
             "type": cascade.get("match_type"),
-            "confidence": round(float(cascade.get("identity_confidence") or 0.0), 4),
+            "confidence": round(float(cascade.get("identity_confidence") or cascade.get("score") or 0.0), 4),
             "pipeline_stage": cascade.get("pipeline_stage"),
         },
         "rights": {
@@ -227,17 +428,12 @@ def analyze_audio(audio_path: str, filename: str, db: Session,
             "identity_confidence": decision["identity_confidence"],
             "rights_confidence": decision["rights_confidence"],
             "decision_confidence": decision["decision_confidence"],
+            "worst_case": worst_case,
+            "context_declared_by_user": True,
+            "rights_source_note": rights_source_note,
         },
         "recommendation": generate_rights_recommendation(decision),
-        "evidence": {
-            "identification": cascade.get("evidence", {}),
-            "candidates": cascade.get("candidates", []),
-            "rule_engine": decision["evidence"],
-            "composition": composition,
-            "rights_record": rights_data,
-            "license_prediction": predicted_license,
-            "production_features": production,
-        },
+        "evidence": evidence_dict,
         "latency_ms": round(latency_ms, 2),
         "model_version": config.MERT_MODEL_VERSION,
     }

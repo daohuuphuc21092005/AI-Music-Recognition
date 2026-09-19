@@ -5,6 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Music Rights AI — Nhận diện nhạc &amp; đánh giá rủi ro bản quyền</title>
 <link rel="stylesheet" href="styles.css">
+<style>
+.worst-case-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--conditional);
+  font-size: 14px;
+}
+.worst-case-banner.worst-case-HIGH {
+  border-left-color: var(--high);
+}
+.worst-case-banner.worst-case-CONDITIONAL {
+  border-left-color: var(--conditional);
+}
+.worst-case-content {
+  flex: 1;
+}
+.worst-case-title {
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+.worst-case-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+</style>
 </head>
 <body>
 
@@ -119,6 +152,14 @@
       <p class="risk-label">Mức rủi ro sử dụng</p>
       <p id="risk-level" class="risk-level">—</p>
       <p id="risk-condition" class="risk-condition"></p>
+    </div>
+  </div>
+
+  <div id="worst-case-banner" class="worst-case-banner" hidden>
+    <span class="worst-case-icon" aria-hidden="true">⚠️</span>
+    <div class="worst-case-content">
+      <p id="worst-case-text" class="worst-case-title"></p>
+      <p id="worst-case-note" class="worst-case-note"></p>
     </div>
   </div>
 

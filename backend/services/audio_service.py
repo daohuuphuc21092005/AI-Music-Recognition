@@ -91,14 +91,36 @@ def extract_and_normalize_audio(input_file_path: str, output_dir: str = None) ->
     base_name = os.path.splitext(os.path.basename(input_file_path))[0]
     output_wav_path = os.path.join(output_dir, f"{base_name}_normalized.wav")
 
-    proc = subprocess.run(
-        ["ffmpeg", "-y", "-i", input_file_path,
-         "-vn",                                 # bỏ luồng video
-         "-ar", str(config.MERT_SAMPLE_RATE),   # 24kHz cho MERT
-         "-ac", "1",                            # mono
-         output_wav_path],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
+    cmd = [
+        "ffmpeg", "-nostdin", "-y",
+        "-t", str(config.MAX_MEDIA_SECONDS),
+        "-i", input_file_path,
+        "-vn",                                 # bỏ luồng video
+        "-ar", str(config.MERT_SAMPLE_RATE),   # 24kHz cho MERT
+        "-ac", "1",                            # mono
+        output_wav_path,
+    ]
+
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=config.FFMPEG_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        if os.path.exists(output_wav_path):
+            try:
+                os.remove(output_wav_path)
+            except OSError:
+                pass
+        logger.warning(
+            "FFmpeg timeout sau %s giay (%s)", config.FFMPEG_TIMEOUT_S, input_file_path
+        )
+        raise AudioProcessingError(
+            "TIMEOUT",
+            f"Thời gian xử lý FFmpeg vượt quá giới hạn ({config.FFMPEG_TIMEOUT_S}s).",
+        ) from None
+
     if proc.returncode != 0 or not os.path.exists(output_wav_path):
         # stderr của FFmpeg chứa đường dẫn tuyệt đối trên máy chủ -> chỉ ghi log
         detail = proc.stderr.decode("utf-8", errors="replace").strip()[-300:]

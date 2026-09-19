@@ -20,13 +20,17 @@ Vì vậy module này:
 Model được xây theo yêu cầu rõ ràng của chủ dự án sau khi đã xem số liệu EXP-09.
 Train lại bằng: python scripts/train_license_classifier.py
 """
+import hashlib
 import io
 import json
+import logging
 import os
 
 import numpy as np
 
 from backend import config
+
+logger = logging.getLogger("music_rights_ai")
 
 MODEL_DIR = os.path.join(config.BASE_DIR, "models", "license")
 MODEL_VERSION = "license_clf_v1"
@@ -40,6 +44,38 @@ def _paths(target: str) -> tuple:
     return stem + ".joblib", stem + ".json"
 
 
+def _verify_model_integrity(model_path: str) -> bool:
+    """Kiểm tra SHA-256 của file model với sidecar .sha256."""
+    sha_path = model_path + ".sha256"
+    if not os.path.exists(sha_path):
+        stem, _ = os.path.splitext(model_path)
+        sha_path = stem + ".sha256"
+        if not os.path.exists(sha_path):
+            logger.warning("Thieu file sidecar SHA-256 cho model: %s", model_path)
+            return False
+
+    try:
+        with open(sha_path, "r", encoding="utf-8") as f:
+            expected_hash = f.read().strip().split()[0].lower()
+
+        hasher = hashlib.sha256()
+        with open(model_path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                hasher.update(chunk)
+        actual_hash = hasher.hexdigest().lower()
+
+        if actual_hash != expected_hash:
+            logger.warning(
+                "Sai lech SHA-256 cho model %s: mong doi %s, tinh duoc %s",
+                model_path, expected_hash, actual_hash,
+            )
+            return False
+        return True
+    except Exception as e:
+        logger.warning("Loi kiem tra SHA-256 cho model %s: %s", model_path, e)
+        return False
+
+
 def is_available(target: str = DEFAULT_TARGET) -> bool:
     model_path, meta_path = _paths(target)
     return os.path.exists(model_path) and os.path.exists(meta_path)
@@ -47,7 +83,7 @@ def is_available(target: str = DEFAULT_TARGET) -> bool:
 
 def load_model(target: str = DEFAULT_TARGET):
     """
-    Nạp lười (model, metadata); trả (None, None) nếu chưa train.
+    Nạp lười (model, metadata); trả (None, None) nếu chưa train hoặc kiểm tra SHA-256 hỏng.
 
     Nạp lười vì cùng lý do với `embedding_service`: chỉ `import backend.main` mà
     đã kéo theo joblib + sklearn thì /health và pytest đều phải trả giá, và lỗi
@@ -58,6 +94,11 @@ def load_model(target: str = DEFAULT_TARGET):
 
     model_path, meta_path = _paths(target)
     if not (os.path.exists(model_path) and os.path.exists(meta_path)):
+        _cache[target] = (None, None)
+        return _cache[target]
+
+    # Kiểm tra toàn vẹn file model trước khi nạp
+    if not _verify_model_integrity(model_path):
         _cache[target] = (None, None)
         return _cache[target]
 

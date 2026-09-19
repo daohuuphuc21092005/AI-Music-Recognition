@@ -250,3 +250,24 @@ ALLOWED_EXTENSIONS = tuple(
     ).split(",")
     if e.strip()
 )
+
+# --------------------------------------------------------------------------
+# Bảo mật & Giới hạn tài nguyên API (Security Hardening)
+# --------------------------------------------------------------------------
+# Xác thực API Key tuỳ chọn: nếu đặt thì mọi /api/v1/* yêu cầu header X-API-Key.
+API_KEY = _get("API_KEY", "") or None
+RATE_LIMIT_PER_MIN = _get_int("RATE_LIMIT_PER_MIN", 10)
+MAX_CONCURRENT_JOBS = _get_int("MAX_CONCURRENT_JOBS", 2)
+FFMPEG_TIMEOUT_S = _get_int("FFMPEG_TIMEOUT_S", 120)
+MAX_MEDIA_SECONDS = _get_int("MAX_MEDIA_SECONDS", 900)
+# Mức độ chi tiết evidence: full (mặc định) | public (ẩn ngưỡng, làm tròn điểm số)
+EVIDENCE_DETAIL = _get("EVIDENCE_DETAIL", "full").lower()
+
+# --------------------------------------------------------------------------
+# Quét đa cửa sổ (Multi-window Scanning)
+# --------------------------------------------------------------------------
+# SCAN_MODE: multi (mặc định) | first (chỉ quét cửa sổ đầu, hành vi cũ)
+SCAN_MODE = _get("SCAN_MODE", "multi").lower()
+SCAN_MAX_WINDOWS = _get_int("SCAN_MAX_WINDOWS", 8)
+SCAN_TIME_BUDGET_S = _get_float("SCAN_TIME_BUDGET_S", 60.0)
+

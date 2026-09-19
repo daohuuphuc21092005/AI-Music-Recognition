@@ -28,6 +28,14 @@ from backend.schemas.analysis import (
     JobStatusResponse,
     Platform,
 )
+from backend.security import (
+    filter_public_evidence,
+    get_client_ip,
+    job_concurrency_limiter,
+    rate_limiter,
+    sanitize_filename,
+    verify_api_key,
+)
 from backend.services import job_service
 from backend.services.analysis_pipeline import analyze_audio
 from backend.services.audio_service import AudioProcessingError
@@ -36,12 +44,14 @@ from backend.services.rights_service import get_full_music_rights
 
 logger = logging.getLogger("music_rights_ai")
 
-router = APIRouter(prefix="/api/v1")
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(verify_api_key)])
 
 # Mã lỗi chuẩn hoá theo §12 -> HTTP status
 ERROR_STATUS = {
     "FILE_TOO_LARGE": 413,
     "UNSUPPORTED_FORMAT": 415,
+    "RATE_LIMITED": 429,
+    "UNAUTHORIZED": 401,
     "NO_AUDIO": 422,
     "NO_MUSIC": 422,
     "MODEL_FAILURE": 503,
@@ -53,10 +63,11 @@ ERROR_STATUS = {
 }
 
 
-def api_error(code: str, message: str) -> HTTPException:
+def api_error(code: str, message: str, headers: dict = None) -> HTTPException:
     return HTTPException(
         status_code=ERROR_STATUS.get(code, 500),
         detail={"error_code": code, "message": message},
+        headers=headers,
     )
 
 
@@ -82,13 +93,66 @@ def safe_mark_failed(db, job_id: str, code: str, message: str) -> None:
         logger.error("job=%s khong ghi duoc trang thai FAILED [%s]: %s", job_id, code, e)
 
 
-def save_upload(file: UploadFile) -> str:
-    """Lưu file với tên do server sinh — không tin tên file của client."""
-    os.makedirs(config.TEMP_UPLOAD_DIR, exist_ok=True)
+def check_upload_limits(request: Request, file: UploadFile) -> None:
+    """Kiểm tra sớm Content-Length từ header và đuôi file trước khi ghi đĩa."""
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > config.MAX_UPLOAD_MB * 1024 * 1024:
+                raise api_error(
+                    "FILE_TOO_LARGE",
+                    f"Dung lượng tải lên vượt quá giới hạn {config.MAX_UPLOAD_MB} MB",
+                )
+        except ValueError:
+            pass
+
     ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in config.ALLOWED_EXTENSIONS:
+        raise api_error(
+            "UNSUPPORTED_FORMAT",
+            f"Đuôi file '{ext or 'không rõ'}' không được hỗ trợ. "
+            f"Chấp nhận: {', '.join(config.ALLOWED_EXTENSIONS)}",
+        )
+
+
+def save_upload(file: UploadFile) -> str:
+    """
+    Lưu file với tên do server sinh — kiểm tra đuôi file trước khi ghi
+    và đếm byte khi ghi để huỷ sớm nếu vượt MAX_UPLOAD_MB.
+    """
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in config.ALLOWED_EXTENSIONS:
+        raise api_error(
+            "UNSUPPORTED_FORMAT",
+            f"Đuôi file '{ext or 'không rõ'}' không được hỗ trợ. "
+            f"Chấp nhận: {', '.join(config.ALLOWED_EXTENSIONS)}",
+        )
+
+    os.makedirs(config.TEMP_UPLOAD_DIR, exist_ok=True)
+    # Chỉ dùng đuôi đã chuẩn hoá thuộc danh sách cho phép để đặt tên
     path = os.path.join(config.TEMP_UPLOAD_DIR, f"{uuid.uuid4().hex}{ext}")
-    with open(path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+
+    max_bytes = config.MAX_UPLOAD_MB * 1024 * 1024
+    total_bytes = 0
+    chunk_size = 65536  # 64KB
+
+    try:
+        with open(path, "wb") as buffer:
+            while True:
+                chunk = file.file.read(chunk_size)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    raise api_error(
+                        "FILE_TOO_LARGE",
+                        f"Kích thước file vượt quá giới hạn {config.MAX_UPLOAD_MB} MB",
+                    )
+                buffer.write(chunk)
+    except Exception:
+        cleanup(path)
+        raise
+
     return path
 
 
@@ -104,10 +168,11 @@ def run_job(job_id: str, audio_path: str, filename: str, usage_context: dict,
             vector_index) -> None:
     """Chạy nền: dùng session RIÊNG vì session của request đã đóng."""
     db = SessionLocal()
+    safe_name = sanitize_filename(filename)
     try:
         job_service.mark_processing(db, job_id)
         result = analyze_audio(
-            audio_path, filename, db, vector_index, usage_context,
+            audio_path, safe_name, db, vector_index, usage_context,
             on_stage=lambda stage: job_service.mark_stage(db, job_id, stage),
         )
         job_service.mark_done(db, job_id, result)
@@ -122,7 +187,7 @@ def run_job(job_id: str, audio_path: str, filename: str, usage_context: dict,
         logger.info(
             "job=%s file=%s match=%s risk=%s conf(id/rights/decision)=%.3f/%.3f/%.3f "
             "total=%.0fms stages=%s",
-            job_id, filename, result["match"]["type"], result["assessment"]["risk"],
+            job_id, safe_name, result["match"]["type"], result["assessment"]["risk"],
             result["assessment"]["identity_confidence"],
             result["assessment"]["rights_confidence"],
             result["assessment"]["decision_confidence"],
@@ -138,6 +203,7 @@ def run_job(job_id: str, audio_path: str, filename: str, usage_context: dict,
     finally:
         db.close()
         cleanup(audio_path)
+        job_concurrency_limiter.release()
 
 
 @router.post("/analyze", response_model=AnalyzeAccepted, status_code=202,
@@ -152,22 +218,50 @@ def analyze(
     db: Session = Depends(get_db),
 ):
     """Nhận file và mục đích sử dụng, xử lý nền, trả về job_id để theo dõi."""
+    # 1. Rate limiting theo IP
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.check(client_ip)
+    if not allowed:
+        raise api_error(
+            "RATE_LIMITED",
+            f"Quá số lượng yêu cầu cho phép ({config.RATE_LIMIT_PER_MIN}/phút). Thử lại sau {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # 2. Kiểm tra giới hạn upload sớm (Content-Length và đuôi file)
+    check_upload_limits(request, file)
+    safe_filename = sanitize_filename(file.filename)
+
+    # 3. Giới hạn số job phân tích chạy đồng thời (Semaphore non-blocking)
+    if not job_concurrency_limiter.acquire():
+        raise api_error(
+            "RATE_LIMITED",
+            "Hệ thống đang quá tải với số tác vụ phân tích tối đa. Thử lại sau.",
+            headers={"Retry-After": "30"},
+        )
+
     usage_context = {
         "platform": platform.value,
         "commercial_use": commercial_use,
         "monetization": monetization,
     }
 
-    audio_path = save_upload(file)
     try:
-        job_id = job_service.create_job(db, file.filename, usage_context)
+        audio_path = save_upload(file)
+    except Exception:
+        job_concurrency_limiter.release()
+        raise
+
+    try:
+        job_id = job_service.create_job(db, safe_filename, usage_context)
     except Exception as e:
         cleanup(audio_path)
+        job_concurrency_limiter.release()
         logger.error("Khong tao duoc job: %s", e)
         raise api_error("DATABASE_FAILURE", "Không tạo được job phân tích.")
 
     background_tasks.add_task(
-        run_job, job_id, audio_path, file.filename, usage_context,
+        run_job, job_id, audio_path, safe_filename, usage_context,
         getattr(request.app.state, "vector_index", None),
     )
 
@@ -208,7 +302,8 @@ def get_job_result(job_id: str, db: Session = Depends(get_db)):
         return {"status": job.status, "job_id": str(job.job_id),
                 "message": "Job chưa hoàn tất. Thử lại sau."}
 
-    return {"status": "DONE", "job_id": str(job.job_id), **(job.result or {})}
+    raw_result = {"status": "DONE", "job_id": str(job.job_id), **(job.result or {})}
+    return filter_public_evidence(raw_result)
 
 
 @router.get("/tracks/{recording_id}", tags=["Copyright & Licensing"])
@@ -244,33 +339,62 @@ def submit_feedback(payload: FeedbackRequest, db: Session = Depends(get_db)):
 
 @router.post("/search", tags=["Music Identification"])
 def search_music(request: Request, file: UploadFile = File(...),
-                       platform: Platform = Form(Platform.YOUTUBE),
-                       commercial_use: bool = Form(False),
-                       monetization: bool = Form(False),
-                       db: Session = Depends(get_db)):
+                 platform: Platform = Form(Platform.YOUTUBE),
+                 commercial_use: bool = Form(False),
+                 monetization: bool = Form(False),
+                 db: Session = Depends(get_db)):
     """
     Bản ĐỒNG BỘ của /analyze: chạy xong mới trả về.
     Tiện để thử nhanh và cho các script thí nghiệm; luồng chính nên dùng /analyze.
     """
+    # 1. Rate limiting theo IP
+    client_ip = get_client_ip(request)
+    allowed, retry_after = rate_limiter.check(client_ip)
+    if not allowed:
+        raise api_error(
+            "RATE_LIMITED",
+            f"Quá số lượng yêu cầu cho phép ({config.RATE_LIMIT_PER_MIN}/phút). Thử lại sau {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # 2. Kiểm tra giới hạn upload sớm
+    check_upload_limits(request, file)
+    safe_filename = sanitize_filename(file.filename)
+
+    # 3. Giới hạn số job phân tích chạy đồng thời
+    if not job_concurrency_limiter.acquire():
+        raise api_error(
+            "RATE_LIMITED",
+            "Hệ thống đang quá tải với số tác vụ phân tích tối đa. Thử lại sau.",
+            headers={"Retry-After": "30"},
+        )
+
     usage_context = {
         "platform": platform.value,
         "commercial_use": commercial_use,
         "monetization": monetization,
     }
-    audio_path = save_upload(file)
+
+    try:
+        audio_path = save_upload(file)
+    except Exception:
+        job_concurrency_limiter.release()
+        raise
+
     job_id = str(uuid.uuid4())
 
     try:
         result = analyze_audio(
-            audio_path, file.filename, db,
+            audio_path, safe_filename, db,
             getattr(request.app.state, "vector_index", None), usage_context,
         )
         logger.info(
             "job=%s file=%s match=%s risk=%s total=%.0fms",
-            job_id, file.filename, result["match"]["type"],
+            job_id, safe_filename, result["match"]["type"],
             result["assessment"]["risk"], result.get("latency_ms", 0),
         )
-        return {"status": "DONE", "job_id": job_id, **result}
+        full_res = {"status": "DONE", "job_id": job_id, **result}
+        return filter_public_evidence(full_res)
     except (AudioProcessingError, PipelineError) as e:
         logger.info("job=%s that bai [%s]: %s", job_id, e.code, e.message)
         raise api_error(e.code, e.message)
@@ -281,3 +405,4 @@ def search_music(request: Request, file: UploadFile = File(...),
         raise api_error("INTERNAL_ERROR", "Loi noi bo khi xu ly file. Xem log may chu.")
     finally:
         cleanup(audio_path)
+        job_concurrency_limiter.release()

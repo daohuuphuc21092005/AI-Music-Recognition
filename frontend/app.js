@@ -152,8 +152,8 @@ async function checkHealth() {
       `FFmpeg ${c.ffmpeg === 'AVAILABLE' ? 'AVAILABLE' : 'MISSING — chỉ nhận file audio'}`,
       ...(c.cover ? [`Cover ${c.cover.status}`] : []),
       `Rule Engine ${c.rule_engine.version || c.rule_engine.status}`,
-      `τFP=${health.thresholds.fingerprint} τMERT=${health.thresholds.embedding} `
-        + `τCover=${health.thresholds.cover}`,
+      ...(health.thresholds ? [`τFP=${health.thresholds.fingerprint} τMERT=${health.thresholds.embedding} `
+        + `τCover=${health.thresholds.cover}`] : []),
       `Làm nóng: ${describeWarmup(health.warmup)}`,
     ];
     // Máy chủ vừa bật: vẫn nhận file, nhưng truy vấn gửi lúc này chờ bộ đệm nạp xong
@@ -405,6 +405,30 @@ function renderResult(result) {
   $('#risk-condition').textContent = assessment.condition
     ? `Điều kiện: ${assessment.condition}` : '';
 
+  // Đánh giá ngữ cảnh xấu nhất (Worst-Case Context)
+  const worstCase = assessment.worst_case;
+  const wcBanner = $('#worst-case-banner');
+  const wcText = $('#worst-case-text');
+  const wcNote = $('#worst-case-note');
+
+  if (wcBanner && worstCase && (worstCase.risk !== risk || worstCase.condition !== assessment.condition)) {
+    wcBanner.hidden = false;
+    wcBanner.className = `worst-case-banner worst-case-${worstCase.risk || 'CONDITIONAL'}`;
+    const condText = worstCase.condition ? ` — ${worstCase.condition}` : '';
+    wcText.textContent = `Nếu dùng thương mại và bật kiếm tiền: ${worstCase.risk || ''}${condText}`;
+    if (assessment.rights_source_note) {
+      wcNote.textContent = assessment.rights_source_note;
+      wcNote.hidden = false;
+    } else {
+      wcNote.textContent = '';
+      wcNote.hidden = true;
+    }
+  } else if (wcBanner) {
+    wcBanner.hidden = true;
+    if (wcText) wcText.textContent = '';
+    if (wcNote) wcNote.textContent = '';
+  }
+
   dl($('#identity-list'), [
     ['Bài hát', identity.track],
     ['Nghệ sĩ', identity.artist],
@@ -439,6 +463,7 @@ function renderResult(result) {
     ['Cho dùng thương mại', asGuess(rights.commercial_use_allowed, guessed)],
     ['Cho bật kiếm tiền', asGuess(rights.monetization_allowed, guessed)],
     ['Nguồn dữ liệu', rights.source],
+    ['Ghi chú nguồn quyền', assessment.rights_source_note],
     ['Xác minh lần cuối', rights.verified_at],
   ]);
 

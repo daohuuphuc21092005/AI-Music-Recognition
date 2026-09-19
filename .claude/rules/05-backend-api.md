@@ -62,9 +62,19 @@ Mọi logic nghiệp vụ phải được tổ chức trong các service độc 
 - **Không có mật khẩu CSDL mặc định trong mã nguồn**: thiếu `DATABASE_URL` thì kết nối thất bại, log khởi động báo rõ và `/health` ra `DEGRADED`.
 - Endpoint gọi mã chặn (`/analyze`, `/search`) khai báo `def` chứ không `async def`, để FastAPI đẩy sang threadpool thay vì chặn event loop.
 
+### Vá cứng bảo mật (Security Hardening, `backend/security.py`)
+Chi tiết đầy đủ ở [docs/SECURITY.md](file:///d:/PycharmProjects/AMR_advanced/docs/SECURITY.md); tóm tắt phần ảnh hưởng tới API:
+- **Xác thực API Key tuỳ chọn**: mọi route dưới `/api/v1/*` (`APIRouter(dependencies=[Depends(verify_api_key)])`) yêu cầu header `X-API-Key` nếu biến môi trường `API_KEY` được đặt; so khớp bằng `secrets.compare_digest`. Không đặt `API_KEY` thì giữ nguyên chế độ mở. Sai/thiếu key → 401 `UNAUTHORIZED`.
+- **Rate limit theo IP + giới hạn job đồng thời**: `POST /api/v1/analyze` giới hạn `RATE_LIMIT_PER_MIN` request/phút/IP và tối đa `MAX_CONCURRENT_JOBS` job chạy song song; vượt quá → 429 `RATE_LIMITED` kèm header `Retry-After`.
+- **Chặn sớm upload quá khổ/sai định dạng**: kiểm `Content-Length` và đuôi file trước khi ghi đĩa; `save_upload` đếm byte theo khối 64 KB để huỷ giữa chừng nếu vượt `MAX_UPLOAD_MB`, không để lại file rác.
+- **`sanitize_filename`**: lọc ký tự điều khiển và cắt độ dài trước khi tên file người dùng đi vào log/CSDL (chống Log/CRLF Injection).
+- **`EVIDENCE_DETAIL=public`**: ẩn khối `thresholds` ở `/health` và làm tròn điểm số/ẩn ngưỡng trong evidence trả về từ `/results`, `/search`.
+
 ### Danh mục mã lỗi bắt buộc:
 - **`FILE_TOO_LARGE`**: Kích thước file vượt quá giới hạn cấu hình (ví dụ: > 100MB).
 - **`UNSUPPORTED_FORMAT`**: Định dạng file không nằm trong danh sách hỗ trợ.
+- **`UNAUTHORIZED`**: Thiếu hoặc sai `X-API-Key` khi `API_KEY` đã được cấu hình (HTTP 401).
+- **`RATE_LIMITED`**: Vượt giới hạn request/phút theo IP hoặc vượt số job phân tích đồng thời tối đa (HTTP 429, kèm header `Retry-After`).
 - **`NO_AUDIO`**: File video tải lên không chứa luồng âm thanh (audio stream).
 - **`NO_MUSIC`**: Đoạn âm thanh tải lên hoàn toàn là khoảng lặng (silence) hoặc không phát hiện được tín hiệu âm nhạc.
 - **`MODEL_FAILURE`**: Lỗi trong quá trình suy luận của Chromaprint hoặc model MERT.

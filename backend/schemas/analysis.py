@@ -165,6 +165,13 @@ class Rights(BaseModel):
     )
 
 
+class WorstCaseAssessment(BaseModel):
+    """Đánh giá rủi ro trong kịch bản xấu nhất (thương mại + bật kiếm tiền)."""
+    risk: RiskLevel = Field(..., description="Mức rủi ro xấu nhất: LOW | CONDITIONAL | HIGH | UNKNOWN.")
+    condition: Optional[str] = Field(None, description="Điều kiện sử dụng trong kịch bản xấu nhất.")
+    rule_id: Optional[str] = Field(None, description="Mã rule bị kích hoạt trong kịch bản xấu nhất.")
+
+
 class Assessment(BaseModel):
     """Kết quả Rule Engine — cây quyết định tuần tự 5 nhóm bản quyền + fallback (§6)."""
     risk: RiskLevel = Field(
@@ -201,6 +208,19 @@ class Assessment(BaseModel):
                           "rights_confidence), và = 0 khi risk=UNKNOWN. KHÔNG PHẢI trung bình "
                           "cộng, không thay thế hai field kia. Phép tính cụ thể nằm ở "
                           "evidence.rule_engine.decision_confidence_formula.",
+    )
+    worst_case: Optional[WorstCaseAssessment] = Field(
+        None,
+        description="Đánh giá rủi ro nếu sử dụng cho mục đích thương mại và bật kiếm tiền. "
+                    "None nếu người dùng đã khai báo sẵn thương mại và bật kiếm tiền.",
+    )
+    context_declared_by_user: bool = Field(
+        True,
+        description="Đánh dấu bối cảnh sử dụng do người dùng tự khai báo, chưa kiểm chứng.",
+    )
+    rights_source_note: Optional[str] = Field(
+        None,
+        description="Ghi chú cảnh báo về nguồn gốc giấy phép (suy đoán, mô phỏng, do nguồn công bố).",
     )
 
 

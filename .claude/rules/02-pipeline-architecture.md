@@ -44,6 +44,7 @@ INPUT AUDIO/VIDEO
 - **M3 Segmentation**:
   - Chia đoạn tín hiệu âm thanh với cửa sổ kích thước: 10 giây / 15 giây / 30 giây kèm overlap (ví dụ: overlap 50% hoặc 5s).
   - Tách đoạn trước khi sinh fingerprint hoặc embedding để tối ưu độ chính xác cục bộ.
+  - **Quét đa cửa sổ (`backend/services/window_scan.py`, `SCAN_MODE=multi` mặc định)**: file dài hơn 30 s được lập lịch tối đa `SCAN_MAX_WINDOWS` cửa sổ 30 giây rải đều (điểm 0, điểm đuôi, cách đều ở giữa — `plan_windows`) thay vì chỉ chấm 30 giây đầu, để bắt các đoạn nhạc bản quyền nằm giữa/cuối file dài. Mỗi cửa sổ chạy nguyên vẹn cascade production (không đổi ngưỡng τFP/τMERT/τCover đã hiệu chỉnh); dừng sớm khi gặp `EXACT_MATCH`. Ngân sách thời gian `SCAN_TIME_BUDGET_S` (mặc định 60 s) chặn tổng thời gian quét một file — hết ngân sách thì bỏ qua các cửa sổ còn lại, evidence ghi rõ `windows_scanned`/`stopped_early`. `SCAN_MODE=first` giữ hành vi cũ (chỉ cửa sổ đầu) để so sánh hoặc phục vụ máy yếu. Đánh đổi FMR và các kịch bản né tránh kết hợp: xem `docs/SECURITY.md` §8 và `experiments/exp10_multiwindow/run.py` (EXP-10, mở rộng ngoài EXP-01…08).
 
 ---
 

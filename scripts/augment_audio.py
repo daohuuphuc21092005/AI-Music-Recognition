@@ -47,9 +47,12 @@ MP3_LEVELS = {"mp3_128k": 0.20, "mp3_64k": 0.60}
 # Hệ số co giãn thời gian và lượng dịch cao độ của từng biến thể, ghi vào manifest
 # để thí nghiệm ánh xạ truy vấn về trục thời gian bản gốc mà không phải đoán.
 TEMPO_FACTORS = {"tempo_0_90": 0.90, "tempo_0_95": 0.95,
-                 "tempo_1_05": 1.05, "tempo_1_10": 1.10}
+                 "tempo_1_05": 1.05, "tempo_1_10": 1.10,
+                 "composite_pitch_tempo_noise": 0.95}
 PITCH_STEPS = {"pitch_plus_1": 1, "pitch_plus_2": 2,
-               "pitch_minus_1": -1, "pitch_minus_2": -2}
+               "pitch_minus_1": -1, "pitch_minus_2": -2,
+               "composite_pitch1_crop10s": 1, "composite_pitch2_crop10s": 2,
+               "composite_pitch_tempo_noise": 1}
 
 
 def mp3_supported() -> bool:
@@ -71,7 +74,7 @@ def lowpass(audio: np.ndarray, cutoff_hz: float = 4000.0) -> np.ndarray:
     return scipy_signal.sosfilt(sos, audio).astype("float32")
 
 
-def build_variants(audio: np.ndarray, overlay: np.ndarray = None) -> dict:
+def build_variants(audio: np.ndarray, overlay: np.ndarray = None, composite: bool = False) -> dict:
     """Trả {tên_biến_đổi: mảng audio}. Mọi biến đổi đều trên cùng đoạn crop 30s."""
     variants = {
         "original_crop30s": audio,
@@ -98,6 +101,22 @@ def build_variants(audio: np.ndarray, overlay: np.ndarray = None) -> dict:
         mixed = audio + 0.35 * other
         peak = np.max(np.abs(mixed)) or 1.0
         variants["audio_overlay"] = (mixed / peak * 0.95).astype("float32")
+
+    if composite:
+        # 1. Pitch shift ±1 / ±2 kết hợp crop 10s và offset (cắt từ giây 10 đến 20 của audio 30s rồi shift)
+        crop_10_20 = audio[int(10 * SR):int(20 * SR)] if len(audio) >= int(20 * SR) else audio[int(10 * SR):]
+        if len(crop_10_20) > 0:
+            variants["composite_pitch1_crop10s"] = librosa.effects.pitch_shift(y=crop_10_20, sr=SR, n_steps=1)
+            variants["composite_pitch2_crop10s"] = librosa.effects.pitch_shift(y=crop_10_20, sr=SR, n_steps=2)
+
+        # 2. Pitch + tempo 0.95 + noise SNR 10: time_stretch(0.95) -> pitch_shift(+1) -> add_noise(10)
+        stretched = librosa.effects.time_stretch(y=audio, rate=0.95)
+        shifted = librosa.effects.pitch_shift(y=stretched, sr=SR, n_steps=1)
+        variants["composite_pitch_tempo_noise"] = add_noise(shifted, snr_db=10, seed=4)
+
+        # 3. Ghép 150s tĩnh lặng (silence + noise nhẹ) vào trước đoạn audio (để test cửa sổ quét sau 2.5 phút)
+        noise_150s = np.random.RandomState(42).normal(0, 1e-4, int(150 * SR)).astype("float32")
+        variants["composite_padded_offset150s"] = np.concatenate([noise_150s, audio])
 
     return variants
 
@@ -205,6 +224,8 @@ def main() -> int:
                              "file, không cần và không nên.")
     parser.add_argument("--license", metavar="LICENSE_TYPE",
                         help="Chỉ lấy bản ghi mang giấy phép này (vd. CC0)")
+    parser.add_argument("--composite", action="store_true", default=False,
+                        help="Tạo thêm các biến thể composite cho kiểm thử multi-window")
     parser.add_argument("--seed", type=int, default=42,
                         help="Seed cho --sample, để lặp lại được tập truy vấn")
     args = parser.parse_args()
@@ -249,6 +270,7 @@ def main() -> int:
         "mp3": can_mp3,
         "append": bool(args.append),
         "license": args.license,
+        "composite": bool(args.composite),
     })
 
     for path, rec_id in targets:
@@ -270,7 +292,7 @@ def main() -> int:
             overlay_path, overlay_rec_id = overlays[path]
             overlay, _ = load_crop(overlay_path, crop_start)
 
-        variants = build_variants(audio, overlay)
+        variants = build_variants(audio, overlay, composite=args.composite)
         stem = os.path.splitext(os.path.basename(path))[0]
 
         for name, data in variants.items():
@@ -293,7 +315,7 @@ def main() -> int:
                     overlay_rec_id if name == "audio_overlay" else ""),
                 "expected_match_type": "EXACT_MATCH" if name in (
                     "original_crop30s", "crop_15s", "crop_10s", "noise_snr20",
-                    "gain_minus12db") else "NEAR_MATCH",
+                    "gain_minus12db", "composite_padded_offset150s") else "NEAR_MATCH",
             })
 
         if can_mp3:

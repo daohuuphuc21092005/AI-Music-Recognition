@@ -126,6 +126,11 @@ async def lifespan(app: FastAPI):
             "khau mac dinh viet cung, nen may chu se o trang thai DEGRADED."
         )
 
+    if not config.API_KEY:
+        logger.warning(
+            "API_KEY chua duoc dat -> cac endpoint /api/v1/* khong yeu cau xac thuc."
+        )
+
     if not fingerprint_service.is_available():
         logger.warning(
             "Chromaprint chua san sang (%s) -> tang 1 se bi bo qua. "
@@ -241,19 +246,25 @@ def health_check():
     }
     degraded = (not db_ok) or vector_index is None or app.state.rules_error is not None
     warmup = getattr(app.state, "warmup", None) or {"status": "DISABLED", "steps": {}}
-    return {
+    health_res = {
         "status": "DEGRADED" if degraded else "ONLINE",
         "components": components,
         # Bản sao: luồng làm nóng vẫn đang ghi vào dict gốc trong lúc response
         # được tuần tự hoá. Chỉ trạng thái + số giây, không có nội dung lỗi.
         "warmup": {"status": warmup["status"], "steps": dict(warmup["steps"])},
-        "thresholds": {
+    }
+    if getattr(config, "EVIDENCE_DETAIL", "full") != "public":
+        health_res["thresholds"] = {
             "fingerprint": config.FP_THRESHOLD,
             "embedding": config.MERT_THRESHOLD,
             "cover": config.COVER_THRESHOLD,
             "note": "fingerprint hieu chinh bang EXP-01, embedding bang EXP-06, cover bang EXP-07; chay lai khi mo rong du lieu tham chieu.",
-        },
-    }
+        }
+    else:
+        if "cover" in components and isinstance(components["cover"], dict):
+            components["cover"].pop("threshold", None)
+
+    return health_res
 
 
 # --------------------------------------------------------------------------
