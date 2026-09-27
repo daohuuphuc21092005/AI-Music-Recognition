@@ -1,0 +1,2 @@
+# Script shell chạy trong container Linux: CRLF làm `sh` báo lỗi ngay dòng `set -e`
+*.sh text eol=lf

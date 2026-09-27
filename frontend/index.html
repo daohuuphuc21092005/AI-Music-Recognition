@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#7c3aed">
+<title>Music Rights AI — Nhận diện nhạc &amp; đánh giá rủi ro bản quyền</title>
+<link rel="preload" href="fonts/be-vietnam-pro-800-vietnamese.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Trước <main> có thanh trên + thanh điều hướng: người dùng bàn phím nhảy thẳng vào nội dung -->
+<a class="skip-link" href="#main">Bỏ qua tới nội dung chính</a>
+
+<header class="topbar">
+  <a class="brand" href="#trang-chu">
+    <span class="logo" aria-hidden="true">
+      <svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M4 10v4"/><path d="M8 7v10"/><path d="M12 4v16"/><path d="M16 8v8"/><path d="M20 11v2"/></svg>
+    </span>
+    <div class="brand-text">
+      <h1 class="brand-name">Music Rights AI</h1>
+      <p class="brand-sub">Nhận diện nhạc &amp; đánh giá rủi ro bản quyền</p>
+    </div>
+  </a>
+
+  <nav class="tabs" aria-label="Chức năng">
+    <a class="tab active" href="#trang-chu" data-view="home" aria-current="page">Trang chủ</a>
+    <a class="tab" href="#phan-tich" data-view="analyze">Phân tích</a>
+    <a class="tab" href="#lich-su" data-view="history">Lịch sử</a>
+    <a class="tab" href="#thong-ke" data-view="registry">Thống kê<span class="tab-long">&nbsp;&amp; Tra cứu</span></a>
+  </nav>
+
+  <!-- Chi tiết từng thành phần trước đây chỉ nằm trong `title` (chỉ hiện khi rê chuột):
+       bàn phím và màn hình cảm ứng không xem được. Nay là khối bấm mở được. -->
+  <details id="health" class="health">
+    <summary><span class="dot dot-idle" aria-hidden="true"></span><span class="health-text">đang kiểm tra…</span></summary>
+    <ul id="health-details" class="health-panel" aria-label="Chi tiết trạng thái hệ thống">
+      <li>Đang hỏi máy chủ…</li>
+    </ul>
+  </details>
+</header>
+
+<nav class="steps" aria-label="Tiến trình" hidden>
+  <!-- Bước là nút thật: trước đây là <li> chỉ bấm được bằng chuột. Bước chưa tới được thì
+       nút bị tắt (Tab bỏ qua), bước đang mở mang aria-current="step". -->
+  <ol>
+    <li class="active"><button type="button" class="step" data-step="upload" aria-current="step"><span>1</span> Tải lên</button></li>
+    <li><button type="button" class="step" data-step="processing" disabled><span>2</span> Xử lý</button></li>
+    <li><button type="button" class="step" data-step="result" disabled><span>3</span> Kết quả</button></li>
+    <li><button type="button" class="step" data-step="evidence" disabled><span>4</span> Bằng chứng</button></li>
+  </ol>
+</nav>
+
+<main id="main" tabindex="-1">
+
+<!-- ══════════════════ TRANG CHỦ ══════════════════ -->
+<section id="screen-home" class="screen active">
+  <div class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow">Nhận diện nhạc · Đánh giá rủi ro bản quyền</p>
+      <h2 class="hero-title" tabindex="-1">Nhạc trong video của bạn <span class="grad-text">có vướng bản quyền?</span></h2>
+      <p class="hero-sub">Tải một file audio hoặc video lên. Hệ thống dò dấu vân tay âm thanh, so tương
+         đồng bằng AI rồi đưa ra mức rủi ro kèm bằng chứng — không phải một con số hộp đen.</p>
+      <div class="hero-actions">
+        <a class="primary cta" href="#phan-tich" id="hero-cta">Kiểm tra bản quyền ngay
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a>
+        <a class="ghost" href="#lich-su">Xem lịch sử</a>
+      </div>
+      <!-- Số liệu THẬT từ /health — không bịa "1 triệu bài hát" cho đẹp -->
+      <p id="hero-meta" class="hero-meta">Đang hỏi máy chủ…</p>
+    </div>
+
+    <div class="hero-art" aria-hidden="true">
+      <div class="vinyl"><span class="vinyl-label"></span></div>
+      <div class="eq eq-hero"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+
+  <h3 class="section-title">Hệ thống làm gì</h3>
+  <ul class="feature-grid">
+    <li class="feature">
+      <span class="feature-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M4 10v4"/><path d="M8 7v10"/><path d="M12 4v16"/><path d="M16 8v8"/><path d="M20 11v2"/></svg></span>
+      <h4>Dấu vân tay Chromaprint</h4>
+      <p>Nhận ra bản ghi giống hệt hoặc gần giống trong cơ sở dữ liệu, kể cả khi chỉ có một đoạn.</p>
+    </li>
+    <li class="feature">
+      <span class="feature-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg></span>
+      <h4>Tương đồng sâu bằng AI</h4>
+      <p>MERT bắt bản bị nén, cắt, đổi âm lượng; tầng Cover (CQT + OTI) bắt bản đổi tông, đổi nhịp.</p>
+    </li>
+    <li class="feature">
+      <span class="feature-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.9 4-1.6 7-5.5 7-9.9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <h4>4 mức rủi ro rõ ràng</h4>
+      <p>THẤP · CÓ ĐIỀU KIỆN · CAO · CHƯA XÁC ĐỊNH. Không đủ căn cứ thì nói chưa xác định — không đoán bừa.</p>
+    </li>
+    <li class="feature">
+      <span class="feature-icon" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24" focusable="false"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg></span>
+      <h4>Bằng chứng truy ngược</h4>
+      <p>Điểm từng tầng so với ngưỡng, luật đã kích hoạt, nguồn và ngày xác minh dữ liệu quyền.</p>
+    </li>
+  </ul>
+
+  <h3 class="section-title">Cách hoạt động</h3>
+  <ol class="how-steps">
+    <li><span class="how-num" aria-hidden="true">1</span><div><h4>Tải file lên</h4><p>MP3, WAV, FLAC… hoặc video MP4, MOV. Chọn nền tảng và mục đích sử dụng.</p></div></li>
+    <li><span class="how-num" aria-hidden="true">2</span><div><h4>AI dò 3 tầng</h4><p>Chromaprint → MERT → Cover, dừng ngay ở tầng đầu tiên khớp.</p></div></li>
+    <li><span class="how-num" aria-hidden="true">3</span><div><h4>Nhận mức rủi ro</h4><p>Kèm điều kiện sử dụng, khuyến nghị và toàn bộ bằng chứng.</p></div></li>
+  </ol>
+
+  <div class="cta-band">
+    <p class="cta-band-title">Sẵn sàng kiểm tra bài đầu tiên?</p>
+    <a class="primary cta" href="#phan-tich">Kiểm tra bản quyền ngay
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a>
+  </div>
+</section>
+
+<!-- ══════════════════ MÀN 1: UPLOAD ══════════════════ -->
+<section id="screen-upload" class="screen">
+  <h2 class="sr-only" tabindex="-1">Tải file lên để phân tích</h2>
+
+  <form id="upload-form">
+    <!-- Máy chủ chưa sẵn sàng (thiếu CSDL, chỉ mục MERT…): nói TRƯỚC khi người dùng tải file
+         lên, thay vì để họ nhận một mã lỗi sau khi chờ tải xong. Nội dung lấy từ /health. -->
+    <div id="server-note" class="server-note" role="status" hidden></div>
+
+    <!-- Vùng thả KHÔNG là role=button: bên trong đã có nút "chọn file từ máy", nút lồng
+         trong nút bị trình đọc màn hình làm phẳng mất. Bấm chuột vào cả vùng vẫn mở hộp chọn. -->
+    <div id="dropzone" class="dropzone">
+      <div class="dz-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
+      <p class="dz-title">Kéo thả file audio hoặc video vào đây</p>
+      <p class="dz-sub">hoặc <button type="button" id="browse" class="linklike">chọn file từ máy</button></p>
+      <p class="dz-formats">mp3 · wav · flac · m4a · aac · ogg · opus · mp4 · mkv · mov · webm · avi
+        <span class="sep">—</span> tối đa <span id="max-size">100</span> MB</p>
+      <input type="file" id="file" name="file" hidden
+             accept=".mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,.mp4,.mkv,.mov,.webm,.avi">
+    </div>
+
+    <div id="file-picked" class="file-picked" hidden>
+      <span class="file-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+      <div class="file-meta">
+        <strong id="file-name"></strong>
+        <span id="file-size"></span>
+        <!-- Sóng âm THẬT của file (giải mã trong trình duyệt, không gửi đi đâu) -->
+        <canvas id="file-wave" class="file-wave" aria-hidden="true" hidden></canvas>
+      </div>
+      <button type="button" id="clear-file" class="ghost" aria-label="Bỏ chọn file">✕</button>
+    </div>
+
+    <fieldset class="options">
+      <legend>Mục đích sử dụng — đây là đầu vào của Rule Engine, không phải tuỳ chọn trang trí</legend>
+
+      <label class="field">
+        <span>Nền tảng đăng tải</span>
+        <select id="platform" name="platform">
+          <option value="YOUTUBE" selected>YouTube</option>
+          <option value="FACEBOOK">Facebook</option>
+          <option value="TIKTOK">TikTok</option>
+          <option value="OTHER">Khác</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Mục đích</span>
+        <select id="commercial_use" name="commercial_use">
+          <option value="false" selected>Phi thương mại</option>
+          <option value="true">Thương mại</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Bật kiếm tiền</span>
+        <select id="monetization" name="monetization">
+          <option value="false" selected>Không</option>
+          <option value="true">Có</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <button type="submit" id="analyze" class="primary cta" disabled>PHÂN TÍCH</button>
+    <p id="upload-error" class="error" role="alert" hidden></p>
+    <!-- Trang có thể mở công khai: người gửi file phải biết trước hệ thống giữ lại gì -->
+    <p class="hint">File chỉ dùng để phân tích rồi bị xoá. Nếu bài chưa nhận diện được, hệ
+      thống giữ lại dấu vân tay và đặc trưng âm thanh của bài (không giữ file) trong sổ bài
+      chưa nhận diện, để nhận ra khi gặp lại; ai dùng trang này cũng tra được sổ. Kết quả là
+      đánh giá rủi ro kỹ thuật, không phải tư vấn pháp lý.</p>
+  </form>
+</section>
+
+<!-- ══════════════════ MÀN 2: PROCESSING ══════════════════ -->
+<section id="screen-processing" class="screen">
+  <h2 tabindex="-1">Đang xử lý <span id="processing-file" class="muted"></span></h2>
+
+  <!-- Hình động chỉ trang trí; tiến trình THẬT nằm ở thanh sóng âm + danh sách bước -->
+  <div class="proc-visual" aria-hidden="true">
+    <div class="vinyl vinyl-sm"><span class="vinyl-label"></span></div>
+    <div class="eq eq-live"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  </div>
+  <!-- Thanh tiến trình dạng sóng âm: tô tới bước pipeline đang chạy (backend báo), không theo đồng hồ -->
+  <div id="proc-progress" class="wave-progress" role="progressbar" aria-label="Tiến trình pipeline"
+       aria-valuemin="0" aria-valuemax="9" aria-valuenow="0" aria-valuetext="Chưa bắt đầu">
+    <canvas id="proc-wave" aria-hidden="true"></canvas>
+  </div>
+
+  <p class="hint">Danh sách dưới đây là các bước THẬT của pipeline, đọc từ
+     <code>GET /api/v1/jobs/{job_id}</code> — không phải thanh chờ giả.</p>
+
+  <ol id="stage-list" class="stages">
+    <li data-stage="VALIDATING">Kiểm tra file tải lên</li>
+    <li data-stage="EXTRACTING_AUDIO">Tách &amp; chuẩn hoá luồng âm thanh</li>
+    <li data-stage="FINGERPRINTING">Sinh fingerprint Chromaprint &amp; dò trong CSDL</li>
+    <li data-stage="EMBEDDING">Trích embedding MERT-v1-95M</li>
+    <li data-stage="VECTOR_SEARCH">Tìm Top-K bản ghi tương đồng (FAISS)</li>
+    <li data-stage="COVER_SEARCH">Nhận dạng phiên bản &amp; cover (CQT + OTI)</li>
+    <li data-stage="RIGHTS_LOOKUP">Tra cứu giấy phép &amp; quyền sử dụng</li>
+    <li data-stage="RULE_ENGINE">Áp dụng Rule Engine phân loại rủi ro</li>
+    <li data-stage="REGISTRY_LOOKUP">Đối chiếu sổ bài chưa nhận diện</li>
+  </ol>
+  <!-- Một thông báo duy nhất cho trình đọc màn hình: bước đang chạy (danh sách trên đổi màu
+       nhưng không tự đọc lên) -->
+  <p id="stage-live" class="sr-only" role="status" aria-atomic="true"></p>
+
+  <p class="muted small">Job <code id="job-id"></code> · trạng thái <span id="job-status">QUEUED</span></p>
+  <button type="button" id="cancel-poll" class="ghost">Huỷ theo dõi</button>
+</section>
+
+<!-- ══════════════════ MÀN 3: RESULT ══════════════════ -->
+<section id="screen-result" class="screen">
+  <!-- Heading ẩn: focus chuyển vào đây khi kết quả về, trình đọc màn hình đọc luôn mức rủi ro -->
+  <h2 id="result-title" class="sr-only" tabindex="-1">Kết quả phân tích</h2>
+  <div id="risk-banner" class="risk-banner reveal">
+    <span id="risk-emoji" class="risk-emoji" aria-hidden="true">⚪</span>
+    <div class="risk-body">
+      <p class="risk-label">Mức rủi ro sử dụng</p>
+      <p id="risk-level" class="risk-level">—</p>
+      <p id="risk-condition" class="risk-condition"></p>
+    </div>
+    <!-- Số đếm chạy lên là trang trí: chữ thật cho trình đọc màn hình nằm ở .sr-only bên cạnh -->
+    <div class="risk-metric">
+      <p class="metric-value"><span id="match-percent" aria-hidden="true">0</span><span aria-hidden="true">%</span>
+        <span id="match-percent-sr" class="sr-only"></span></p>
+      <p id="match-label" class="metric-label">Độ tin cậy nhận diện</p>
+    </div>
+  </div>
+
+  <div id="worst-case-banner" class="worst-case-banner" hidden>
+    <svg class="icon worst-case-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+    <div class="worst-case-content">
+      <p id="worst-case-text" class="worst-case-title"></p>
+      <p id="worst-case-note" class="worst-case-note"></p>
+    </div>
+  </div>
+
+  <div class="cards">
+    <article class="card reveal">
+      <h3>Nhận diện</h3>
+      <dl id="identity-list"></dl>
+    </article>
+
+    <article class="card reveal" id="card-rights">
+      <h3>Quyền &amp; giấy phép</h3>
+      <dl id="rights-list"></dl>
+    </article>
+  </div>
+
+  <article class="card reveal">
+    <h3>Đánh giá &amp; khuyến nghị</h3>
+    <p id="recommendation" class="recommendation"></p>
+    <p class="hint">Ba loại độ tin cậy được giữ TÁCH BIỆT — hệ thống không quy về
+       một con số “xác suất vi phạm bản quyền” duy nhất.</p>
+    <div id="confidences" class="confidences"></div>
+    <p id="decision-reason" class="muted small"></p>
+  </article>
+
+  <!-- Thể loại: hệ thống CHƯA phân loại thể loại. Thẻ này là VÍ DỤ giao diện, cố định cho
+       mọi file, viền nét đứt + thanh gạch chéo để không đọc nhầm thành kết quả thật. -->
+  <article class="card card-sample reveal" id="card-genre" aria-labelledby="genre-title">
+    <div class="sample-head">
+      <h3 id="genre-title">Thể loại</h3>
+      <span class="badge-sample">Ví dụ minh hoạ</span>
+    </div>
+    <p class="hint">Hệ thống <strong>chưa</strong> phân loại thể loại. Số liệu dưới đây là ví dụ cố
+       định, giống nhau cho mọi file — không suy ra từ bài của bạn.</p>
+    <div class="genre-tabs" role="tablist" aria-label="Thể loại (ví dụ)"></div>
+    <div id="genre-panel" class="genre-panel" role="tabpanel"></div>
+  </article>
+
+  <!-- Chỉ hiện khi kết quả là UNKNOWN (evidence.unknown_registry) -->
+  <article class="card reveal" id="card-registry" hidden>
+    <h3 id="registry-heading">Sổ bài chưa nhận diện</h3>
+    <p id="registry-summary" class="registry-summary"></p>
+    <p id="registry-learned" class="small" hidden></p>
+    <p id="registry-review" class="small" hidden></p>
+    <p class="hint">Thông tin sổ chỉ để tra cứu. Nhận ra "bài đã gặp" không phải dữ liệu
+       quyền: sổ không biết ai giữ bản quyền, nên mức rủi ro ở trên không đổi.</p>
+    <button type="button" id="open-in-registry" class="ghost">Xem trong sổ →</button>
+  </article>
+
+  <article class="card feedback reveal">
+    <h3>Kết quả này có đúng không?</h3>
+    <div class="feedback-buttons">
+      <button type="button" data-verdict="Correct">Đúng</button>
+      <button type="button" data-verdict="Incorrect">Sai</button>
+      <button type="button" data-verdict="Unsure">Không chắc</button>
+    </div>
+    <p id="feedback-msg" class="muted small" role="status" hidden></p>
+  </article>
+
+  <div class="actions">
+    <button type="button" id="to-evidence" class="primary cta">Xem bằng chứng →</button>
+    <button type="button" id="restart" class="ghost">Phân tích file khác</button>
+  </div>
+</section>
+
+<!-- ══════════════════ MÀN 4: EVIDENCE ══════════════════ -->
+<section id="screen-evidence" class="screen">
+  <h2 tabindex="-1">Bằng chứng</h2>
+  <p class="hint">Mọi kết luận ở màn hình trước đều truy ngược được về các số liệu
+     dưới đây. Không có bước nào là hộp đen.</p>
+
+  <article class="card">
+    <h3>Tầng 1 — Chromaprint</h3>
+    <dl id="ev-fingerprint"></dl>
+  </article>
+
+  <article class="card">
+    <h3>Tầng 2 — MERT retrieval (Top-K bản ghi)</h3>
+    <div class="table-wrap">
+      <table id="ev-topk">
+        <thead><tr><th>#</th><th>recording_id</th><th>Similarity</th><th>Đoạn khớp</th><th>Số đoạn trúng</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <dl id="ev-embedding"></dl>
+  </article>
+
+  <article class="card" id="card-cover">
+    <h3>Tầng 3 — Cover &amp; Phiên bản (CQT Chroma + OTI)</h3>
+    <dl id="ev-cover"></dl>
+  </article>
+
+  <article class="card">
+    <h3>Rule Engine — luật đã kích hoạt</h3>
+    <dl id="ev-rules"></dl>
+  </article>
+
+  <article class="card" id="card-source">
+    <h3>Nguồn dữ liệu quyền</h3>
+    <dl id="ev-source"></dl>
+  </article>
+
+  <article class="card">
+    <h3>Độ trễ từng bước</h3>
+    <dl id="ev-timings"></dl>
+  </article>
+
+  <details class="card">
+    <summary>JSON gốc của kết quả</summary>
+    <pre id="ev-raw"></pre>
+  </details>
+
+  <div class="actions">
+    <button type="button" id="back-to-result" class="ghost">← Về kết quả</button>
+    <button type="button" id="restart2" class="primary cta">Phân tích file khác</button>
+  </div>
+</section>
+
+<!-- ══════════════════ LỊCH SỬ ══════════════════ -->
+<section id="screen-history" class="screen">
+  <h2 tabindex="-1">Lịch sử kiểm tra</h2>
+  <p class="hint">Các lần phân tích đã chạy trên <strong>trình duyệt này</strong> — lưu trong trình
+     duyệt, không gửi đi đâu, máy khác không thấy. Mở lại một mục để xem kết quả nếu máy chủ
+     còn giữ job đó.</p>
+
+  <div class="history-toolbar">
+    <div class="filter-chips" role="group" aria-label="Lọc theo mức rủi ro">
+      <button type="button" class="chip" data-risk="" aria-pressed="true">Tất cả</button>
+      <button type="button" class="chip" data-risk="LOW" aria-pressed="false"><span class="risk-dot r-LOW" aria-hidden="true"></span>Thấp</button>
+      <button type="button" class="chip" data-risk="CONDITIONAL" aria-pressed="false"><span class="risk-dot r-CONDITIONAL" aria-hidden="true"></span>Có điều kiện</button>
+      <button type="button" class="chip" data-risk="HIGH" aria-pressed="false"><span class="risk-dot r-HIGH" aria-hidden="true"></span>Cao</button>
+      <button type="button" class="chip" data-risk="UNKNOWN" aria-pressed="false"><span class="risk-dot r-UNKNOWN" aria-hidden="true"></span>Chưa xác định</button>
+    </div>
+    <button type="button" id="history-clear" class="ghost btn-small">Xoá lịch sử</button>
+  </div>
+
+  <p id="history-status" class="muted small" role="status"></p>
+  <ul id="history-list" class="history-list"></ul>
+
+  <div id="history-empty" class="empty-state" hidden>
+    <div class="vinyl vinyl-sm vinyl-still" aria-hidden="true"><span class="vinyl-label"></span></div>
+    <p class="empty-title">Chưa có lần kiểm tra nào</p>
+    <p class="muted">Mỗi lần phân tích xong, kết quả được ghi vào đây để mở lại nhanh.</p>
+    <a class="primary cta" href="#phan-tich">Kiểm tra bài đầu tiên</a>
+  </div>
+</section>
+
+<!-- ══════════════════ THỐNG KÊ & TRA CỨU ══════════════════ -->
+<section id="screen-registry" class="screen">
+  <h2 tabindex="-1">Thống kê &amp; Tra cứu</h2>
+  <p class="hint">Sổ bài chưa nhận diện: mọi kết quả UNKNOWN từ màn Phân tích được ghi
+     vào đây. Cùng một bài gửi lại được gộp vào mục cũ nhờ fingerprint Chromaprint.
+     Hệ thống không lưu file audio. Ghi chú trong sổ chỉ để tra cứu — không phải dữ
+     liệu quyền, không làm thay đổi mức rủi ro.</p>
+
+  <p id="registry-error" class="error" role="alert" hidden></p>
+  <p id="registry-disabled" class="muted small" hidden>Việc ghi sổ đang tắt
+     (<code>UNKNOWN_REGISTRY_ENABLED=false</code>) — sổ chỉ còn đọc.</p>
+
+  <div id="registry-stats" aria-busy="false">
+  <div id="stat-grid" class="stat-grid">
+    <p class="muted small">Đang tải số liệu…</p>
+  </div>
+
+  <div class="cards">
+    <article class="card">
+      <h3>Theo loại</h3>
+      <div id="chart-kind" class="hbars"></div>
+    </article>
+    <article class="card">
+      <h3>Theo mức rủi ro lần gặp gần nhất</h3>
+      <div id="chart-risk" class="hbars"></div>
+    </article>
+  </div>
+
+  <article class="card">
+    <h3>Lượt gặp trong 30 ngày</h3>
+    <div id="chart-days" class="vchart"></div>
+    <details class="table-view">
+      <summary>Xem dạng bảng</summary>
+      <div class="table-wrap">
+        <table id="table-days">
+          <thead><tr><th>Ngày</th><th class="num">Lượt gặp</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+  </article>
+
+  <div class="cards">
+    <article class="card">
+      <h3>Theo nền tảng</h3>
+      <div id="chart-platform" class="hbars"></div>
+    </article>
+    <article class="card">
+      <h3>Gặp lại nhiều nhất</h3>
+      <ol id="top-resighted" class="top-list"></ol>
+    </article>
+  </div>
+  </div><!-- /#registry-stats -->
+
+  <article class="card" id="registry-search-card" aria-busy="false">
+    <h3>Tra cứu sổ</h3>
+    <form id="registry-search" class="search-row" role="search">
+      <label class="field grow">Từ khoá
+        <input type="search" id="rs-q" maxlength="100"
+               placeholder="Tên bài, nghệ sĩ, ghi chú, tên file hoặc UUID">
+      </label>
+      <label class="field">Loại
+        <select id="rs-kind">
+          <option value="">Tất cả</option>
+          <option value="NOT_IDENTIFIED">Không nhận diện được</option>
+          <option value="RIGHTS_UNKNOWN">Quyền chưa xác định</option>
+        </select>
+      </label>
+      <label class="field">Trạng thái
+        <select id="rs-status">
+          <option value="">Tất cả</option>
+          <option value="PENDING">Chờ thẩm định</option>
+          <option value="REVIEWED">Đã thẩm định</option>
+        </select>
+      </label>
+      <label class="field">Sắp xếp
+        <select id="rs-sort">
+          <option value="last_seen">Gặp gần nhất</option>
+          <option value="sightings">Nhiều lượt gặp nhất</option>
+          <option value="first_seen">Mới vào sổ</option>
+        </select>
+      </label>
+      <button type="submit" class="primary">Tìm</button>
+    </form>
+
+    <div class="table-wrap">
+      <table id="registry-table">
+        <thead><tr>
+          <th>Bài</th><th>Loại</th><th class="num">Lượt gặp</th><th>Gặp gần nhất</th>
+          <th>Rủi ro gần nhất</th><th>Trạng thái</th>
+        </tr></thead>
+        <tbody><tr><td colspan="6" class="muted">Đang tải…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button type="button" id="rs-prev" class="ghost">‹ Trước</button>
+      <span id="rs-range" class="muted small" role="status"></span>
+      <button type="button" id="rs-next" class="ghost">Sau ›</button>
+    </div>
+  </article>
+
+  <article class="card" id="registry-detail" hidden>
+    <div class="detail-head">
+      <h3 id="rd-title" tabindex="-1">Chi tiết mục</h3>
+      <button type="button" id="rd-close" class="ghost btn-small" aria-label="Đóng khung chi tiết">Đóng</button>
+    </div>
+    <dl id="rd-info"></dl>
+    <p id="rd-hint" class="hint" hidden></p>
+
+    <h3 class="sub">Các lượt gặp gần nhất</h3>
+    <div class="table-wrap">
+      <table id="rd-sightings">
+        <thead><tr>
+          <th>Thời điểm</th><th>Nền tảng</th><th>Thương mại</th><th>Kiếm tiền</th>
+          <th>Rủi ro</th><th>Nhận ra qua</th><th class="num">Điểm khớp sổ</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h3 class="sub">Ghi chú thẩm định</h3>
+    <form id="review-form" class="review-form">
+      <label class="field">Tên bài
+        <input type="text" id="rv-title" maxlength="255">
+      </label>
+      <label class="field">Nghệ sĩ
+        <input type="text" id="rv-artist" maxlength="255">
+      </label>
+      <label class="field">Trạng thái
+        <select id="rv-status">
+          <option value="PENDING">Chờ thẩm định</option>
+          <option value="REVIEWED">Đã thẩm định</option>
+        </select>
+      </label>
+      <label class="field wide">Ghi chú
+        <textarea id="rv-note" rows="3" maxlength="2000"></textarea>
+      </label>
+      <p class="hint wide">Ghi chú giúp tìm lại bài này về sau. Nó KHÔNG phải dữ liệu
+         quyền: Rule Engine không đọc ghi chú, nên đặt tên bài ở đây không biến kết quả
+         UNKNOWN thành đã nhận diện.</p>
+      <div class="actions wide">
+        <button type="submit" id="rv-save" class="primary">Lưu ghi chú</button>
+        <span id="rv-msg" class="muted small" role="status"></span>
+      </div>
+    </form>
+  </article>
+</section>
+
+</main>
+
+<div id="chart-tooltip" class="chart-tooltip" role="tooltip" hidden></div>
+
+<footer>
+  <p>Rule Engine <code>rules_v1</code> · <a href="/docs">Swagger UI</a> · <a href="/health">/health</a></p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

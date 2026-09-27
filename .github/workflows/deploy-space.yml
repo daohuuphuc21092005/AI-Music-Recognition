@@ -1,0 +1,82 @@
+# Mỗi lần push lên main: chạy bộ test, đạt thì triển khai lên Hugging Face Space.
+# Pull request chỉ chạy test.
+#
+# Cấu hình một lần trong Settings → Secrets and variables → Actions của repo GitHub:
+#   Variables:  HF_SPACE_ID        vd. ten-ban/music-rights-ai (chưa đặt thì bỏ qua bước triển khai)
+#               RUNTIME_DATA_REPO  vd. ten-ban/amr-runtime-data (dataset chứa chỉ mục FAISS)
+#   Secrets:    HF_TOKEN              token GHI của Hugging Face (đẩy code lên Space)
+#               SPACE_DATABASE_URL    chuỗi kết nối Neon của role music_ai_app
+#               SPACE_HF_READ_TOKEN   token ĐỌC, cần khi dataset để private
+# Chi tiết từng bước: mục "Triển khai lên web" trong README.md.
+name: Test & deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Cài FFmpeg và fpcalc
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg libchromaprint-tools
+
+      - name: Cài thư viện Python (torch bản CPU)
+        run: |
+          TORCH_VERSION="$(grep -i '^torch==' requirements.txt | cut -d= -f3)"
+          pip install --index-url https://download.pytorch.org/whl/cpu "torch==${TORCH_VERSION}"
+          pip install -r requirements.txt
+
+      # Không có CSDL: test cần PostgreSQL tự bỏ qua kèm lý do (-rs in lý do ra log)
+      - name: Chạy test
+        env:
+          DATABASE_URL: postgresql://nobody@127.0.0.1:1/none
+          WARMUP_ON_STARTUP: "false"
+        run: python -m pytest -q -rs
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.HF_SPACE_ID != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: huggingface-space
+      url: https://huggingface.co/spaces/${{ vars.HF_SPACE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cài huggingface_hub
+        run: pip install "$(grep -i '^huggingface_hub==' requirements.txt)"
+
+      - name: Dựng gói Space
+        run: python deploy/build_space_bundle.py --out space_bundle
+
+      - name: Đẩy lên Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ vars.HF_SPACE_ID }}
+          RUNTIME_DATA_REPO: ${{ vars.RUNTIME_DATA_REPO }}
+          SPACE_DATABASE_URL: ${{ secrets.SPACE_DATABASE_URL }}
+          SPACE_HF_READ_TOKEN: ${{ secrets.SPACE_HF_READ_TOKEN }}
+        run: python deploy/push_space.py space_bundle

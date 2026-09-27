@@ -1,0 +1,605 @@
+{
+  "experiment_id": "exp05_robustness",
+  "date": "2026-09-18T09:52:41",
+  "git_commit": "4127914",
+  "git_dirty": true,
+  "dataset_version": {
+    "metadata_master.csv": {
+      "bytes": 41673661,
+      "mtime": "2026-09-16T22:06:30"
+    },
+    "rights_master.csv": {
+      "bytes": 61585559,
+      "mtime": "2026-09-16T22:06:32"
+    },
+    "fingerprints_master.csv": {
+      "bytes": 22719740,
+      "mtime": "2026-09-15T21:59:11"
+    },
+    "embeddings_master.csv": {
+      "bytes": 803900847,
+      "mtime": "2026-09-16T16:55:30"
+    }
+  },
+  "model": {
+    "name": "m-a-p/MERT-v1-95M",
+    "version": "MERT-v1-95M",
+    "embedding_dim": 768,
+    "pooling": "mean",
+    "sample_rate": 24000
+  },
+  "environment": {
+    "python": "3.12.1",
+    "platform": "Windows-11-10.0.26200-SP0"
+  },
+  "parameters": {
+    "source_experiments": [
+      "exp01_fingerprint_baseline",
+      "exp04_hybrid_cascade"
+    ],
+    "families": {
+      "Cắt đoạn": [
+        "original_crop30s",
+        "crop_15s",
+        "crop_10s"
+      ],
+      "Nén codec": [
+        "mp3_128k",
+        "mp3_64k",
+        "aac_96k"
+      ],
+      "Nhiễu": [
+        "noise_snr20",
+        "noise_snr10",
+        "noise_snr5"
+      ],
+      "Biên độ / EQ": [
+        "gain_minus12db",
+        "eq_lowpass_4k"
+      ],
+      "Dịch cao độ": [
+        "pitch_plus_1",
+        "pitch_minus_1",
+        "pitch_plus_2",
+        "pitch_minus_2"
+      ],
+      "Đổi tốc độ": [
+        "tempo_0_90",
+        "tempo_0_95",
+        "tempo_1_05",
+        "tempo_1_10"
+      ],
+      "Chồng âm": [
+        "audio_overlay"
+      ]
+    },
+    "tau_fp": 0.3,
+    "tau_mert": 0.98,
+    "tau_cover": 0.9,
+    "queries_shared_by_exp01_and_exp04": 1900,
+    "blind_spot_max_accuracy": 0.05
+  },
+  "metrics": {
+    "by_family": {
+      "Cắt đoạn": {
+        "n": 300,
+        "fingerprint_accuracy": 1.0,
+        "mert_accuracy": 0.7633,
+        "cascade_accuracy": 1.0,
+        "cover_accuracy": 0.3333,
+        "cascade_no_cover_accuracy": 1.0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9869,
+        "transformations": [
+          "original_crop30s",
+          "crop_15s",
+          "crop_10s"
+        ]
+      },
+      "Nén codec": {
+        "n": 200,
+        "fingerprint_accuracy": 1.0,
+        "mert_accuracy": 0.5,
+        "cascade_accuracy": 1.0,
+        "cover_accuracy": 1.0,
+        "cascade_no_cover_accuracy": 1.0,
+        "fingerprint_mean_score": 0.9991,
+        "mert_mean_score": 0.9782,
+        "transformations": [
+          "mp3_128k",
+          "mp3_64k"
+        ]
+      },
+      "Nhiễu": {
+        "n": 300,
+        "fingerprint_accuracy": 0.9967,
+        "mert_accuracy": 0.0833,
+        "cascade_accuracy": 1.0,
+        "cover_accuracy": 0.99,
+        "cascade_no_cover_accuracy": 0.9967,
+        "fingerprint_mean_score": 0.9215,
+        "mert_mean_score": 0.9498,
+        "transformations": [
+          "noise_snr20",
+          "noise_snr10",
+          "noise_snr5"
+        ]
+      },
+      "Biên độ / EQ": {
+        "n": 200,
+        "fingerprint_accuracy": 1.0,
+        "mert_accuracy": 0.3,
+        "cascade_accuracy": 1.0,
+        "cover_accuracy": 1.0,
+        "cascade_no_cover_accuracy": 1.0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9697,
+        "transformations": [
+          "gain_minus12db",
+          "eq_lowpass_4k"
+        ]
+      },
+      "Dịch cao độ": {
+        "n": 400,
+        "fingerprint_accuracy": 0.0,
+        "mert_accuracy": 0.0025,
+        "cascade_accuracy": 0.7125,
+        "cover_accuracy": 0.71,
+        "cascade_no_cover_accuracy": 0.0025,
+        "fingerprint_mean_score": 0.0082,
+        "mert_mean_score": 0.9266,
+        "transformations": [
+          "pitch_plus_1",
+          "pitch_minus_1",
+          "pitch_plus_2",
+          "pitch_minus_2"
+        ]
+      },
+      "Đổi tốc độ": {
+        "n": 400,
+        "fingerprint_accuracy": 0.0,
+        "mert_accuracy": 0.0775,
+        "cascade_accuracy": 0.8075,
+        "cover_accuracy": 0.795,
+        "cascade_no_cover_accuracy": 0.0775,
+        "fingerprint_mean_score": 0.0296,
+        "mert_mean_score": 0.9585,
+        "transformations": [
+          "tempo_0_90",
+          "tempo_0_95",
+          "tempo_1_05",
+          "tempo_1_10"
+        ]
+      },
+      "Chồng âm": {
+        "n": 100,
+        "fingerprint_accuracy": 0.57,
+        "mert_accuracy": 0.17,
+        "cascade_accuracy": 0.65,
+        "cover_accuracy": 0.57,
+        "cascade_no_cover_accuracy": 0.57,
+        "fingerprint_mean_score": 0.4615,
+        "mert_mean_score": 0.9552,
+        "transformations": [
+          "audio_overlay"
+        ]
+      }
+    },
+    "blind_spot_definition": {
+      "max_accuracy": 0.05,
+      "rule": "tầng nhận đúng <= ngưỡng này trên cả nhóm thì coi là điểm mù"
+    },
+    "fingerprint_blind_spots": [
+      "Dịch cao độ",
+      "Đổi tốc độ"
+    ],
+    "mert_blind_spots": [
+      "Dịch cao độ"
+    ],
+    "both_blind_spots": [
+      "Dịch cao độ"
+    ],
+    "cover_blind_spots": [],
+    "all_tiers_blind_spots": [],
+    "has_cover_stage": true,
+    "blind_spot_accuracy": {
+      "Dịch cao độ": {
+        "fingerprint": 0.0,
+        "mert": 0.0025,
+        "cascade": 0.7125,
+        "cover": 0.71
+      },
+      "Đổi tốc độ": {
+        "fingerprint": 0.0,
+        "mert": 0.0775,
+        "cascade": 0.8075,
+        "cover": 0.795
+      }
+    },
+    "per_transformation_fingerprint": {
+      "audio_overlay": {
+        "n": 100,
+        "mean_score": 0.4673,
+        "min_score": 0.009,
+        "matched_at_current_tau": 57,
+        "mean_latency_ms": 4891.6,
+        "mean_held_out_score": 0.0117
+      },
+      "crop_10s": {
+        "n": 100,
+        "mean_score": 1.0,
+        "min_score": 1.0,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 1608.8,
+        "mean_held_out_score": 0.0359
+      },
+      "crop_15s": {
+        "n": 100,
+        "mean_score": 1.0,
+        "min_score": 1.0,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 2460.0,
+        "mean_held_out_score": 0.025
+      },
+      "eq_lowpass_4k": {
+        "n": 100,
+        "mean_score": 1.0,
+        "min_score": 1.0,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 4857.3,
+        "mean_held_out_score": 0.0129
+      },
+      "gain_minus12db": {
+        "n": 100,
+        "mean_score": 1.0,
+        "min_score": 1.0,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 4854.9,
+        "mean_held_out_score": 0.0129
+      },
+      "mp3_128k": {
+        "n": 100,
+        "mean_score": 1.0,
+        "min_score": 0.9955,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 4903.1,
+        "mean_held_out_score": 0.0129
+      },
+      "mp3_64k": {
+        "n": 100,
+        "mean_score": 0.9983,
+        "min_score": 0.9729,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 4905.6,
+        "mean_held_out_score": 0.0127
+      },
+      "noise_snr10": {
+        "n": 100,
+        "mean_score": 0.9517,
+        "min_score": 0.5204,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 4864.1,
+        "mean_held_out_score": 0.013
+      },
+      "noise_snr20": {
+        "n": 100,
+        "mean_score": 0.9904,
+        "min_score": 0.8371,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 4860.8,
+        "mean_held_out_score": 0.0127
+      },
+      "noise_snr5": {
+        "n": 100,
+        "mean_score": 0.8223,
+        "min_score": 0.2986,
+        "matched_at_current_tau": 99,
+        "mean_latency_ms": 4844.4,
+        "mean_held_out_score": 0.0125
+      },
+      "original_crop30s": {
+        "n": 100,
+        "mean_score": 1.0,
+        "min_score": 1.0,
+        "matched_at_current_tau": 100,
+        "mean_latency_ms": 4901.3,
+        "mean_held_out_score": 0.0129
+      },
+      "pitch_minus_1": {
+        "n": 100,
+        "mean_score": 0.0122,
+        "min_score": 0.0045,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 4882.6,
+        "mean_held_out_score": 0.0122
+      },
+      "pitch_minus_2": {
+        "n": 100,
+        "mean_score": 0.0131,
+        "min_score": 0.0045,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 4861.9,
+        "mean_held_out_score": 0.0131
+      },
+      "pitch_plus_1": {
+        "n": 100,
+        "mean_score": 0.0126,
+        "min_score": 0.0045,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 4882.3,
+        "mean_held_out_score": 0.0126
+      },
+      "pitch_plus_2": {
+        "n": 100,
+        "mean_score": 0.013,
+        "min_score": 0.0045,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 4863.5,
+        "mean_held_out_score": 0.013
+      },
+      "tempo_0_90": {
+        "n": 100,
+        "mean_score": 0.0253,
+        "min_score": 0.009,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 5395.0,
+        "mean_held_out_score": 0.0133
+      },
+      "tempo_0_95": {
+        "n": 100,
+        "mean_score": 0.0403,
+        "min_score": 0.0045,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 5120.2,
+        "mean_held_out_score": 0.0134
+      },
+      "tempo_1_05": {
+        "n": 100,
+        "mean_score": 0.0439,
+        "min_score": 0.0096,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 4666.0,
+        "mean_held_out_score": 0.0136
+      },
+      "tempo_1_10": {
+        "n": 100,
+        "mean_score": 0.0312,
+        "min_score": 0.005,
+        "matched_at_current_tau": 0,
+        "mean_latency_ms": 4470.8,
+        "mean_held_out_score": 0.0134
+      }
+    },
+    "per_transformation_hybrid": {
+      "audio_overlay": {
+        "n": 100,
+        "fingerprint_correct": 57,
+        "mert_correct": 17,
+        "cover_correct": 57,
+        "cascade_no_cover_correct": 57,
+        "cascade_correct": 65,
+        "cascade_wrong_accept": 5,
+        "fingerprint_mean_score": 0.4615,
+        "mert_mean_score": 0.9552,
+        "cover_mean_score": 0.9028
+      },
+      "crop_10s": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 73,
+        "cover_correct": 0,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9828,
+        "cover_mean_score": 0.5929
+      },
+      "crop_15s": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 100,
+        "cover_correct": 0,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9981,
+        "cover_mean_score": 0.5878
+      },
+      "eq_lowpass_4k": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 4,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9597,
+        "cover_mean_score": 0.9961
+      },
+      "gain_minus12db": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 56,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9797,
+        "cover_mean_score": 0.998
+      },
+      "mp3_128k": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 52,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9784,
+        "cover_mean_score": 0.9977
+      },
+      "mp3_64k": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 48,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.9983,
+        "mert_mean_score": 0.978,
+        "cover_mean_score": 0.9966
+      },
+      "noise_snr10": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 5,
+        "cover_correct": 99,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.9517,
+        "mert_mean_score": 0.9507,
+        "cover_mean_score": 0.9879
+      },
+      "noise_snr20": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 19,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.9904,
+        "mert_mean_score": 0.9654,
+        "cover_mean_score": 0.9942
+      },
+      "noise_snr5": {
+        "n": 100,
+        "fingerprint_correct": 99,
+        "mert_correct": 1,
+        "cover_correct": 98,
+        "cascade_no_cover_correct": 99,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.8223,
+        "mert_mean_score": 0.9332,
+        "cover_mean_score": 0.9808
+      },
+      "original_crop30s": {
+        "n": 100,
+        "fingerprint_correct": 100,
+        "mert_correct": 56,
+        "cover_correct": 100,
+        "cascade_no_cover_correct": 100,
+        "cascade_correct": 100,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 1.0,
+        "mert_mean_score": 0.9798,
+        "cover_mean_score": 0.9986
+      },
+      "pitch_minus_1": {
+        "n": 100,
+        "fingerprint_correct": 0,
+        "mert_correct": 0,
+        "cover_correct": 72,
+        "cascade_no_cover_correct": 0,
+        "cascade_correct": 72,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0075,
+        "mert_mean_score": 0.9265,
+        "cover_mean_score": 0.9224
+      },
+      "pitch_minus_2": {
+        "n": 100,
+        "fingerprint_correct": 0,
+        "mert_correct": 0,
+        "cover_correct": 65,
+        "cascade_no_cover_correct": 0,
+        "cascade_correct": 65,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0089,
+        "mert_mean_score": 0.924,
+        "cover_mean_score": 0.9103
+      },
+      "pitch_plus_1": {
+        "n": 100,
+        "fingerprint_correct": 0,
+        "mert_correct": 1,
+        "cover_correct": 76,
+        "cascade_no_cover_correct": 1,
+        "cascade_correct": 77,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0082,
+        "mert_mean_score": 0.9279,
+        "cover_mean_score": 0.9219
+      },
+      "pitch_plus_2": {
+        "n": 100,
+        "fingerprint_correct": 0,
+        "mert_correct": 0,
+        "cover_correct": 71,
+        "cascade_no_cover_correct": 0,
+        "cascade_correct": 71,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0081,
+        "mert_mean_score": 0.9279,
+        "cover_mean_score": 0.9206
+      },
+      "tempo_0_90": {
+        "n": 100,
+        "fingerprint_correct": 0,
+        "mert_correct": 7,
+        "cover_correct": 83,
+        "cascade_no_cover_correct": 7,
+        "cascade_correct": 83,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0208,
+        "mert_mean_score": 0.9579,
+        "cover_mean_score": 0.9331
+      },
+      "tempo_0_95": {
+        "n": 100,
+        "fingerprint_correct": 0,
+        "mert_correct": 9,
+        "cover_correct": 77,
+        "cascade_no_cover_correct": 9,
+        "cascade_correct": 79,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0336,
+        "mert_mean_score": 0.9585,
+        "cover_mean_score": 0.9256
+      },
+      "tempo_1_05": {
+        "n": 100,
+        "fingerprint_correct": 0,
+        "mert_correct": 8,
+        "cover_correct": 77,
+        "cascade_no_cover_correct": 8,
+        "cascade_correct": 79,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0381,
+        "mert_mean_score": 0.9587,
+        "cover_mean_score": 0.9245
+      },
+      "tempo_1_10": {
+        "n": 100,
+        "fingerprint_correct": 0,
+        "mert_correct": 7,
+        "cover_correct": 81,
+        "cascade_no_cover_correct": 7,
+        "cascade_correct": 82,
+        "cascade_wrong_accept": 0,
+        "fingerprint_mean_score": 0.0261,
+        "mert_mean_score": 0.9587,
+        "cover_mean_score": 0.9269
+      }
+    }
+  },
+  "notes": "Tổng hợp lại từ EXP-01 và EXP-04, không chạy lại suy luận. Quy mô 1900 truy vấn, 100 mẫu cho mỗi phép biến đổi. Nhãn 'điểm mù' = tầng nhận đúng <= 5% trên cả nhóm."
+}

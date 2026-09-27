@@ -1,0 +1,320 @@
+import os
+import re
+
+from sqlalchemy import inspect, text
+
+from backend import config
+from backend.database.session import engine
+
+def clean_and_filter_df(df: "pd.DataFrame", table_name: str, engine) -> "pd.DataFrame":
+    """
+    1. Loại bỏ các đuôi biến dạng như _m999, _m3274 ở cuối tên cột (ví dụ: duration_m999 -> duration)
+    2. Chỉ lọc lấy đúng các cột có khai báo trong Bảng CSDL PostgreSQL
+    """
+    new_columns = {}
+    for col in df.columns:
+        # Regex xóa _m theo sau bởi các chữ số ở cuối chuỗi
+        clean_col = re.sub(r'_m\d+$', '', str(col)).strip()
+        new_columns[col] = clean_col
+    df = df.rename(columns=new_columns)
+
+    # Lấy danh sách cột thực tế từ Schema DB
+    inspector = inspect(engine)
+    db_columns = [c['name'] for c in inspector.get_columns(table_name)]
+
+    # Giữ lại cột hợp lệ
+    valid_cols = [c for c in df.columns if c in db_columns]
+    return df[valid_cols]
+
+def init_database(schema_only: bool = False):
+    print("=== BẮT ĐẦU TẠO BẢNG & NẠP DỮ LIỆU VÀO POSTGRESQL ===")
+    
+    create_tables_sql = """
+    CREATE TABLE IF NOT EXISTS compositions (
+        composition_id UUID PRIMARY KEY,
+        title TEXT,
+        composer TEXT,
+        year INTEGER,
+        public_domain_status VARCHAR(50),
+        source TEXT,
+        verified_at TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS recordings (
+        recording_id UUID PRIMARY KEY,
+        composition_id UUID REFERENCES compositions(composition_id),
+        title TEXT,
+        artist TEXT,
+        album TEXT,
+        release_year INTEGER,
+        duration FLOAT,
+        source_dataset TEXT,
+        source_track_id TEXT,
+        audio_path TEXT,
+        metadata_verified BOOLEAN
+    );
+
+    CREATE TABLE IF NOT EXISTS rights (
+        rights_id UUID PRIMARY KEY,
+        recording_id UUID REFERENCES recordings(recording_id),
+        composition_id UUID REFERENCES compositions(composition_id),
+        license_type VARCHAR(100),
+        copyright_status VARCHAR(50),
+        attribution_required BOOLEAN,
+        commercial_use_allowed BOOLEAN,
+        modification_allowed BOOLEAN,
+        monetization_allowed BOOLEAN,
+        revenue_share_required BOOLEAN,
+        policy_action VARCHAR(30),
+        license_purchased BOOLEAN,
+        revenue_share_agreed BOOLEAN,
+        recording_public_domain BOOLEAN,
+        territory VARCHAR(50),
+        platform VARCHAR(50),
+        valid_from DATE,
+        valid_until DATE,
+        source TEXT,
+        source_url TEXT,
+        verified_at TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS fingerprints (
+        fingerprint_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        recording_id UUID REFERENCES recordings(recording_id),
+        algorithm VARCHAR(50) DEFAULT 'chromaprint',
+        fingerprint TEXT,
+        duration FLOAT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS embeddings (
+        embedding_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        recording_id UUID REFERENCES recordings(recording_id),
+        segment_start FLOAT,
+        segment_end FLOAT,
+        model VARCHAR(50) DEFAULT 'MERT',
+        model_version VARCHAR(50) DEFAULT 'MERT-v1-95M',
+        dimension INTEGER DEFAULT 768,
+        vector TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS test_queries (
+        query_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        recording_id UUID REFERENCES recordings(recording_id),
+        composition_id UUID REFERENCES compositions(composition_id),
+        transformation VARCHAR(100),
+        snr FLOAT,
+        pitch_shift FLOAT,
+        tempo_factor FLOAT,
+        codec VARCHAR(20),
+        bitrate INTEGER,
+        segment_start FLOAT,
+        duration FLOAT,
+        expected_match_type VARCHAR(50)
+    );
+
+    -- Bảng jobs & feedback phục vụ API bất đồng bộ ở §11 (analyze/jobs/results/feedback).
+    CREATE TABLE IF NOT EXISTS jobs (
+        job_id UUID PRIMARY KEY,
+        status VARCHAR(20) NOT NULL,
+        filename TEXT,
+        platform VARCHAR(30),
+        commercial_use BOOLEAN,
+        monetization BOOLEAN,
+        error_code VARCHAR(40),
+        error_message TEXT,
+        result JSONB,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS feedback (
+        feedback_id UUID PRIMARY KEY,
+        job_id UUID,
+        recording_id UUID,
+        verdict VARCHAR(20),
+        note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS analysis_results (
+        job_id UUID PRIMARY KEY,
+        query_id UUID,
+        recording_candidate UUID,
+        composition_candidate UUID,
+        fingerprint_score FLOAT,
+        embedding_score FLOAT,
+        cover_score FLOAT,
+        match_type VARCHAR(50),
+        risk_level VARCHAR(50),
+        confidence FLOAT,
+        decision_reason TEXT,
+        latency_ms FLOAT,
+        model_version VARCHAR(50),
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Sổ bài chưa nhận diện: mỗi kết quả UNKNOWN của /analyze được ghi vào đây để
+    -- thống kê, nhận lại khi cùng bài được gửi lại, và cho người thẩm định ghi chú.
+    -- KHÔNG có khoá ngoại tới recordings: init_db chạy TRUNCATE recordings CASCADE
+    -- mỗi lần nạp lại dữ liệu, khoá ngoại sẽ xoá sạch sổ theo.
+    -- Sổ không bao giờ đi vào Rule Engine: ghi chú ở đây không phải dữ liệu quyền.
+    -- TIMESTAMPTZ (khác các bảng cũ): API trả thời điểm kèm múi giờ, trình duyệt đổi
+    -- đúng sang giờ địa phương thay vì hiểu giờ UTC của container là giờ máy.
+    CREATE TABLE IF NOT EXISTS unknown_tracks (
+        unknown_id UUID PRIMARY KEY,
+        kind VARCHAR(20) NOT NULL,
+        recording_id UUID,
+        fingerprint TEXT,
+        fingerprint_duration FLOAT,
+        first_filename TEXT,
+        first_seen_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        last_seen_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        sighting_count INTEGER NOT NULL DEFAULT 1,
+        last_match_type VARCHAR(50),
+        last_risk_level VARCHAR(20),
+        last_category VARCHAR(60),
+        last_condition VARCHAR(60),
+        hint_recording_id UUID,
+        hint_score FLOAT,
+        review_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        reviewer_title VARCHAR(255),
+        reviewer_artist VARCHAR(255),
+        reviewer_note TEXT,
+        reviewed_at TIMESTAMPTZ
+    );
+
+    -- Mỗi lượt gặp một dòng. job_id chỉ để kiểm toán: job_id là khoá truy cập kết
+    -- quả (docs/SECURITY.md), API của sổ không bao giờ trả trường này.
+    CREATE TABLE IF NOT EXISTS unknown_sightings (
+        sighting_id UUID PRIMARY KEY,
+        unknown_id UUID NOT NULL REFERENCES unknown_tracks(unknown_id) ON DELETE CASCADE,
+        job_id UUID,
+        seen_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        platform VARCHAR(30),
+        commercial_use BOOLEAN,
+        monetization BOOLEAN,
+        match_score FLOAT,
+        risk_level VARCHAR(20),
+        category VARCHAR(60)
+    );
+
+    -- Đặc trưng "đã học" của mỗi mục NOT_IDENTIFIED: vector MERT từng đoạn 15 s và
+    -- descriptor Cover (30 giây đầu). Không lưu audio — không dựng lại được âm thanh.
+    -- float32 little-endian trong BYTEA (3 KB/vector, TEXT như bảng embeddings ~16 KB).
+    -- model_version khác phiên bản đang chạy thì không đem so (CLAUDE.md §9).
+    CREATE TABLE IF NOT EXISTS unknown_track_features (
+        feature_id UUID PRIMARY KEY,
+        unknown_id UUID NOT NULL REFERENCES unknown_tracks(unknown_id) ON DELETE CASCADE,
+        feature_type VARCHAR(10) NOT NULL,
+        model_version VARCHAR(80) NOT NULL,
+        segment_start FLOAT,
+        segment_end FLOAT,
+        dimension INTEGER NOT NULL,
+        vector BYTEA NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    """
+
+    # CREATE TABLE IF NOT EXISTS không thêm cột cho bảng đã tồn tại, nên các cột
+    # mới của Rule Engine phải thêm bằng ALTER TABLE (dự án không dùng Alembic).
+    migrations_sql = """
+    ALTER TABLE rights ADD COLUMN IF NOT EXISTS policy_action VARCHAR(30);
+    ALTER TABLE rights ADD COLUMN IF NOT EXISTS license_purchased BOOLEAN;
+    ALTER TABLE rights ADD COLUMN IF NOT EXISTS revenue_share_agreed BOOLEAN;
+    ALTER TABLE rights ADD COLUMN IF NOT EXISTS recording_public_domain BOOLEAN;
+    -- Bước đang chạy của job, để màn hình Processing hiển thị tiến trình THẬT
+    -- thay vì một thanh loading giả (§13).
+    ALTER TABLE jobs ADD COLUMN IF NOT EXISTS stage VARCHAR(40);
+    -- Sổ bài chưa nhận diện: danh sách sắp theo lần gặp gần nhất, gộp RIGHTS_UNKNOWN
+    -- theo recording_id (một mục cho mỗi bản ghi), thống kê lượt gặp theo ngày.
+    CREATE INDEX IF NOT EXISTS ix_unknown_tracks_last_seen ON unknown_tracks (last_seen_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_unknown_tracks_recording
+        ON unknown_tracks (recording_id) WHERE kind = 'RIGHTS_UNKNOWN';
+    CREATE INDEX IF NOT EXISTS ix_unknown_sightings_entry ON unknown_sightings (unknown_id, seen_at DESC);
+    CREATE INDEX IF NOT EXISTS ix_unknown_sightings_seen ON unknown_sightings (seen_at);
+    -- Tầng nào của sổ nhận ra lượt gặp: FINGERPRINT | MERT | COVER (NULL = mục mới)
+    ALTER TABLE unknown_sightings ADD COLUMN IF NOT EXISTS match_method VARCHAR(20);
+    CREATE INDEX IF NOT EXISTS ix_unknown_features_entry
+        ON unknown_track_features (unknown_id, feature_type);
+    """
+
+    with engine.connect() as conn:
+        conn.execute(text(create_tables_sql))
+        conn.execute(text(migrations_sql))
+        conn.commit()
+    print("-> Đã khởi tạo xong 7 bảng chuẩn Đề cương + jobs/feedback cho API §11 "
+          "+ sổ bài chưa nhận diện!")
+
+    if schema_only:
+        # Nâng cấp CSDL đang chạy: bỏ qua bước nạp CSV (TRUNCATE rồi nạp lại 158k dòng).
+        print("\n=== --schema-only: đã cập nhật schema, KHÔNG nạp lại dữ liệu ===")
+        return
+
+    # Chỉ bước nạp CSV cần pandas — `--schema-only` chạy được trên máy chỉ cài backend.
+    import pandas as pd
+
+    data_dir = config.DATA_DIR
+    
+    files_to_import = [
+        ("compositions_master.csv", "compositions"),
+        ("metadata_master.csv", "recordings"),
+        ("rights_master.csv", "rights"),
+        ("fingerprints_master.csv", "fingerprints"),
+        ("embeddings_master.csv", "embeddings"),
+        ("test_queries_master.csv", "test_queries")
+    ]
+
+    # Ghi chú: bản cũ gọi SET session_replication_role = 'replica' để tắt kiểm tra
+    # khoá ngoại, nhưng df.to_sql() mở một connection KHÁC nên lệnh đó không có
+    # tác dụng gì. Nay giữ nguyên kiểm tra khoá ngoại: dữ liệu sai phải báo lỗi,
+    # không được nạp vào im lặng. Thứ tự nạp bên dưới đã đúng chiều phụ thuộc.
+    # Đọc theo KHỐI thay vì nạp cả file vào RAM: với 24.375 bài có audio thì
+    # embeddings_master.csv là ~48.750 dòng, mỗi dòng một vector 768 chiều dạng
+    # text (~16 KB) — khoảng 800 MB trên đĩa và vài GB khi pandas dựng DataFrame.
+    # Máy chạy dự án có 15,8 GB RAM và đã bị hệ điều hành cắt tiến trình nhiều lần
+    # ở khâu dựng embedding, nên đọc cả file là hỏng chắc.
+    CHUNK_ROWS = 2000
+
+    with engine.connect() as conn:
+
+        for csv_file, table_name in files_to_import:
+            file_path = os.path.join(data_dir, csv_file)
+            if os.path.exists(file_path):
+                try:
+                    reader = pd.read_csv(file_path, chunksize=CHUNK_ROWS)
+                    # Lấy khối đầu TRƯỚC khi xoá bảng: file hỏng thì lỗi ném ở đây,
+                    # và dữ liệu cũ trong bảng vẫn còn nguyên thay vì mất trắng.
+                    chunk = next(reader, None)
+
+                    conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE;"))
+                    conn.commit()
+
+                    total = 0
+                    while chunk is not None:
+                        # Dọn dẹp tên cột và lọc cột chuẩn
+                        chunk = clean_and_filter_df(chunk, table_name, engine)
+                        chunk.to_sql(table_name, engine, if_exists='append',
+                                     index=False, method='multi', chunksize=1000)
+                        total += len(chunk)
+                        chunk = next(reader, None)
+                    print(f"-> Nạp thành công {total} bản ghi vào bảng '{table_name}' từ {csv_file}")
+                except Exception as e:
+                    print(f"❌ Lỗi khi nạp file {csv_file} vào bảng '{table_name}': {e}")
+            else:
+                print(f"-> Bỏ qua nạp '{table_name}': Chưa tìm thấy file {file_path}")
+
+        conn.commit()
+
+    print("\n=== HOÀN THÀNH QUÁ TRÌNH TẠO VÀ NẠP CSDL ===")
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Tạo bảng và nạp dữ liệu vào PostgreSQL.")
+    parser.add_argument(
+        "--schema-only", action="store_true",
+        help="Chỉ tạo bảng/cột/index còn thiếu, không TRUNCATE và nạp lại CSV.",
+    )
+    init_database(schema_only=parser.parse_args().schema_only)
