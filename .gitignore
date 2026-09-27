@@ -83,3 +83,6 @@ data/test_queries/
 # (config.resolve_audio_path thử cả thư mục gốc repo).
 test.mp3
 test_audio/
+
+.vercel
+.env*
